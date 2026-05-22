@@ -26,7 +26,7 @@ window.MurmurationModules.Agent = class Agent {
     this.beliefState = {};
     this.vx = 0;
     this.vy = 0;
-    this.radius = 5;
+    this.radius = 6;
 
     // ST-1 Trust Battery
     this.trustCharge = personality.trustBaseline || 0.5;
@@ -42,6 +42,11 @@ window.MurmurationModules.Agent = class Agent {
     // ST-3 Faith — belief in something larger than self
     this.faith       = 0.1 + Math.random() * 0.15;  // everyone starts with a seed
     this.evolution   = 0;        // accumulated knowledge from ancestors — the point of it all
+
+    // Persistent wander heading — each agent has its own slowly-rotating direction
+    // This is what makes different agents naturally go different ways
+    this.wanderAngle = Math.random() * Math.PI * 2;
+    this.wanderRate  = (Math.random() - 0.5) * 0.04; // how fast the heading rotates (unique per agent)
   }
 
   // ─── ST-1 ────────────────────────────────────────────────────────────────
@@ -209,14 +214,32 @@ window.MurmurationModules.Agent = class Agent {
 
   move(width, height) {
     if (this.seppukuDone || this.isSentinel) return;
+
+    // Speed cap — prevents runaway velocity while keeping swooping feel
+    const speed = Math.hypot(this.vx, this.vy);
+    const maxSpeed = 2.5;
+    if (speed > maxSpeed) {
+      this.vx = (this.vx / speed) * maxSpeed;
+      this.vy = (this.vy / speed) * maxSpeed;
+    }
+
+    // Soft edge repulsion — gradual push instead of hard bounce
+    // Each agent hits the edge zone at a different position, breaking sync
+    const margin = 60;
+    const edgeForce = 0.08;
+    if (this.x < margin)          this.vx += (margin - this.x) / margin * edgeForce;
+    if (this.x > width - margin)  this.vx -= (this.x - (width - margin)) / margin * edgeForce;
+    if (this.y < margin)          this.vy += (margin - this.y) / margin * edgeForce;
+    if (this.y > height - margin) this.vy -= (this.y - (height - margin)) / margin * edgeForce;
+
     this.x += this.vx;
     this.y += this.vy;
-    this.vx *= 0.92;
-    this.vy *= 0.92;
-    if (this.x < 0 || this.x > width)  this.vx *= -1;
-    if (this.y < 0 || this.y > height) this.vy *= -1;
-    this.x = Math.max(0, Math.min(width,  this.x));
-    this.y = Math.max(0, Math.min(height, this.y));
+    this.vx *= 0.95;  // lighter damping — momentum carries
+    this.vy *= 0.95;
+
+    // Hard clamp as safety net only
+    this.x = Math.max(2, Math.min(width - 2,  this.x));
+    this.y = Math.max(2, Math.min(height - 2, this.y));
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -263,6 +286,27 @@ window.MurmurationModules.Agent = class Agent {
     const belief = this.beliefState.current || 0;
     const energy = this.energy != null ? this.energy : 1;
     const energyLight = 25 + energy * 25; // 25-50% lightness — dims as energy drops
+
+    // Cluster density glow — larger groups glow brighter and wider
+    // Solo agents are dim; a flock of 10+ radiates visible warmth
+    const cluster = this.clusterSize || 0;
+    if (cluster > 2) {
+      const intensity = Math.min(1, (cluster - 2) / 12); // ramps from 3 neighbors to 14
+      const glowRadius = this.radius + 6 + intensity * 14; // 12px to 26px outer glow
+      const glowHue = 120 + belief * 60 + intensity * 40;  // shifts warmer (toward amber) in big groups
+      const glowAlpha = 0.08 + intensity * 0.18;            // 0.08 to 0.26 — subtle to visible
+      const grad = ctx.createRadialGradient(
+        this.x, this.y, this.radius * 0.5,
+        this.x, this.y, glowRadius
+      );
+      grad.addColorStop(0, `hsla(${glowHue}, 80%, 55%, ${glowAlpha})`);
+      grad.addColorStop(1, `hsla(${glowHue}, 80%, 45%, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     ctx.fillStyle = `hsl(${120 + belief * 60}, 70%, ${energyLight}%)`;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);

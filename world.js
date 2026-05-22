@@ -30,7 +30,22 @@ window.MurmurationModules.World = class World {
     // Replaced whenever a new agent is dishonored
     this.sentinel = null;
 
+    // Commons — central gathering zone where agents slow down for inspection
+    this.commons = {
+      radiusFraction: 0.2, // 20% of min(width,height)
+      get x() { return 0; },  // set dynamically
+      get y() { return 0; },
+    };
+
     this.initAgents(agentCount);
+  }
+
+  /** Commons center + radius, recomputed from current dimensions */
+  getCommons() {
+    const cx = this.width * 0.5;
+    const cy = this.height * 0.5;
+    const r  = Math.min(this.width, this.height) * this.commons.radiusFraction;
+    return { cx, cy, r };
   }
 
   initAgents(count) {
@@ -99,17 +114,174 @@ window.MurmurationModules.World = class World {
       });
     }
 
-    // Move
+    // ── Pre-tag commons membership so boids loop can skip them ──
+    const com = this.getCommons();
+    for (const agent of active) {
+      const dx = agent.x - com.cx, dy = agent.y - com.cy;
+      agent.inCommons = Math.hypot(dx, dy) < com.r;
+    }
+
+    // Global center of mass — gentle repulsion so swarm uses the full canvas
+    let gcx = 0, gcy = 0, gCount = 0;
+    for (const a of active) {
+      if (a.isSentinel) continue;
+      gcx += a.x; gcy += a.y; gCount++;
+    }
+    if (gCount > 0) { gcx /= gCount; gcy /= gCount; }
+
+    // Move — boids with split radii: local cohesion, wider alignment
+    // This creates multiple flocks that move in sync but DON'T merge into one blob
     for (const agent of active) {
       if (agent.isSentinel) continue;
-      const neighbors = this.getNeighbors(agent).filter(n => !n.seppukuDone);
-      if (neighbors.length > 0) {
-        const avgX = neighbors.reduce((s, n) => s + n.x, 0) / neighbors.length;
-        const avgY = neighbors.reduce((s, n) => s + n.y, 0) / neighbors.length;
-        agent.vx += (avgX - agent.x) * 0.04 * agent.personality.reactivity;
-        agent.vy += (avgY - agent.y) * 0.04 * agent.personality.reactivity;
+
+      // Agents in the commons skip ALL flocking — they just drift gently
+      if (agent.inCommons) {
+        agent.clusterSize = 0;
+        agent.move(this.width, this.height);
+        continue;
       }
+
+      // All forces use LOCAL neighbors only — groups are independent units
+      const neighbors = this.getNeighbors(agent, 55).filter(n => !n.seppukuDone);
+      const react = agent.personality.reactivity;
+
+      // Store cluster density for visual glow
+      agent.clusterSize = neighbors.length;
+
+      // ── SEPARATION — personal space, repel within 50px ──
+      let sepX = 0, sepY = 0, sepCount = 0;
+      for (const n of neighbors) {
+        const dx = agent.x - n.x, dy = agent.y - n.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 50 && dist > 0.1) {
+          const force = (50 - dist) / 50;
+          sepX += (dx / dist) * force;
+          sepY += (dy / dist) * force;
+          sepCount++;
+        }
+      }
+      if (sepCount > 0) {
+        agent.vx += (sepX / sepCount) * 0.25 * react;
+        agent.vy += (sepY / sepCount) * 0.25 * react;
+      }
+
+      // ── CROWD PRESSURE — too many local neighbors? Push outward to split blobs ──
+      const crowdThreshold = 8;
+      if (neighbors.length > crowdThreshold) {
+        let cx = 0, cy = 0;
+        for (const n of neighbors) { cx += n.x; cy += n.y; }
+        cx /= neighbors.length; cy /= neighbors.length;
+        const awayX = agent.x - cx, awayY = agent.y - cy;
+        const awayDist = Math.hypot(awayX, awayY);
+        if (awayDist > 0.1) {
+          const crowdForce = (neighbors.length - crowdThreshold) / 10;
+          agent.vx += (awayX / awayDist) * crowdForce * 0.12 * react;
+          agent.vy += (awayY / awayDist) * crowdForce * 0.12 * react;
+        }
+      }
+
+      if (neighbors.length >= 2) {
+        // ── ALIGNMENT — match heading of YOUR group only ──
+        // This is what makes groups move together as a unit
+        let aliX = 0, aliY = 0;
+        for (const n of neighbors) { aliX += n.vx; aliY += n.vy; }
+        aliX /= neighbors.length;
+        aliY /= neighbors.length;
+        agent.vx += (aliX - agent.vx) * 0.045 * react;
+        agent.vy += (aliY - agent.vy) * 0.045 * react;
+
+        // ── COHESION — stay with your group, dead zone so they breathe ──
+        if (neighbors.length <= crowdThreshold) {
+          let cohX = 0, cohY = 0;
+          for (const n of neighbors) { cohX += n.x; cohY += n.y; }
+          cohX /= neighbors.length;
+          cohY /= neighbors.length;
+          const toCenterDist = Math.hypot(cohX - agent.x, cohY - agent.y);
+          const comfortRadius = 35;
+          if (toCenterDist > comfortRadius) {
+            const strength = Math.min(1, (toCenterDist - comfortRadius) / 50);
+            agent.vx += (cohX - agent.x) * 0.024 * strength * react;
+            agent.vy += (cohY - agent.y) * 0.024 * strength * react;
+          }
+        }
+      }
+
+      // ── WANDER — persistent heading, unique per agent ──
+      // Lone agents follow their own compass; grouped agents blend toward group heading
+      agent.wanderAngle += agent.wanderRate + (Math.random() - 0.5) * 0.05;
+
+      if (neighbors.length >= 2) {
+        // Blend wander toward group's average heading so it reinforces, not fights
+        let gvx = 0, gvy = 0;
+        for (const n of neighbors) { gvx += n.vx; gvy += n.vy; }
+        const groupAngle = Math.atan2(gvy, gvx);
+        let angleDiff = groupAngle - agent.wanderAngle;
+        // Normalize to -PI..PI
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        agent.wanderAngle += angleDiff * 0.02; // slow blend toward group
+        agent.vx += Math.cos(agent.wanderAngle) * 0.08;
+        agent.vy += Math.sin(agent.wanderAngle) * 0.08;
+      } else {
+        // Lone agent — strong personal heading
+        agent.vx += Math.cos(agent.wanderAngle) * 0.22;
+        agent.vy += Math.sin(agent.wanderAngle) * 0.22;
+      }
+
+      // ── SPREAD — very gentle push from global center so they don't all pile up ──
+      if (gCount > 0) {
+        const toGcx = agent.x - gcx, toGcy = agent.y - gcy;
+        const gcDist = Math.hypot(toGcx, toGcy);
+        if (gcDist > 1) {
+          agent.vx += (toGcx / gcDist) * 0.015;
+          agent.vy += (toGcy / gcDist) * 0.015;
+        }
+      }
+
       agent.move(this.width, this.height);
+    }
+
+    // ── COMMONS ZONE — slow agents when inside, rotate visitors through ──
+    for (const agent of active) {
+      if (agent.isSentinel) continue;
+      const dx = agent.x - com.cx, dy = agent.y - com.cy;
+      const dist = Math.hypot(dx, dy);
+
+      if (agent.inCommons) {
+        // Inside commons — strong damping so they nearly stop
+        const depth = 1 - (dist / com.r); // 0 at edge, 1 at center
+        const keep = 0.82 - depth * 0.2;  // 0.82 at edge → 0.62 at center
+        agent.vx *= keep;
+        agent.vy *= keep;
+
+        // After lingering ~5 seconds (300 ticks), gently push back out
+        agent._commonsTicks = (agent._commonsTicks || 0) + 1;
+        if (agent._commonsTicks > 300) {
+          if (dist > 1) {
+            agent.vx += (dx / dist) * 0.08;
+            agent.vy += (dy / dist) * 0.08;
+          }
+        }
+      } else {
+        agent._commonsTicks = 0;
+      }
+    }
+
+    // Steady pull — every 60 ticks (~1 sec), a small batch of outside agents feel the commons tug
+    if (this.time % 60 === 0) {
+      const candidates = active.filter(a => !a.isSentinel && !a.inCommons);
+      const pullCount = Math.max(2, Math.floor(candidates.length * 0.12)); // ~12% of agents
+      for (let i = 0; i < pullCount && i < candidates.length; i++) {
+        const idx = Math.floor(Math.random() * candidates.length);
+        const a = candidates[idx];
+        if (!a) continue;
+        const toCx = com.cx - a.x, toCy = com.cy - a.y;
+        const d = Math.hypot(toCx, toCy);
+        if (d > 1) {
+          a.vx += (toCx / d) * 0.25;
+          a.vy += (toCy / d) * 0.25;
+        }
+      }
     }
 
     this.time++;
@@ -128,6 +300,33 @@ window.MurmurationModules.World = class World {
 
   /** Env overlay + sentinel label — called separately when K26 controls draw order */
   drawOverlay(ctx) {
+    // ── COMMONS ZONE — soft visible ring so the user knows it's there ──
+    const com = this.getCommons();
+    ctx.save();
+    // Outer glow ring
+    const grad = ctx.createRadialGradient(com.cx, com.cy, com.r * 0.6, com.cx, com.cy, com.r);
+    grad.addColorStop(0, 'rgba(0, 255, 153, 0.03)');
+    grad.addColorStop(0.7, 'rgba(0, 255, 153, 0.04)');
+    grad.addColorStop(1, 'rgba(0, 255, 153, 0.08)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(com.cx, com.cy, com.r, 0, Math.PI * 2);
+    ctx.fill();
+    // Dashed border ring
+    ctx.setLineDash([4, 8]);
+    ctx.strokeStyle = 'rgba(0, 255, 153, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(com.cx, com.cy, com.r, 0, Math.PI * 2);
+    ctx.stroke();
+    // Label
+    ctx.setLineDash([]);
+    ctx.font = '9px monospace';
+    ctx.fillStyle = 'rgba(0, 255, 153, 0.2)';
+    ctx.textAlign = 'center';
+    ctx.fillText('COMMONS', com.cx, com.cy - com.r - 6);
+    ctx.restore();
+
     // Env overlay
     ctx.fillStyle = `rgba(255,255,0,${this.env.disturbance * 0.1})`;
     ctx.fillRect(0, 0, this.width * 0.1, this.height * 0.1);

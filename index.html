@@ -29,8 +29,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 @keyframes pulse-glow{0%,100%{opacity:.5;text-shadow:none}50%{opacity:1;text-shadow:0 0 8px var(--accent-mid)}}
 
 /* ── LAYOUT ── */
-.main{display:flex;height:calc(100vh - 46px)}
-.canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.main{display:flex;min-height:calc(100vh - 46px)}
+.canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;min-height:70vh}
 .sidebar{width:340px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
 
 /* ── HERO OVERLAY on canvas — fades out on interaction ── */
@@ -254,12 +254,22 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
 /* ── RESPONSIVE ── */
 @media(max-width:900px){
-  .main{flex-direction:column}
-  .sidebar{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--border)}
-  .canvas-wrap{min-height:40vh}
+  .main{flex-direction:column;height:auto;min-height:calc(100vh - 46px)}
+  .canvas-col{flex:none;height:55vh}
+  .sidebar{width:100%;max-height:none;border-left:none;border-top:1px solid var(--border);flex:1;overflow-y:auto}
+  .canvas-wrap{height:100%}
   .hero-title{font-size:1.4em}
+  .hero-tagline{font-size:.65em;max-width:90%}
   .essay{padding:48px 18px 60px}
   .essay-h{font-size:1.1em}
+}
+@media(max-width:600px){
+  .header{padding:8px 14px}
+  .header h1{font-size:.9em;letter-spacing:2px}
+  .canvas-col{height:50vh}
+  .sb-section{padding:12px}
+  .hero-title{font-size:1.1em;letter-spacing:4px}
+  .hero-tagline{font-size:.58em}
 }
 </style>
 </head>
@@ -344,7 +354,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       <div class="sb-title">Command</div>
       <div class="agent-row">
         <label>AGENTS</label>
-        <input type="number" id="agentCount" value="80" min="10" max="200">
+        <input type="number" id="agentCount" value="120" min="10" max="300">
       </div>
       <div class="controls-row">
         <button class="btn btn-run" onclick="runSim()">&#9654; RESTART</button>
@@ -921,18 +931,33 @@ const MAX_EVENTS = 80;
   });
 })();
 
-// ── Canvas auto-size ──
+// ── Canvas auto-size — matches visible area, sharp on high-DPI ──
 function sizeCanvas() {
   const c = document.getElementById('canvas');
-  const w = c.parentElement;
-  // Use getBoundingClientRect for reliable sizing even before paint
-  const rect = w.getBoundingClientRect();
-  const dw = Math.max(rect.width, 400);
-  const dh = Math.max(rect.height, 300);
-  c.width = dw;
+  const wrap = c.parentElement;
+  const rect = wrap.getBoundingClientRect();
+  const dw = Math.max(Math.floor(rect.width), 300);
+  const dh = Math.max(Math.floor(rect.height), 200);
+  // Set canvas internal resolution to match CSS display size
+  c.width  = dw;
   c.height = dh;
+  // Ensure CSS matches so there's no stretch/squish
+  c.style.width  = dw + 'px';
+  c.style.height = dh + 'px';
 }
-window.addEventListener('resize', sizeCanvas);
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    sizeCanvas();
+    // Resize the world to match new canvas if sim is running
+    if (k26 && k26.world) {
+      const c = document.getElementById('canvas');
+      k26.world.width  = c.width;
+      k26.world.height = c.height;
+    }
+  }, 150);
+});
 
 // ═══════════ AUTO-START — the swarm is ALIVE on load ═══════════
 
@@ -956,7 +981,7 @@ window.addEventListener('load', () => {
 
 function runSim() {
   sizeCanvas();
-  const count = parseInt(document.getElementById('agentCount').value) || 80;
+  const count = parseInt(document.getElementById('agentCount').value) || 120;
   if (k26) k26.stop();
   k26 = new window.K26('canvas');
   k26.init(count);
@@ -1185,6 +1210,64 @@ function updatePresentation(e) {
         'The destitute had nothing left to lose. The elites had everything to lose. Guess who blinked.',
         'History repeats: inequality → grief → uprising → reset. Watch the cycle.',
       ]));
+    }
+  }
+
+  // ── God emergence ──
+  if (k26 && k26.economy) {
+    if (k26.economy._godPresent && !prevState.godPresent) {
+      prevState.godPresent = true;
+      narrate(pickRandom([
+        'Something just emerged. Not a being — a field. Shared belief dense enough to become real.',
+        'God is present. Not designed. Not programmed. Believed into existence by 80 strangers.',
+        'The collective faith crossed the threshold. The swarm is more than the sum of its parts now.',
+      ]));
+      addEvent('GOD EMERGED — collective faith exceeded threshold. The field is live.', 'emerge');
+    }
+    if (!k26.economy._godPresent && prevState.godPresent) {
+      prevState.godPresent = false;
+      narrate('Faith dropped below the threshold. The field collapsed. God is absent.');
+      addEvent('GOD ABSENT — collective faith fell. The shared field dissolved.', 'grief');
+    }
+
+    // ── Phase changes ──
+    const curPhase = k26.economy.phase;
+    if (curPhase !== prevState.phase && prevState.phase) {
+      prevState.phase = curPhase;
+      if (curPhase === 'DISASTER') {
+        narrate(pickRandom([
+          'DISASTER. Resources collapsed. Every agent is now fighting to eat.',
+          'The golden age is over. Scarcity just became the only truth.',
+        ]));
+        addEvent('⚡ DISASTER — resources collapsed. Survival mode engaged.', 'crisis');
+      } else if (curPhase === 'SCARCITY') {
+        narrate('The worst is over, but hunger remains. Watch who cooperates and who hoards.');
+        addEvent('SCARCITY — aftermath of disaster. Cooperation is survival.', 'grief');
+      } else if (curPhase === 'REBUILD') {
+        narrate('Rebuilding. The survivors are earning it back — one harvest at a time.');
+        addEvent('REBUILD — recovery phase. Those who held together thrive.', 'trust');
+      } else if (curPhase === 'GOLDEN') {
+        narrate(pickRandom([
+          'Golden age restored. Not because it was given — because they earned it back.',
+          'Abundance. The swarm healed itself. This is what cooperation buys you.',
+        ]));
+        addEvent('☀ GOLDEN AGE — abundance restored through collective effort.', 'emerge');
+      }
+    }
+    if (!prevState.phase) prevState.phase = curPhase;
+
+    // ── Birth narration ──
+    const births = k26.economy.totalBirths;
+    if (births > (prevState.births || 0)) {
+      if (births === 1) {
+        narrate(pickRandom([
+          'First birth. Two agents gave up energy so a new one could exist. That\'s not survival — that\'s purpose.',
+          'Generation 1 just arrived. Everything the parents learned is built into the child.',
+        ]));
+      } else if (births % 5 === 0) {
+        narrate('Population growing. ' + births + ' births total. Each generation starts ahead of the last.');
+      }
+      prevState.births = births;
     }
   }
 
