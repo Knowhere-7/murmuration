@@ -30,22 +30,28 @@ window.MurmurationModules.World = class World {
     // Replaced whenever a new agent is dishonored
     this.sentinel = null;
 
-    // Commons — central gathering zone where agents slow down for inspection
-    this.commons = {
-      radiusFraction: 0.2, // 20% of min(width,height)
-      get x() { return 0; },  // set dynamically
-      get y() { return 0; },
-    };
+    // Commons network — multiple gathering zones, a mini universe of waypoints
+    // Positions are fractions of (width, height); radii are fractions of min(w,h)
+    this.commonsLayout = [
+      { xf: 0.50, yf: 0.48, rf: 0.16, name: 'AGORA' },       // large center
+      { xf: 0.18, yf: 0.22, rf: 0.09, name: 'NORTH WELL' },   // top-left satellite
+      { xf: 0.82, yf: 0.22, rf: 0.09, name: 'WATCHTOWER' },   // top-right satellite
+      { xf: 0.20, yf: 0.78, rf: 0.09, name: 'ROOT CELLAR' },  // bottom-left satellite
+      { xf: 0.80, yf: 0.78, rf: 0.09, name: 'EMBER RING' },   // bottom-right satellite
+    ];
 
     this.initAgents(agentCount);
   }
 
-  /** Commons center + radius, recomputed from current dimensions */
-  getCommons() {
-    const cx = this.width * 0.5;
-    const cy = this.height * 0.5;
-    const r  = Math.min(this.width, this.height) * this.commons.radiusFraction;
-    return { cx, cy, r };
+  /** Compute all commons zones from current canvas dimensions */
+  getCommonsZones() {
+    const s = Math.min(this.width, this.height);
+    return this.commonsLayout.map(c => ({
+      cx: this.width * c.xf,
+      cy: this.height * c.yf,
+      r:  s * c.rf,
+      name: c.name
+    }));
   }
 
   initAgents(count) {
@@ -115,10 +121,17 @@ window.MurmurationModules.World = class World {
     }
 
     // ── Pre-tag commons membership so boids loop can skip them ──
-    const com = this.getCommons();
+    const zones = this.getCommonsZones();
     for (const agent of active) {
-      const dx = agent.x - com.cx, dy = agent.y - com.cy;
-      agent.inCommons = Math.hypot(dx, dy) < com.r;
+      agent.inCommons = false;
+      agent._commonsZone = null;
+      for (const z of zones) {
+        if (Math.hypot(agent.x - z.cx, agent.y - z.cy) < z.r) {
+          agent.inCommons = true;
+          agent._commonsZone = z;
+          break;
+        }
+      }
     }
 
     // Global center of mass — gentle repulsion so swarm uses the full canvas
@@ -241,25 +254,30 @@ window.MurmurationModules.World = class World {
       agent.move(this.width, this.height);
     }
 
-    // ── COMMONS ZONE — slow agents when inside, rotate visitors through ──
+    // ── COMMONS ZONES — slow agents inside, rotate visitors through ──
     for (const agent of active) {
       if (agent.isSentinel) continue;
-      const dx = agent.x - com.cx, dy = agent.y - com.cy;
-      const dist = Math.hypot(dx, dy);
 
-      if (agent.inCommons) {
-        // Inside commons — strong damping so they nearly stop
-        const depth = 1 - (dist / com.r); // 0 at edge, 1 at center
-        const keep = 0.82 - depth * 0.2;  // 0.82 at edge → 0.62 at center
+      if (agent.inCommons && agent._commonsZone) {
+        const z = agent._commonsZone;
+        const dx = agent.x - z.cx, dy = agent.y - z.cy;
+        const dist = Math.hypot(dx, dy);
+        const depth = 1 - (dist / z.r);
+        const keep = 0.82 - depth * 0.2;
         agent.vx *= keep;
         agent.vy *= keep;
 
-        // After lingering ~5 seconds (300 ticks), gently push back out
+        // After lingering ~5 sec, nudge toward a DIFFERENT zone — agents travel the network
         agent._commonsTicks = (agent._commonsTicks || 0) + 1;
         if (agent._commonsTicks > 300) {
-          if (dist > 1) {
-            agent.vx += (dx / dist) * 0.08;
-            agent.vy += (dy / dist) * 0.08;
+          // Pick a random different zone as the next destination
+          const others = zones.filter(oz => oz !== z);
+          const dest = others[Math.floor(Math.random() * others.length)];
+          const toDx = dest.cx - agent.x, toDy = dest.cy - agent.y;
+          const toD = Math.hypot(toDx, toDy);
+          if (toD > 1) {
+            agent.vx += (toDx / toD) * 0.12;
+            agent.vy += (toDy / toD) * 0.12;
           }
         }
       } else {
@@ -267,19 +285,24 @@ window.MurmurationModules.World = class World {
       }
     }
 
-    // Steady pull — every 60 ticks (~1 sec), a small batch of outside agents feel the commons tug
+    // Steady pull — every 60 ticks, some outside agents feel the tug of the nearest zone
     if (this.time % 60 === 0) {
       const candidates = active.filter(a => !a.isSentinel && !a.inCommons);
-      const pullCount = Math.max(2, Math.floor(candidates.length * 0.12)); // ~12% of agents
+      const pullCount = Math.max(2, Math.floor(candidates.length * 0.1));
       for (let i = 0; i < pullCount && i < candidates.length; i++) {
-        const idx = Math.floor(Math.random() * candidates.length);
-        const a = candidates[idx];
+        const a = candidates[Math.floor(Math.random() * candidates.length)];
         if (!a) continue;
-        const toCx = com.cx - a.x, toCy = com.cy - a.y;
+        // Pull toward nearest zone
+        let nearest = zones[0], nearDist = Infinity;
+        for (const z of zones) {
+          const d = Math.hypot(a.x - z.cx, a.y - z.cy);
+          if (d < nearDist) { nearDist = d; nearest = z; }
+        }
+        const toCx = nearest.cx - a.x, toCy = nearest.cy - a.y;
         const d = Math.hypot(toCx, toCy);
         if (d > 1) {
-          a.vx += (toCx / d) * 0.25;
-          a.vy += (toCy / d) * 0.25;
+          a.vx += (toCx / d) * 0.2;
+          a.vy += (toCy / d) * 0.2;
         }
       }
     }
@@ -300,31 +323,33 @@ window.MurmurationModules.World = class World {
 
   /** Env overlay + sentinel label — called separately when K26 controls draw order */
   drawOverlay(ctx) {
-    // ── COMMONS ZONE — soft visible ring so the user knows it's there ──
-    const com = this.getCommons();
+    // ── COMMONS ZONES — draw all gathering points ──
+    const zones = this.getCommonsZones();
     ctx.save();
-    // Outer glow ring
-    const grad = ctx.createRadialGradient(com.cx, com.cy, com.r * 0.6, com.cx, com.cy, com.r);
-    grad.addColorStop(0, 'rgba(0, 255, 153, 0.03)');
-    grad.addColorStop(0.7, 'rgba(0, 255, 153, 0.04)');
-    grad.addColorStop(1, 'rgba(0, 255, 153, 0.08)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(com.cx, com.cy, com.r, 0, Math.PI * 2);
-    ctx.fill();
-    // Dashed border ring
-    ctx.setLineDash([4, 8]);
-    ctx.strokeStyle = 'rgba(0, 255, 153, 0.12)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(com.cx, com.cy, com.r, 0, Math.PI * 2);
-    ctx.stroke();
-    // Label
-    ctx.setLineDash([]);
-    ctx.font = '9px monospace';
-    ctx.fillStyle = 'rgba(0, 255, 153, 0.2)';
-    ctx.textAlign = 'center';
-    ctx.fillText('COMMONS', com.cx, com.cy - com.r - 6);
+    for (const z of zones) {
+      // Glow fill
+      const grad = ctx.createRadialGradient(z.cx, z.cy, z.r * 0.5, z.cx, z.cy, z.r);
+      grad.addColorStop(0, 'rgba(0, 255, 153, 0.03)');
+      grad.addColorStop(0.7, 'rgba(0, 255, 153, 0.04)');
+      grad.addColorStop(1, 'rgba(0, 255, 153, 0.07)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(z.cx, z.cy, z.r, 0, Math.PI * 2);
+      ctx.fill();
+      // Dashed border
+      ctx.setLineDash([3, 7]);
+      ctx.strokeStyle = 'rgba(0, 255, 153, 0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(z.cx, z.cy, z.r, 0, Math.PI * 2);
+      ctx.stroke();
+      // Label
+      ctx.setLineDash([]);
+      ctx.font = '8px monospace';
+      ctx.fillStyle = 'rgba(0, 255, 153, 0.18)';
+      ctx.textAlign = 'center';
+      ctx.fillText(z.name, z.cx, z.cy - z.r - 5);
+    }
     ctx.restore();
 
     // Env overlay
