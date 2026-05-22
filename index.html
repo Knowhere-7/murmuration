@@ -3,889 +3,1357 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Murmuration — Collective Intelligence Platform | Gnosquam</title>
+<title>Murmuration — Collective Intelligence, Built From Survival</title>
+<meta name="description" content="80 agents. Zero scripts. Pure biological instinct. Watch collective intelligence emerge from nothing but survival rules stolen from nature.">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html{background:#04060a}
 :root{
-  --bg:#04060a;--surface:#0a0e14;--surface2:#0f1520;--border:#151c28;--border-hi:#1e2a3a;
-  --text:#b8c4d4;--text-dim:#4a5568;--text-bright:#e2e8f0;
-  --accent:#00e187;--accent-dim:rgba(0,225,135,.12);--accent-glow:rgba(0,225,135,.25);
-  --cyan:#00b4d8;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;
-  --font-sans:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
-  --font-mono:'SF Mono','Cascadia Code','JetBrains Mono','Fira Code',monospace;
+  --bg:#06080a;--surface:#0c0f13;--border:#1a1f26;--border-hi:#2a3040;
+  --text:#c8cdd5;--text-dim:#5a6270;--text-bright:#fff;
+  --accent:#00ff99;--accent-dim:#00ff9933;--accent-mid:#00ff9966;
+  --red:#ff3344;--amber:#ff8800;--cyan:#00ccff;--purple:#aa66ff;
 }
-body{background:var(--bg);color:var(--text);font-family:var(--font-sans);overflow:hidden;height:100vh}
+body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code','Fira Code',monospace;overflow-x:hidden;min-height:100vh}
 
-/* ── HEADER ──────────────────────────────────────────────────────────── */
-.header{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:48px;border-bottom:1px solid var(--border);background:var(--surface)}
-.header-left{display:flex;align-items:center;gap:16px}
-.logo{display:flex;align-items:center;gap:10px}
-.logo-mark{width:24px;height:24px;border-radius:50%;background:conic-gradient(from 0deg,var(--accent),var(--cyan),var(--purple),var(--accent));opacity:.9}
-.logo-text{font-size:.85em;font-weight:600;color:var(--text-bright);letter-spacing:1.5px}
-.logo-sub{font-size:.6em;color:var(--text-dim);letter-spacing:.5px;font-weight:400}
-.header-right{display:flex;align-items:center;gap:16px}
-.header-stat{font-size:.65em;font-family:var(--font-mono);color:var(--text-dim)}
-.header-stat .hs-val{color:var(--accent)}
-.status-pill{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:12px;font-size:.65em;font-weight:500;letter-spacing:.5px}
-.status-pill.ready{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border)}
-.status-pill.live{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,225,135,.3)}
-.status-pill .dot{width:6px;height:6px;border-radius:50%}
-.status-pill.ready .dot{background:var(--text-dim)}
-.status-pill.live .dot{background:var(--accent);box-shadow:0 0 8px var(--accent-glow);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+/* ── HEADER ── */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 24px;border-bottom:1px solid var(--border);
+  background:linear-gradient(90deg, var(--bg), var(--surface));
+}
+.header h1{font-size:1.1em;letter-spacing:3px;color:var(--accent);font-weight:600}
+.header-sub{font-size:.6em;color:var(--text-dim);letter-spacing:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.tag{font-size:.6em;color:var(--text-dim);letter-spacing:1px;padding:3px 8px;border:1px solid var(--border);border-radius:3px}
+.tag-live{color:var(--accent);border-color:var(--accent-dim);animation:pulse-glow 2s infinite}
+@keyframes pulse-glow{0%,100%{opacity:.5;text-shadow:none}50%{opacity:1;text-shadow:0 0 8px var(--accent-mid)}}
 
-/* ── LAYOUT ──────────────────────────────────────────────────────────── */
-.main{display:flex;height:calc(100vh - 48px)}
-.canvas-col{flex:1;display:flex;flex-direction:column;min-width:0}
-.sidebar{width:340px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;background:var(--surface)}
+/* ── LAYOUT ── */
+.main{display:flex;height:calc(100vh - 46px)}
+.canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.sidebar{width:340px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
 
-/* ── CANVAS ──────────────────────────────────────────────────────────── */
-.canvas-wrap{flex:1;position:relative;background:#000}
+/* ── HERO OVERLAY on canvas — fades out on interaction ── */
+.hero-overlay{
+  position:absolute;top:0;left:0;right:0;bottom:0;z-index:10;
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  background:radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, rgba(6,8,10,0.85) 70%);
+  transition:opacity 1.5s ease;pointer-events:none;
+}
+.hero-overlay.faded{opacity:0}
+.hero-title{
+  font-size:2em;letter-spacing:6px;color:var(--accent);font-weight:700;
+  text-shadow:0 0 30px var(--accent-dim), 0 0 60px rgba(0,255,153,0.1);
+  animation:hero-breathe 4s ease-in-out infinite;
+  margin-bottom:8px;
+}
+@keyframes hero-breathe{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.02)}}
+.hero-tagline{
+  font-size:.75em;color:var(--text);letter-spacing:2px;
+  opacity:0;animation:hero-fade-in 1.5s ease 0.8s forwards;
+  text-align:center;max-width:500px;line-height:1.6;
+}
+.hero-hook{
+  font-size:.6em;color:var(--accent);letter-spacing:3px;text-transform:uppercase;
+  margin-top:20px;opacity:0;animation:hero-fade-in 1.5s ease 2s forwards;
+}
+@keyframes hero-fade-in{to{opacity:1}}
+
+/* ── CANVAS ── */
+.canvas-wrap{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center}
 .canvas-wrap canvas{display:block;width:100%;height:100%}
 
-/* Overlay — big numbers */
-.overlay-tl{position:absolute;top:20px;left:24px;pointer-events:none}
-.ov-label{font-size:.6em;letter-spacing:2px;color:var(--accent);opacity:.5;text-transform:uppercase;font-weight:600}
-.ov-big{font-size:2.8em;font-weight:700;color:var(--accent);font-family:var(--font-mono);line-height:1;letter-spacing:-1px}
-.ov-big.negative{color:var(--red)}
-.ov-big.neutral{color:var(--text-dim)}
-.ov-sub{font-size:.7em;color:var(--text-dim);margin-top:4px;font-family:var(--font-mono)}
-.ov-sub .tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.85em;margin-left:6px;font-weight:600}
-.ov-sub .tag-polarized{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
-.ov-sub .tag-diffuse{background:rgba(0,180,216,.1);color:var(--cyan);border:1px solid rgba(0,180,216,.2)}
+/* ── NARRATION BAR ── */
+.narration{
+  position:absolute;bottom:0;left:0;right:0;z-index:5;
+  padding:14px 24px;
+  background:linear-gradient(transparent, rgba(6,8,10,0.97));
+  pointer-events:none;
+}
+.narration-text{
+  font-size:.78em;color:var(--accent);line-height:1.6;
+  max-height:4em;overflow:hidden;
+  opacity:0;transition:opacity 0.6s;
+}
+.narration-text.visible{opacity:1}
 
-.overlay-tr{position:absolute;top:20px;right:24px;text-align:right;pointer-events:none}
-.ov-mini{font-size:.65em;font-family:var(--font-mono);color:var(--text-dim);line-height:2}
-.ov-mini .mv{color:var(--text)}
+/* Canvas HUD */
+.canvas-hud{position:absolute;top:12px;left:16px;pointer-events:none;z-index:5}
+.ch-row{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.ch-label{font-size:.58em;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase}
+.ch-value{font-size:.72em;color:var(--accent);font-weight:600}
+.ch-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-glow 1.5s infinite}
 
-/* Sparkline strip along bottom of canvas */
-.sparkline-strip{position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(transparent,rgba(4,6,10,.9));display:flex;align-items:flex-end;padding:0 24px 6px;gap:20px;pointer-events:none}
-.spark-group{display:flex;align-items:flex-end;gap:4px}
-.spark-label{font-size:.5em;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;align-self:center}
-.spark-canvas{border-radius:2px}
-
-/* ── BOTTOM BAR ──────────────────────────────────────────────────────── */
-.bottom-bar{height:36px;display:flex;align-items:center;gap:16px;padding:0 24px;border-top:1px solid var(--border);background:var(--surface);font-size:.65em;font-family:var(--font-mono);color:var(--text-dim)}
-.bottom-bar .flex{flex:1}
-
-/* ── SIDEBAR SECTIONS ────────────────────────────────────────────────── */
-.sb-section{padding:16px 20px;border-bottom:1px solid var(--border)}
-.sb-section h3{font-size:.6em;letter-spacing:2.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:12px;font-weight:600}
+/* ── SIDEBAR ── */
+.sb-section{padding:16px;border-bottom:1px solid var(--border)}
+.sb-section:last-child{border-bottom:none;flex:1}
+.sb-title{
+  font-size:.62em;letter-spacing:2.5px;text-transform:uppercase;
+  color:var(--accent);margin-bottom:10px;font-weight:600;
+}
+.sb-subtitle{font-size:.58em;color:var(--text-dim);margin-top:-6px;margin-bottom:12px;line-height:1.4}
 
 /* Controls */
-.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.btn{padding:9px 12px;font-family:var(--font-sans);font-size:.72em;cursor:pointer;border:none;border-radius:4px;font-weight:600;letter-spacing:.5px;transition:all .15s}
-.btn-primary{background:var(--accent);color:#000;grid-column:span 2}
-.btn-primary:hover{background:#33ffaa;box-shadow:0 0 20px var(--accent-glow)}
-.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.25)}
-.btn-danger:hover{background:rgba(239,68,68,.25)}
-.btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border)}
-.btn-ghost:hover{border-color:var(--border-hi);color:var(--text)}
-.agent-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.agent-row label{font-size:.7em;color:var(--text-dim);flex:1}
-.agent-row input{width:60px;background:var(--bg);border:1px solid var(--border);color:var(--text-bright);padding:6px 8px;font-family:var(--font-mono);font-size:.8em;border-radius:3px;text-align:center}
+.controls-row{display:flex;gap:8px;margin-bottom:10px}
+.btn{
+  flex:1;padding:10px;font-family:inherit;font-size:.8em;cursor:pointer;
+  border:none;border-radius:4px;letter-spacing:1px;font-weight:700;
+  transition:all 0.15s;text-transform:uppercase;
+}
+.btn-run{background:var(--accent);color:var(--bg)}
+.btn-run:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.btn-run:active{transform:translateY(0)}
+.btn-stop{background:var(--red);color:#fff}
+.btn-stop:hover{filter:brightness(1.1)}
+.btn-reset{background:var(--surface);color:var(--text-dim);border:1px solid var(--border)}
+.btn-reset:hover{color:var(--text);border-color:var(--border-hi)}
+.agent-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.agent-row label{font-size:.68em;color:var(--text-dim);font-weight:600}
+.agent-row input{
+  width:56px;background:var(--surface);border:1px solid var(--border);
+  color:var(--text);padding:4px 8px;font-family:inherit;font-size:.8em;border-radius:3px;text-align:center;
+}
 
-/* Scenarios */
-.scenario-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.btn-scenario{padding:10px;font-family:var(--font-sans);font-size:.68em;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:4px;transition:all .15s;text-align:left;line-height:1.3}
-.btn-scenario:hover{border-color:var(--accent);background:var(--accent-dim)}
-.btn-scenario .sc-name{font-weight:600;display:block;margin-bottom:2px}
-.btn-scenario .sc-desc{font-size:.85em;color:var(--text-dim)}
+/* Legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:.6em;color:var(--text-dim)}
+.legend-dot{width:7px;height:7px;border-radius:50%}
 
-/* Signal sliders */
-.signal-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.signal-icon{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.signal-name{font-size:.68em;color:var(--text-dim);min-width:70px}
-.signal-row input[type=range]{flex:1;accent-color:var(--accent);height:3px;opacity:.7}
-.signal-row input[type=range]:hover{opacity:1}
-.signal-val{font-size:.68em;font-family:var(--font-mono);color:var(--text);width:32px;text-align:right}
-.btn-apply{width:100%;padding:8px;font-family:var(--font-sans);font-size:.68em;cursor:pointer;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:4px;font-weight:600;letter-spacing:.5px;transition:all .15s;margin-top:8px}
-.btn-apply:hover{background:var(--accent-dim)}
-.btn-apply.flash{background:var(--accent);color:#000}
+/* ── CHAOS SLIDERS ── */
+.seed-signal{margin-bottom:16px;position:relative}
+.seed-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1px}
+.seed-name{font-size:.78em;color:var(--text-bright);font-weight:700}
+.seed-value{font-size:.7em;color:var(--accent);width:36px;text-align:right;font-weight:600}
+.seed-desc{font-size:.62em;color:var(--text-dim);margin-bottom:4px;line-height:1.4}
+.seed-bio{font-size:.55em;color:var(--purple);margin-bottom:6px;letter-spacing:0.5px}
+input[type="range"]{
+  width:100%;height:4px;-webkit-appearance:none;
+  background:var(--border);border-radius:2px;cursor:pointer;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--accent);cursor:grab;transition:transform 0.15s;
+}
+input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:grabbing}
+.btn-inject{
+  width:100%;padding:12px;margin-top:10px;
+  background:linear-gradient(135deg, var(--accent-dim), transparent);
+  color:var(--accent);
+  border:1px solid var(--accent-mid);border-radius:4px;
+  font-family:inherit;font-size:.85em;cursor:pointer;
+  letter-spacing:2px;font-weight:700;transition:all 0.2s;text-transform:uppercase;
+}
+.btn-inject:hover{background:var(--accent);color:var(--bg);transform:translateY(-1px)}
 
-/* Metrics */
-.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.metric-card{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 12px}
-.metric-card .mc-label{font-size:.55em;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
-.metric-card .mc-val{font-size:1.1em;font-weight:700;font-family:var(--font-mono);color:var(--text-bright)}
-.metric-card .mc-val.hi{color:var(--accent)}
-.metric-card .mc-val.lo{color:var(--red)}
-.metric-card .mc-val.warn{color:var(--amber)}
-.metric-card.wide{grid-column:span 2}
+/* ── LIVE METRICS ── */
+.metric{margin-bottom:14px}
+.metric-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.metric-name{font-size:.68em;color:var(--text-dim);font-weight:600}
+.metric-val{font-size:.75em;color:var(--text-bright);font-weight:700}
+.metric-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;position:relative}
+.metric-fill{height:100%;border-radius:2px;transition:width 0.3s,background 0.3s;position:relative}
+.metric-fill::after{
+  content:'';position:absolute;top:0;right:0;width:20px;height:100%;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,0.15));
+}
+.metric-explain{font-size:.56em;color:var(--text-dim);margin-top:3px;max-height:0;overflow:hidden;transition:max-height 0.3s,opacity 0.3s;opacity:0;line-height:1.4}
+.metric:hover .metric-explain{max-height:40px;opacity:1}
 
-/* Bar meters */
-.bar-meter{margin-bottom:8px}
-.bar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-.bar-header .bh-label{font-size:.62em;color:var(--text-dim);letter-spacing:.5px}
-.bar-header .bh-val{font-size:.68em;font-family:var(--font-mono);color:var(--text)}
-.bar-track{height:4px;background:var(--bg);border-radius:2px;overflow:hidden;border:1px solid var(--border)}
-.bar-fill{height:100%;border-radius:2px;transition:width .3s ease}
-.bar-fill.trust{background:linear-gradient(90deg,var(--cyan),var(--accent))}
-.bar-fill.grief{background:linear-gradient(90deg,var(--amber),var(--red))}
-.bar-fill.stability{background:linear-gradient(90deg,var(--purple),var(--accent))}
+/* ── AGENT ID CARD ── */
+.agent-tooltip{
+  position:absolute;pointer-events:none;z-index:20;
+  background:rgba(8,8,12,0.95);
+  border:1px solid rgba(100,100,120,0.4);
+  border-radius:3px;padding:0;font-size:.6em;line-height:1.5;
+  color:var(--text);width:235px;opacity:0;transition:opacity 0.12s;
+  backdrop-filter:blur(6px);
+  box-shadow:0 4px 20px rgba(0,0,0,0.6);
+  overflow:hidden;
+}
+.agent-tooltip.visible{opacity:1}
+.agent-tooltip.flagged{border-color:rgba(180,30,30,0.6)}
+.agent-tooltip.honored{border-color:rgba(255,215,80,0.4)}
+.at-header{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center}
+.at-id{font-family:var(--mono);font-weight:700;font-size:1.15em;letter-spacing:0.5px}
+.at-badge{font-size:.85em;padding:1px 6px;border-radius:2px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+.at-badge.active{background:rgba(0,200,100,0.15);color:#00cc66}
+.at-badge.grieving{background:rgba(255,165,0,0.15);color:#ff8800}
+.at-badge.crisis{background:rgba(255,50,30,0.2);color:#ff3322}
+.at-badge.dishonored{background:rgba(180,30,30,0.25);color:#cc2200}
+.at-badge.ghost{background:rgba(200,200,255,0.1);color:rgba(200,200,255,0.5)}
+.at-badge.sentinel{background:rgba(255,120,0,0.2);color:#ff7800}
+.at-body{padding:7px 10px}
+.at-row{display:flex;justify-content:space-between;gap:6px;padding:1px 0}
+.at-label{color:rgba(180,180,200,0.5);font-size:.9em}
+.at-val{color:var(--text);font-family:var(--mono);font-size:.95em}
+.at-divider{height:1px;background:rgba(255,255,255,0.05);margin:4px 0}
+.at-rings{padding:5px 10px 7px;border-top:1px solid rgba(255,255,255,0.05)}
+.at-ring{display:flex;align-items:center;gap:6px;padding:1.5px 0;font-size:.9em}
+.at-ring-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.at-ring-text{color:rgba(180,180,200,0.6)}
+.at-footer{padding:5px 10px 7px;border-top:1px solid rgba(255,255,255,0.05);font-style:italic;color:rgba(180,180,200,0.4);font-size:.88em}
 
-/* Log */
-.log-header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px 0;border-top:1px solid var(--border)}
-.log-header h3{font-size:.6em;letter-spacing:2.5px;color:var(--text-dim);text-transform:uppercase;font-weight:600}
-.log-wrap{flex:1;overflow-y:auto;padding:8px 20px 12px;font-size:.62em;font-family:var(--font-mono);line-height:1.8;min-height:100px}
-.log-wrap .l-seed{color:var(--cyan)}
-.log-wrap .l-evolve{color:var(--amber)}
-.log-wrap .l-emerge{color:var(--accent)}
-.log-wrap .l-sys{color:var(--text-dim)}
-.log-wrap .l-tick{color:#1a3020}
-.log-wrap .l-scenario{color:var(--purple)}
+/* ── EVENT FEED ── */
+.event-feed{
+  flex:1;overflow-y:auto;font-size:.66em;line-height:1.9;
+  background:var(--bg);border:1px solid var(--border);border-radius:4px;
+  padding:8px 10px;min-height:100px;
+}
+.event-feed::-webkit-scrollbar{width:3px}
+.event-feed::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
+.evt{animation:slideIn 0.3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.evt-emerge{color:var(--accent)}
+.evt-trust{color:var(--cyan)}
+.evt-grief{color:var(--amber)}
+.evt-crisis{color:var(--red)}
+.evt-time{color:var(--text-dim)}
 
-/* Action bar */
-.action-bar{display:flex;gap:6px;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2)}
-.btn-action{flex:1;padding:8px;font-family:var(--font-sans);font-size:.62em;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text-dim);border-radius:3px;font-weight:500;transition:all .15s}
-.btn-action:hover{border-color:var(--accent);color:var(--accent)}
-
-/* ── RESPONSIVE ──────────────────────────────────────────────────────── */
+/* ── RESPONSIVE ── */
 @media(max-width:900px){
   .main{flex-direction:column}
-  .sidebar{width:100%;max-height:55vh;border-left:none;border-top:1px solid var(--border)}
-  .overlay-tr{display:none}
+  .sidebar{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--border)}
+  .canvas-wrap{min-height:40vh}
+  .hero-title{font-size:1.4em}
 }
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
-<div class="header">
-  <div class="header-left">
-    <div class="logo">
-      <div class="logo-mark"></div>
-      <div>
-        <div class="logo-text">MURMURATION</div>
-        <div class="logo-sub">Collective Intelligence Platform</div>
-      </div>
-    </div>
+<!-- ═══════════ HEADER ═══════════ -->
+<header class="header">
+  <div>
+    <h1>MURMURATION</h1>
+    <span class="header-sub">SWARM INTELLIGENCE — ZERO DEPENDENCIES — PURE RULES</span>
   </div>
   <div class="header-right">
-    <span class="header-stat">Cycle <span class="hs-val" id="h-time">0</span></span>
-    <span class="header-stat">Agents <span class="hs-val" id="h-agents">0</span></span>
-    <div class="status-pill ready" id="status-pill">
-      <div class="dot"></div>
-      <span id="status-label">STANDBY</span>
-    </div>
+    <span class="tag tag-live" id="status-tag">LIVE</span>
   </div>
-</div>
+</header>
 
-<!-- MAIN -->
+<!-- ═══════════ MAIN ═══════════ -->
 <div class="main">
+
+  <!-- LEFT: CANVAS -->
   <div class="canvas-col">
     <div class="canvas-wrap">
       <canvas id="canvas"></canvas>
+      <div class="agent-tooltip" id="agent-tooltip"></div>
 
-      <!-- Top-left overlay -->
-      <div class="overlay-tl">
-        <div class="ov-label">Collective Signal</div>
-        <div class="ov-big neutral" id="ov-pred">0.000</div>
-        <div class="ov-sub">
-          confidence <span id="ov-conf">0.00</span>
-          <span class="tag tag-diffuse" id="ov-cluster">DIFFUSE</span>
+      <!-- Hero overlay — fades after a few seconds -->
+      <div class="hero-overlay" id="hero-overlay">
+        <div class="hero-title">MURMURATION</div>
+        <div class="hero-tagline">
+          80 independent agents. No instructions. No AI. Just survival instincts stolen from nature.<br>
+          Watch them think together — or tear each other apart.
+        </div>
+        <div class="hero-hook">▼ THE SWARM IS ALREADY RUNNING ▼</div>
+      </div>
+
+      <!-- Live HUD -->
+      <div class="canvas-hud">
+        <div class="ch-row">
+          <div class="ch-dot" id="ch-dot"></div>
+          <span class="ch-label">ALIVE</span>
+          <span class="ch-value" id="ch-agents">0</span>
+        </div>
+        <div class="ch-row">
+          <span class="ch-label">TICK</span>
+          <span class="ch-value" id="ch-time">0</span>
         </div>
       </div>
 
-      <!-- Top-right mini stats -->
-      <div class="overlay-tr">
-        <div class="ov-mini">Cascade Velocity <span class="mv" id="ov-cascade">0.00</span></div>
-        <div class="ov-mini">System Stability <span class="mv" id="ov-stab">0.00</span></div>
-        <div class="ov-mini">Collective Wisdom <span class="mv" id="ov-wisdom">0</span></div>
+      <!-- Narration bar -->
+      <div class="narration">
+        <div class="narration-text visible" id="narration">The swarm is waking up. Every dot you see has a personality it was born with.</div>
       </div>
-
-      <!-- Sparklines -->
-      <div class="sparkline-strip">
-        <div class="spark-group"><span class="spark-label">Signal</span><canvas class="spark-canvas" id="spark-pred" width="120" height="28"></canvas></div>
-        <div class="spark-group"><span class="spark-label">Trust</span><canvas class="spark-canvas" id="spark-trust" width="120" height="28"></canvas></div>
-        <div class="spark-group"><span class="spark-label">Stress</span><canvas class="spark-canvas" id="spark-grief" width="120" height="28"></canvas></div>
-      </div>
-    </div>
-
-    <div class="bottom-bar">
-      <span id="bb-status">Ready</span>
-      <div class="flex"></div>
-      <span>Gnosquam Sovereign AI</span>
     </div>
   </div>
 
-  <!-- SIDEBAR -->
+  <!-- RIGHT: SIDEBAR -->
   <div class="sidebar">
 
-    <!-- Simulation -->
+    <!-- ── SECTION: WHAT IS THIS ── -->
     <div class="sb-section">
-      <h3>Simulation Control</h3>
+      <div class="sb-title">What you're watching</div>
+      <div class="sb-subtitle">
+        Every dot is an agent with its own trust level, grief threshold, and survival instincts borrowed from real animals. Nobody tells them what to do — they figure it out by interacting with whoever's nearby. Groups form. Trust builds. Betrayal costs. Some agents sacrifice themselves for the group. Others refuse — and everyone watches them pay for it.
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#00ff99"></div>Thriving</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#00ccff"></div>Trusted</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff8800"></div>Grieving</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff3344"></div>In crisis</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#444"></div>Dishonored</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff6600;box-shadow:0 0 4px #ff6600"></div>Sentinel</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#503c14"></div>Hungry</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffd700;box-shadow:0 0 4px #ffd700"></div>Elite</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#661100"></div>Destitute</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,215,80,0.5)"></div>Faithful</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,200,50,0.4);box-shadow:0 0 4px rgba(255,200,50,0.3)"></div>Sacred ground</div>
+      </div>
+    </div>
+
+    <!-- ── SECTION: CONTROLS ── -->
+    <div class="sb-section">
+      <div class="sb-title">Command</div>
       <div class="agent-row">
-        <label>Agent Population</label>
-        <input type="number" id="agentCount" value="120" min="20" max="300">
+        <label>AGENTS</label>
+        <input type="number" id="agentCount" value="80" min="10" max="200">
       </div>
-      <div class="ctrl-grid">
-        <button class="btn btn-primary" onclick="runSim()">INITIALIZE</button>
-        <button class="btn btn-danger" onclick="stopSim()">HALT</button>
-        <button class="btn btn-ghost" onclick="resetSim()">RESET</button>
+      <div class="controls-row">
+        <button class="btn btn-run" onclick="runSim()">&#9654; RESTART</button>
+        <button class="btn btn-stop" onclick="stopSim()">FREEZE</button>
       </div>
+      <button class="btn btn-reset" style="width:100%" onclick="resetSim()">WIPE &amp; RESET</button>
     </div>
 
-    <!-- Scenarios -->
+    <!-- ── SECTION: BREAK THE SWARM ── -->
     <div class="sb-section">
-      <h3>Market Scenarios</h3>
-      <div class="scenario-grid">
-        <button class="btn-scenario" onclick="loadScenario('flash')">
-          <span class="sc-name">Flash Crash</span>
-          <span class="sc-desc">Sudden high-volatility shock</span>
-        </button>
-        <button class="btn-scenario" onclick="loadScenario('bleed')">
-          <span class="sc-name">Slow Bleed</span>
-          <span class="sc-desc">Gradual confidence erosion</span>
-        </button>
-        <button class="btn-scenario" onclick="loadScenario('swan')">
-          <span class="sc-name">Black Swan</span>
-          <span class="sc-desc">Anomaly + cascade + pressure</span>
-        </button>
-        <button class="btn-scenario" onclick="loadScenario('recovery')">
-          <span class="sc-name">Recovery</span>
-          <span class="sc-desc">Post-crisis stabilization</span>
-        </button>
-        <button class="btn-scenario" onclick="loadScenario('contagion')">
-          <span class="sc-name">Contagion</span>
-          <span class="sc-desc">Trust collapse propagation</span>
-        </button>
-        <button class="btn-scenario" onclick="loadScenario('euphoria')">
-          <span class="sc-name">Euphoria</span>
-          <span class="sc-desc">Overconfidence spiral</span>
-        </button>
+      <div class="sb-title">Break the swarm</div>
+      <div class="sb-subtitle">Drag these sliders and hit DETONATE. See what survives.</div>
+
+      <div class="seed-signal">
+        <div class="seed-header">
+          <span class="seed-name">Earthquake</span>
+          <span class="seed-value" id="pitviperVal">0.00</span>
+        </div>
+        <div class="seed-desc">Shatter the environment. Every agent scrambles to find new ground.</div>
+        <div class="seed-bio">Pit Viper infrared — they see heat signatures you can't</div>
+        <input type="range" id="pitviper" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'pitviperVal')">
+      </div>
+
+      <div class="seed-signal">
+        <div class="seed-header">
+          <span class="seed-name">Paranoia</span>
+          <span class="seed-value" id="electroVal">0.00</span>
+        </div>
+        <div class="seed-desc">Crank up sensitivity. Every agent overreacts to everything.</div>
+        <div class="seed-bio">Shark electroreception — feeling heartbeats through water</div>
+        <input type="range" id="electroreception" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'electroVal')">
+      </div>
+
+      <div class="seed-signal">
+        <div class="seed-header">
+          <span class="seed-name">Ticking bomb</span>
+          <span class="seed-value" id="lateralVal">0.00</span>
+        </div>
+        <div class="seed-desc">Delayed detonation. Pressure builds silently, then erupts.</div>
+        <div class="seed-bio">Fish lateral line — feeling the current change before you see it</div>
+        <input type="range" id="lateralline" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'lateralVal')">
+      </div>
+
+      <div class="seed-signal">
+        <div class="seed-header">
+          <span class="seed-name">Time warp</span>
+          <span class="seed-value" id="echoVal">0.00</span>
+        </div>
+        <div class="seed-desc">Speed up or slow down how fast they process reality.</div>
+        <div class="seed-bio">Bat echolocation — adjusting frequency to match the terrain</div>
+        <input type="range" id="echolocation" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'echoVal')">
+      </div>
+
+      <div class="seed-signal">
+        <div class="seed-header">
+          <span class="seed-name">Flood the gates</span>
+          <span class="seed-value" id="mantisVal">0.00</span>
+        </div>
+        <div class="seed-desc">Pour in newcomers. Watch the swarm absorb — or reject — fresh blood.</div>
+        <div class="seed-bio">Mantis Shrimp — 16 color bands where you have 3</div>
+        <input type="range" id="mantisshrimp" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'mantisVal')">
+      </div>
+
+      <button class="btn-inject" id="injectBtn" onclick="injectSeeds()">DETONATE</button>
+
+      <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="seed-header">
+          <span class="seed-name">Scarcity</span>
+          <span class="seed-value" id="scarcityVal">0.50</span>
+        </div>
+        <div class="seed-desc">Resource pressure. Higher = faster drain, harder survival. Cooperation becomes life or death.</div>
+        <div class="seed-bio">Ghost's law — they need incentive to work together for the greater good</div>
+        <input type="range" id="scarcitySlider" min="0" max="1" step="0.01" value="0.5" oninput="updateVal(this,'scarcityVal'); if(k26 && k26.economy) k26.economy.scarcityLevel = parseFloat(this.value);">
       </div>
     </div>
 
-    <!-- Signal tuning -->
+    <!-- ── SECTION: ECONOMY ── -->
     <div class="sb-section">
-      <h3>Signal Parameters</h3>
-      <div class="signal-row">
-        <div class="signal-icon" style="background:var(--red)"></div>
-        <span class="signal-name">Volatility</span>
-        <input type="range" id="s-pitviper" min="0" max="1" step="0.01" value="0" oninput="seedUpdate(this)">
-        <span class="signal-val" data-for="s-pitviper">0.00</span>
+      <div class="sb-title">Economy</div>
+      <div class="sb-subtitle">Energy, resources, and the disaster cycle. Survival is not free.</div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Phase</span>
+          <span class="metric-val" id="m-phase">GOLDEN</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-phase" style="width:0;background:var(--accent)"></div></div>
+        <div class="metric-explain">GOLDEN → DISASTER → SCARCITY → REBUILD → repeat. The cycle never stops.</div>
       </div>
-      <div class="signal-row">
-        <div class="signal-icon" style="background:var(--purple)"></div>
-        <span class="signal-name">Anomaly</span>
-        <input type="range" id="s-electro" min="0" max="1" step="0.01" value="0" oninput="seedUpdate(this)">
-        <span class="signal-val" data-for="s-electro">0.00</span>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Avg Energy</span>
+          <span class="metric-val" id="m-energy">—</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-energy" style="width:0;background:#ffcc00"></div></div>
+        <div class="metric-explain">Mean energy across living agents. Zero = starvation. Cooperation is the only way to abundance.</div>
       </div>
-      <div class="signal-row">
-        <div class="signal-icon" style="background:var(--amber)"></div>
-        <span class="signal-name">Pressure</span>
-        <input type="range" id="s-lateral" min="0" max="1" step="0.01" value="0" oninput="seedUpdate(this)">
-        <span class="signal-val" data-for="s-lateral">0.00</span>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Births</span>
+          <span class="metric-val" id="m-cycles">0</span>
+        </div>
+        <div class="metric-explain">New agents born. Parents sacrifice energy to give the next generation a chance — high honor.</div>
       </div>
-      <div class="signal-row">
-        <div class="signal-icon" style="background:var(--cyan)"></div>
-        <span class="signal-name">Resolution</span>
-        <input type="range" id="s-echo" min="0" max="1" step="0.01" value="0" oninput="seedUpdate(this)">
-        <span class="signal-val" data-for="s-echo">0.00</span>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Faith</span>
+          <span class="metric-val" id="m-faith">0.00</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-faith" style="width:0;background:#ffd700"></div></div>
+        <div class="metric-explain">Collective belief. When faith is high enough, something emerges.</div>
       </div>
-      <div class="signal-row">
-        <div class="signal-icon" style="background:var(--accent)"></div>
-        <span class="signal-name">Sensitivity</span>
-        <input type="range" id="s-mantis" min="0" max="1" step="0.01" value="0" oninput="seedUpdate(this)">
-        <span class="signal-val" data-for="s-mantis">0.00</span>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Evolution</span>
+          <span class="metric-val" id="m-evolution">0.00</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-evolution" style="width:0;background:#cc88ff"></div></div>
+        <div class="metric-explain">Ancestral knowledge inherited across generations. The point of passing the torch.</div>
       </div>
-      <button class="btn-apply" id="applyBtn" onclick="applySignals()">APPLY PARAMETERS</button>
+
+      <div class="controls-row" style="margin-top:8px">
+        <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em">⚡ TRIGGER DISASTER</button>
+      </div>
     </div>
 
-    <!-- Metrics -->
+    <!-- ── SECTION: SOCIAL CLASS ── -->
     <div class="sb-section">
-      <h3>System Health</h3>
-      <div class="bar-meter">
-        <div class="bar-header"><span class="bh-label">Network Trust Index</span><span class="bh-val" id="m-trust">--</span></div>
-        <div class="bar-track"><div class="bar-fill trust" id="bar-trust" style="width:0%"></div></div>
+      <div class="sb-title">Social class</div>
+      <div class="sb-subtitle">Wealth creates class. Class creates power. Power creates revolution.</div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Inequality (Gini)</span>
+          <span class="metric-val" id="m-gini">—</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-gini" style="width:0;background:var(--red)"></div></div>
+        <div class="metric-explain">0 = perfect equality. 1 = one agent owns everything. Real-world US ≈ 0.39.</div>
       </div>
-      <div class="bar-meter">
-        <div class="bar-header"><span class="bh-label">Systemic Stress</span><span class="bh-val" id="m-grief">--</span></div>
-        <div class="bar-track"><div class="bar-fill grief" id="bar-grief" style="width:0%"></div></div>
+
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:70px;text-align:center;padding:6px;border:1px solid var(--border);border-radius:4px">
+          <div style="font-size:.55em;color:#ffd700;font-weight:700;letter-spacing:1px">ELITE</div>
+          <div style="font-size:.9em;color:#ffd700;font-weight:700" id="c-elite">0</div>
+        </div>
+        <div style="flex:1;min-width:70px;text-align:center;padding:6px;border:1px solid var(--border);border-radius:4px">
+          <div style="font-size:.55em;color:#c0c0c0;font-weight:700;letter-spacing:1px">MERCHANT</div>
+          <div style="font-size:.9em;color:#c0c0c0;font-weight:700" id="c-merchant">0</div>
+        </div>
+        <div style="flex:1;min-width:70px;text-align:center;padding:6px;border:1px solid var(--border);border-radius:4px">
+          <div style="font-size:.55em;color:var(--text-dim);font-weight:700;letter-spacing:1px">WORKER</div>
+          <div style="font-size:.9em;color:var(--text);font-weight:700" id="c-worker">0</div>
+        </div>
+        <div style="flex:1;min-width:70px;text-align:center;padding:6px;border:1px solid var(--border);border-radius:4px">
+          <div style="font-size:.55em;color:#661100;font-weight:700;letter-spacing:1px">DESTITUTE</div>
+          <div style="font-size:.9em;color:#ff4400;font-weight:700" id="c-destitute">0</div>
+        </div>
       </div>
-      <div class="bar-meter">
-        <div class="bar-header"><span class="bh-label">Consensus Stability</span><span class="bh-val" id="m-stab">--</span></div>
-        <div class="bar-track"><div class="bar-fill stability" id="bar-stab" style="width:0%"></div></div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Revolutions</span>
+          <span class="metric-val" id="m-revolutions">0</span>
+        </div>
+        <div class="metric-explain">When too many starve while few feast, the bottom rises. Everything resets.</div>
       </div>
-      <div class="metric-grid" style="margin-top:10px">
-        <div class="metric-card">
-          <div class="mc-label">High-Trust Nodes</div>
-          <div class="mc-val" id="m-leaders">--</div>
+
+      <div class="seed-signal" style="margin-top:8px">
+        <div class="seed-header">
+          <span class="seed-name">Tax rate</span>
+          <span class="seed-value" id="taxVal">0.00</span>
         </div>
-        <div class="metric-card">
-          <div class="mc-label">Depleted Nodes</div>
-          <div class="mc-val" id="m-depleted">--</div>
-        </div>
-        <div class="metric-card">
-          <div class="mc-label">Under Stress</div>
-          <div class="mc-val" id="m-grieving">--</div>
-        </div>
-        <div class="metric-card">
-          <div class="mc-label">Critical</div>
-          <div class="mc-val" id="m-crisis">--</div>
-        </div>
-        <div class="metric-card">
-          <div class="mc-label">Honored Exits</div>
-          <div class="mc-val" id="m-seppuku">--</div>
-        </div>
-        <div class="metric-card">
-          <div class="mc-label">Failures</div>
-          <div class="mc-val" id="m-dishonor">--</div>
-        </div>
-        <div class="metric-card wide">
-          <div class="mc-label">Sentinel (Systemic Risk Marker)</div>
-          <div class="mc-val" id="m-sentinel">None</div>
-        </div>
+        <div class="seed-desc">Redistribute from elite to destitute. Too low = revolution. Too high = no one climbs.</div>
+        <div class="seed-bio">The invisible hand vs. the visible fist</div>
+        <input type="range" id="taxSlider" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'taxVal'); if(k26 && k26.wealthEngine) k26.wealthEngine.taxRate = parseFloat(this.value);">
+      </div>
+
+      <div class="controls-row" style="margin-top:8px">
+        <button class="btn btn-reset" onclick="if(k26 && k26.wealthEngine) k26.wealthEngine.triggerRevolution(k26.world.agents.filter(a=>!a.seppukuDone&&!a.isSentinel&&a.griefState!=='DISHONORED'&&a.griefState!=='STARVED'), k26.wealthEngine.classCounts)" style="font-size:.65em">🔥 FORCE REVOLUTION</button>
       </div>
     </div>
 
-    <!-- Log -->
-    <div class="log-header"><h3>Event Stream</h3></div>
-    <div class="log-wrap" id="log">// Murmuration initialized
-</div>
+    <!-- ── SECTION: SWARM VITALS ── -->
+    <div class="sb-section">
+      <div class="sb-title">Swarm vitals</div>
 
-    <!-- Actions -->
-    <div class="action-bar">
-      <button class="btn-action" onclick="copySnapshot()">Export Snapshot</button>
-      <button class="btn-action" onclick="copyReport()">Generate Report</button>
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Consensus</span>
+          <span class="metric-val" id="m-consensus">—</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-consensus" style="width:0;background:var(--accent)"></div></div>
+        <div class="metric-explain">Are they agreeing? 1.0 = hivemind. 0 = total anarchy.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Trust</span>
+          <span class="metric-val" id="m-trust">—</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-trust" style="width:0;background:var(--cyan)"></div></div>
+        <div class="metric-explain">Nobody starts trusted. They earn it. Conflict drains it. Isolation kills it.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Grief</span>
+          <span class="metric-val" id="m-grief">—</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-grief" style="width:0;background:var(--amber)"></div></div>
+        <div class="metric-explain">Losing someone you trusted hurts. Too much grief = crisis. Crisis demands a choice.</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Stability</span>
+          <span class="metric-val" id="m-stability">—</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-stability" style="width:0;background:var(--purple)"></div></div>
+        <div class="metric-explain">Can the swarm hold its shape? Or is the whole thing about to crack?</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-header">
+          <span class="metric-name">Cascade</span>
+          <span class="metric-val" id="m-cascade">—</span>
+        </div>
+        <div class="metric-bar"><div class="metric-fill" id="mb-cascade" style="width:0;background:var(--red)"></div></div>
+        <div class="metric-explain">How fast ideas are spreading. High cascade = wildfire. One voice can move the whole swarm.</div>
+      </div>
     </div>
-  </div>
-</div>
+
+    <!-- ── SECTION: SAVE / LOAD ── -->
+    <div class="sb-section">
+      <div class="sb-title">Civilization archive</div>
+      <div class="sb-subtitle">Snapshot the swarm. Restore it later. Never lose a civilization again.</div>
+      <div class="controls-row">
+        <button class="btn btn-run" onclick="saveCivilization()" style="font-size:.7em">&#128190; SAVE</button>
+        <button class="btn btn-reset" onclick="document.getElementById('loadFile').click()" style="font-size:.7em">&#128194; LOAD</button>
+      </div>
+      <input type="file" id="loadFile" accept=".json" style="display:none" onchange="loadCivilization(event)">
+      <div id="save-status" style="font-size:.58em;color:var(--text-dim);margin-top:6px;min-height:1.4em"></div>
+    </div>
+
+    <!-- ── SECTION: LIVE FEED ── -->
+    <div class="sb-section" style="flex:1;display:flex;flex-direction:column">
+      <div class="sb-title">Live feed</div>
+      <div class="event-feed" id="event-feed">
+        <div class="evt evt-emerge">Swarm initializing...</div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+</div><!-- /main -->
+
+<!-- ═══════════ ENGINE ═══════════ -->
+<script src="agent.js"></script>
+<script src="world.js"></script>
+<script src="seed.js"></script>
+<script src="interaction.js"></script>
+<script src="evolution.js"></script>
+<script src="extractor.js"></script>
+<script src="k26.js"></script>
+<script src="economy.js"></script>
+<script src="wealth.js"></script>
+<script src="warninglog.js"></script>
+<script src="murmuration.js"></script>
 
 <script>
-// ═══════════════════════════════════════════════════════════════════════════
-// CORE ENGINE (all modules inlined — identical mechanics, enterprise skin)
-// ═══════════════════════════════════════════════════════════════════════════
-window.M = {};
+// ═══════════════════════════════════════════════════
+// PRESENTATION ENGINE — the swarm talks
+// ═══════════════════════════════════════════════════
 
-M.Agent = class Agent {
-  constructor(id,x,y,p={}){
-    this.id=id;this.x=x;this.y=y;
-    this.personality={riskTolerance:p.riskTolerance||Math.random(),trustBaseline:p.trustBaseline||.5,reactivity:p.reactivity||.7,memoryWeight:p.memoryWeight||.6};
-    this.memory=[];this.beliefState={};this.vx=0;this.vy=0;this.radius=4;
-    this.trustCharge=p.trustBaseline||.5;this.griefLevel=0;this.griefState='ACTIVE';
-    this.graceTimer=0;this.wisdomScore=0;this.isSentinel=false;this.seppukuDone=false;
-  }
-  updateTrust(d){this.trustCharge=Math.max(.05,Math.min(1,this.trustCharge+d))}
-  updateGrief(d){
-    if(this.isSentinel||this.seppukuDone||this.griefState==='DISHONORED')return;
-    this.griefLevel=Math.max(0,Math.min(1,this.griefLevel+d));
-    if(this.griefLevel>=.9){if(this.griefState!=='CRISIS'){this.griefState='CRISIS';this.graceTimer=0}}
-    else if(this.griefLevel>=.3){if(this.griefState==='ACTIVE')this.griefState='GRIEVING'}
-    else{if(this.griefState==='GRIEVING'){this.griefState='ACTIVE';this.wisdomScore=Math.min(1,this.wisdomScore+.1)}}
-  }
-  evaluateSeppuku(){
-    if(this.griefLevel<.9||this.seppukuDone||this.isSentinel)return false;
-    let c=0;if(this.trustCharge<.2)c++;if(Math.abs(this.beliefState.current||0)<.05)c++;
-    const r=this.memory.slice(-5).map(m=>m.beliefUpdate);
-    if(r.length&&r.reduce((s,v)=>s+v,0)/r.length<0)c++;if(this.graceTimer>35)c++;return c>=2;
-  }
-  performSeppuku(w){
-    const nb=w.getNeighbors(this,100).sort((a,b)=>b.trustCharge-a.trustCharge).filter(n=>!n.seppukuDone&&!n.isSentinel).slice(0,3);
-    const sh=(this.trustCharge-.05)/Math.max(1,nb.length);for(const n of nb)n.updateTrust(sh);
-    w.collectiveMemory.push({agentId:this.id,wisdomScore:this.wisdomScore,beliefAtExit:this.beliefState.current||0,trustAtExit:this.trustCharge,time:w.time,type:'SEPPUKU'});
-    this.trustCharge=.05;this.griefLevel=0;this.griefState='SEPPUKU_COMPLETE';this.seppukuDone=true;this.beliefState.current=0;this.vx=0;this.vy=0;
-  }
-  updateBelief(nbs,env){
-    const gm=this.griefState==='GRIEVING'?(1-this.griefLevel*.4):this.griefState==='CRISIS'?(1-this.griefLevel*.6):1;
-    let avg=0,c=0;for(const n of nbs){avg+=n.strength*this.trustCharge;c++}if(c>0)avg/=c;
-    const si=env*this.personality.reactivity*gm;const nb=avg*.4+si*.6;
-    const mm=(1+this.griefLevel*.6)*this.personality.memoryWeight;
-    const mi=this.memory.slice(-5).reduce((s,m)=>s+m.beliefUpdate,0)/Math.max(1,this.memory.length)*mm;
-    this.beliefState.current=Math.max(-1,Math.min(1,nb*.7+mi*.3));
-    this.memory.push({signal:env,beliefUpdate:nb-(this.beliefState.current||0)});if(this.memory.length>10)this.memory.shift();
-  }
-  move(w,h){
-    if(this.seppukuDone||this.isSentinel)return;
-    this.x+=this.vx;this.y+=this.vy;this.vx*=.95;this.vy*=.95;
-    if(this.x<0||this.x>w)this.vx*=-1;if(this.y<0||this.y>h)this.vy*=-1;
-    this.x=Math.max(0,Math.min(w,this.x));this.y=Math.max(0,Math.min(h,this.y));
-  }
-};
+var k26 = null;
+let eventCount = 0;
+const MAX_EVENTS = 80;
 
-M.World = class World {
-  constructor(w,h,n=50){
-    this.width=w;this.height=h;this.agents=[];
-    this.env={disturbance:0,anomaly:0,pressure:0,timestepRes:1,spawnFilter:0};
-    this.interactionLog=[];this.time=0;this.collectiveMemory=[];this.sentinel=null;
-    this.initAgents(n);
-  }
-  initAgents(n){const b=this.agents.length;for(let i=0;i<n;i++)this.agents.push(new M.Agent(b+i,Math.random()*this.width,Math.random()*this.height,{riskTolerance:Math.random(),trustBaseline:.3+Math.random()*.4,reactivity:.5+Math.random()*.5,memoryWeight:.6+Math.random()*.3}))}
-  setEnv(k,v){if(this.env.hasOwnProperty(k))this.env[k]=v}
-  getNeighbors(a,r=50){return this.agents.filter(b=>b!==a&&Math.hypot(b.x-a.x,b.y-a.y)<r)}
-  installSentinel(a){
-    if(this.sentinel&&this.sentinel!==a){this.sentinel.isSentinel=false;this.sentinel.griefState='RETIRED'}
-    a.isSentinel=true;a.griefLevel=1;a.trustCharge=.05;a.griefState='GRIEF_SENTINEL';a.seppukuDone=false;a.vx=0;a.vy=0;this.sentinel=a;
-    if(window.logLine)window.logLine(`SENTINEL INSTALLED — Node #${a.id} — systemic risk marker active`,'evolve');
-  }
-  advanceStep(){
-    const act=this.agents.filter(a=>!a.seppukuDone);
-    for(const a of act){if(a.isSentinel)continue;const nb=this.getNeighbors(a).filter(n=>!n.seppukuDone);
-      a.updateBelief(nb.map(n=>({strength:n.beliefState.current||0})),this.env.anomaly+this.env.disturbance);
-      this.interactionLog.push({time:this.time,agent:a.id,action:a.beliefState.current,belief:a.beliefState.current});
-    }
-    for(const a of act){if(a.isSentinel)continue;const nb=this.getNeighbors(a).filter(n=>!n.seppukuDone);
-      if(nb.length>0){const ax=nb.reduce((s,n)=>s+n.x,0)/nb.length;const ay=nb.reduce((s,n)=>s+n.y,0)/nb.length;
-        a.vx+=(ax-a.x)*.04*a.personality.reactivity;a.vy+=(ay-a.y)*.04*a.personality.reactivity}
-      a.move(this.width,this.height);
-    }
-    this.time++;if(this.interactionLog.length>200)this.interactionLog=this.interactionLog.slice(-100);
-  }
-  getEmergenceMetrics(){
-    const act=this.agents.filter(a=>!a.seppukuDone&&!a.isSentinel);
-    const bs=act.map(a=>a.beliefState.current||0);if(!bs.length)return{consensus:0,avgBelief:0,divergence:0,cascadeVelocity:0};
-    const avg=bs.reduce((s,b)=>s+b,0)/bs.length;const v=bs.reduce((s,b)=>s+Math.pow(b-avg,2),0)/bs.length;
-    return{consensus:1-Math.sqrt(v),avgBelief:avg,divergence:Math.sqrt(v),cascadeVelocity:this.interactionLog.slice(-10).filter(l=>Math.abs(l.belief)>.5).length/10};
-  }
-};
-
-M.SeedInjector = class {
-  inject(w,s={}){
-    if('PitViperDivergence'in s)w.setEnv('disturbance',s.PitViperDivergence);
-    if('ElectroreceptionAnomaly'in s){w.setEnv('anomaly',s.ElectroreceptionAnomaly);w.agents.forEach(a=>{a.personality.reactivity*=(1+s.ElectroreceptionAnomaly*.5)})}
-    if('LateralLinePressure'in s){w.setEnv('pressure',s.LateralLinePressure);const c=s.LateralLinePressure;setTimeout(()=>{w.setEnv('disturbance',(w.env.disturbance||0)+c*2)},1000)}
-    if('EcholocationFrequency'in s){w.setEnv('timestepRes',s.EcholocationFrequency)}
-    if('MantisShrimp16Bands'in s){w.setEnv('spawnFilter',s.MantisShrimp16Bands);if(s.MantisShrimp16Bands>.7)w.initAgents(Math.floor(s.MantisShrimp16Bands*10))}
-  }
-};
-
-M.InteractionEngine = class {
-  compute(w){
-    for(let i=0;i<w.agents.length;i++){const a=w.agents[i];
-      if(a.seppukuDone||a.isSentinel||a.griefState==='DISHONORED')continue;
-      const nb=w.getNeighbors(a).filter(n=>!n.seppukuDone&&n.griefState!=='DISHONORED');
-      if(!nb.length){a.updateTrust(-.003);a.updateGrief(.004);continue}
-      const inf=a.trustCharge*a.personality.reactivity*.35;
-      for(const n of nb){const ab=a.beliefState.current||0;const nbb=n.beliefState.current||0;const d=Math.abs(ab-nbb);const tb=n.trustCharge;
-        if(d>.5){a.updateTrust(-.015);n.updateTrust(-.008);a.updateGrief(.008)}
-        else if(d>.2){const dir=ab>nbb?1:-1;const ps=inf*(1-d);const pb=nbb;n.beliefState.current=Math.max(-1,Math.min(1,pb+ps*dir));
-          if(Math.abs(n.beliefState.current-pb)>.001){a.updateTrust(.003);a.updateGrief(-.01)}}
-        if(tb>.3&&n.trustCharge<=.05)a.updateGrief(tb*.15);
-      }
-    }
-  }
-};
-
-M.EvolutionEngine = class {
-  evolve(w){
-    const rl=w.interactionLog.slice(-20);const as=new Map();
-    for(const l of rl)if(l.type==='belief_prop')as.set(l.from,(as.get(l.from)||0)+(1-Math.abs(l.strength)));
-    const act=w.agents.filter(a=>!a.seppukuDone&&!a.isSentinel);
-    const bs=act.map(a=>a.beliefState.current||0);const sa=bs.length?bs.reduce((s,b)=>s+b,0)/bs.length:0;
-    for(const a of w.agents){
-      if(a.seppukuDone)continue;if(a.isSentinel){a.griefLevel=1;a.trustCharge=.05;continue}
-      const ss=as.get(a.id)||0;
-      if(ss>.5)a.personality.memoryWeight=Math.min(1,a.personality.memoryWeight+.05);
-      else if(ss<.2){a.personality.memoryWeight=Math.max(0,a.personality.memoryWeight-.05);if(a.memory.length){a.memory[0].beliefUpdate*=.8;if(Math.abs(a.memory[0].beliefUpdate)<.01)a.memory.shift()}}
-      a.updateTrust(-.002);const ad=Math.abs((a.beliefState.current||0)-sa);
-      if(ad<.15)a.updateTrust(.004);else if(ad>.6)a.updateTrust(-.003);
-      a.updateGrief(-.003);
-      if(w.sentinel&&a.griefLevel>.5)a.updateGrief((a.griefLevel-.5)*.02);
-      if(a.griefState==='CRISIS'){a.graceTimer++;
-        if(a.evaluateSeppuku()){a.performSeppuku(w);if(window.logLine)window.logLine(`HONORED EXIT — Node #${a.id} — trust redistributed to network`,'emerge');continue}
-        if(a.graceTimer>50){a.griefState='DISHONORED';a.trustCharge=.05;a.vx=0;a.vy=0;
-          if(window.logLine)window.logLine(`NODE FAILURE — #${a.id} — isolated from network`,'evolve');w.installSentinel(a)}
-      }
-    }
-  }
-};
-
-M.Extractor = class {
-  extract(w){
-    const m=w.getEmergenceMetrics();const act=w.agents.filter(a=>!a.seppukuDone&&!a.isSentinel);
-    const bs=act.map(a=>a.beliefState.current||0);const hb=bs.filter(b=>b>.3).length/Math.max(1,act.length);
-    const lb=bs.filter(b=>b<-.3).length/Math.max(1,act.length);const cl=hb>.4||lb>.4?'polarized':'diffuse';
-    const tl=act.map(a=>a.trustCharge);const at=tl.length?tl.reduce((s,t)=>s+t,0)/tl.length:0;
-    const all=w.agents;
-    return{prediction:m.avgBelief*m.consensus,confidence:Math.max(0,m.consensus*(1-m.divergence)),
-      clusters:cl,consensus:m.consensus,divergence:m.divergence,
-      cascadeVelocity:w.interactionLog.slice(-20).filter(l=>Math.abs(l.belief||0)>.6).length/20,
-      stability:1-m.divergence,avgTrust:at,highTrustCount:tl.filter(t=>t>.75).length,lowTrustCount:tl.filter(t=>t<.25).length,
-      avgGrief:act.length?act.reduce((s,a)=>s+a.griefLevel,0)/act.length:0,
-      grievingCount:all.filter(a=>a.griefState==='GRIEVING').length,crisisCount:all.filter(a=>a.griefState==='CRISIS').length,
-      seppukuCount:all.filter(a=>a.griefState==='SEPPUKU_COMPLETE').length,dishonoredCount:all.filter(a=>a.griefState==='DISHONORED').length,
-      hasSentinel:!!w.sentinel,sentinelId:w.sentinel?w.sentinel.id:null,wisdomCount:w.collectiveMemory.length,...m};
-  }
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ENTERPRISE RENDERER (connection lines + refined visuals)
-// ═══════════════════════════════════════════════════════════════════════════
-function drawWorld(ctx, world) {
-  const W = world.width, H = world.height;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, H);
-
-  // Subtle grid
-  ctx.strokeStyle = 'rgba(30,42,58,.3)';
-  ctx.lineWidth = .5;
-  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = 0; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-
-  // Env glow
-  if (world.env.disturbance > .01) {
-    const g = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W/2);
-    g.addColorStop(0, `rgba(239,68,68,${world.env.disturbance * .06})`);
-    g.addColorStop(1, 'transparent');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  }
-
-  const active = world.agents.filter(a => !a.seppukuDone);
-
-  // Connection lines — the murmuration effect
-  ctx.lineWidth = .5;
-  for (const a of active) {
-    if (a.isSentinel || a.griefState === 'DISHONORED') continue;
-    const nb = world.getNeighbors(a, 60).filter(n => !n.seppukuDone && !n.isSentinel && n.griefState !== 'DISHONORED');
-    for (const n of nb) {
-      const dist = Math.hypot(n.x - a.x, n.y - a.y);
-      const alpha = (1 - dist / 60) * .15 * Math.min(a.trustCharge, n.trustCharge);
-      if (alpha < .01) continue;
-      const beliefAvg = ((a.beliefState.current || 0) + (n.beliefState.current || 0)) / 2;
-      const hue = 160 + beliefAvg * 40;
-      ctx.strokeStyle = `hsla(${hue},70%,50%,${alpha})`;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(n.x, n.y); ctx.stroke();
-    }
-  }
-
-  // Agents
-  for (const a of world.agents) {
-    ctx.save();
-    if (a.isSentinel) {
-      const p = .5 + .5 * Math.sin(Date.now() / 400);
-      ctx.fillStyle = `rgba(245,158,11,${.3 + p * .5})`;
-      ctx.beginPath(); ctx.arc(a.x, a.y, a.radius + 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#1a0800';
-      ctx.beginPath(); ctx.arc(a.x, a.y, a.radius - 1, 0, Math.PI * 2); ctx.fill();
-      ctx.font = '8px -apple-system,sans-serif'; ctx.fillStyle = 'rgba(245,158,11,.8)';
-      ctx.fillText('SENTINEL', a.x + 10, a.y - 8);
-      ctx.restore(); continue;
-    }
-    if (a.seppukuDone) {
-      ctx.fillStyle = 'rgba(200,200,255,.15)';
-      ctx.beginPath(); ctx.arc(a.x, a.y, a.radius * .6, 0, Math.PI * 2); ctx.fill();
-      ctx.restore(); continue;
-    }
-    if (a.griefState === 'DISHONORED') {
-      ctx.fillStyle = 'rgba(239,68,68,.3)';
-      ctx.beginPath(); ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2); ctx.fill();
-      ctx.restore(); continue;
-    }
-    const belief = a.beliefState.current || 0;
-    const hue = 160 + belief * 50;
-    ctx.fillStyle = `hsla(${hue},65%,55%,.9)`;
-    ctx.beginPath(); ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2); ctx.fill();
-    // Trust glow
-    if (a.trustCharge > .4) {
-      ctx.strokeStyle = `rgba(0,225,135,${(a.trustCharge - .4) * .8})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(a.x, a.y, a.radius + 3, 0, Math.PI * 2); ctx.stroke();
-    }
-    // Crisis pulse
-    if (a.griefState === 'CRISIS') {
-      const p = .5 + .5 * Math.sin(Date.now() / 250);
-      ctx.strokeStyle = `rgba(239,68,68,${.4 + p * .6})`;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(a.x, a.y, a.radius + 7, 0, Math.PI * 2); ctx.stroke();
-    } else if (a.griefState === 'GRIEVING') {
-      ctx.strokeStyle = `rgba(245,158,11,${a.griefLevel * .5})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(a.x, a.y, a.radius + 5, 0, Math.PI * 2); ctx.stroke();
-    }
-    ctx.restore();
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SPARKLINES
-// ═══════════════════════════════════════════════════════════════════════════
-const sparkHistory = { pred: [], trust: [], grief: [] };
-const SPARK_LEN = 60;
-
-function drawSparkline(canvasId, data, color, range = [-1, 1]) {
-  const c = document.getElementById(canvasId);
-  const ctx = c.getContext('2d');
-  const w = c.width, h = c.height;
-  ctx.clearRect(0, 0, w, h);
-  if (data.length < 2) return;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  for (let i = 0; i < data.length; i++) {
-    const x = (i / (SPARK_LEN - 1)) * w;
-    const norm = (data[i] - range[0]) / (range[1] - range[0]);
-    const y = h - norm * h;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-  // Fill under
-  ctx.lineTo((data.length - 1) / (SPARK_LEN - 1) * w, h);
-  ctx.lineTo(0, h);
-  ctx.closePath();
-  ctx.fillStyle = color.replace('1)', '.08)').replace('rgb', 'rgba');
-  ctx.fill();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SCENARIOS
-// ═══════════════════════════════════════════════════════════════════════════
-const SCENARIOS = {
-  flash:     { pv: .95, ea: .3,  ll: .8,  ef: .9,  ms: 0,   name: 'Flash Crash' },
-  bleed:     { pv: .25, ea: .15, ll: .4,  ef: .2,  ms: 0,   name: 'Slow Bleed' },
-  swan:      { pv: .7,  ea: .85, ll: .9,  ef: .7,  ms: .5,  name: 'Black Swan' },
-  recovery:  { pv: .05, ea: .05, ll: .05, ef: .3,  ms: .3,  name: 'Recovery' },
-  contagion: { pv: .6,  ea: .5,  ll: .95, ef: .6,  ms: 0,   name: 'Contagion' },
-  euphoria:  { pv: .1,  ea: .8,  ll: .1,  ef: .5,  ms: .85, name: 'Euphoria' }
-};
-
-function loadScenario(key) {
-  const s = SCENARIOS[key]; if (!s) return;
-  document.getElementById('s-pitviper').value = s.pv;
-  document.getElementById('s-electro').value = s.ea;
-  document.getElementById('s-lateral').value = s.ll;
-  document.getElementById('s-echo').value = s.ef;
-  document.getElementById('s-mantis').value = s.ms;
-  document.querySelectorAll('.signal-val').forEach(el => {
-    const input = document.getElementById(el.dataset.for);
-    if (input) el.textContent = parseFloat(input.value).toFixed(2);
-  });
-  logLine(`SCENARIO LOADED — ${s.name}`, 'scenario');
-  applySignals();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// UI CONTROLLER
-// ═══════════════════════════════════════════════════════════════════════════
-let sim = null, world = null, running = false, animId = null;
-const seed = new M.SeedInjector();
-const interact = new M.InteractionEngine();
-const evolve = new M.EvolutionEngine();
-const extract = new M.Extractor();
-
-function resizeCanvas() {
+// ── Agent ID Card — Hover Identification Papers ──
+(function() {
+  const tooltip = document.getElementById('agent-tooltip');
   const canvas = document.getElementById('canvas');
-  const wrap = canvas.parentElement;
-  canvas.width = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
-  if (world) { world.width = canvas.width; world.height = canvas.height; }
-}
+  let lastHovered = null;
 
-function logLine(msg, type = 'sys') {
-  const el = document.getElementById('log');
-  const span = document.createElement('span');
-  span.className = `l-${type}`;
-  span.textContent = msg + '\n';
-  el.appendChild(span);
-  el.scrollTop = el.scrollHeight;
-  if (el.childNodes.length > 150) el.removeChild(el.firstChild);
+  // Badge class + label for each state
+  function getBadge(a) {
+    if (a.seppukuDone)                    return { cls: 'ghost',      label: 'DECEASED' };
+    if (a.isSentinel)                     return { cls: 'sentinel',   label: 'SENTINEL' };
+    if (a.griefState === 'DISHONORED')    return { cls: 'dishonored', label: 'DISHONORED' };
+    if (a.griefState === 'CRISIS')        return { cls: 'crisis',     label: 'CRISIS' };
+    if (a.griefState === 'GRIEVING')      return { cls: 'grieving',   label: 'GRIEVING' };
+    return                                       { cls: 'active',     label: 'ACTIVE' };
+  }
+
+  // The footer — short thematic line for each state
+  function getVerdict(a) {
+    if (a.seppukuDone)                    return 'Honored the collective. Wisdom preserved in memory.';
+    if (a.isSentinel)                     return 'Living cost of selfishness. A warning to all.';
+    if (a.griefState === 'DISHONORED')    return 'Chose self over collective. Papers revoked.';
+    if (a.griefState === 'CRISIS')        return 'Grace period active. Searching for reason to stay.';
+    if (a.griefState === 'GRIEVING')      return 'Carrying loss. Faith may see them through.';
+    const e = a.energy || 0, f = a.faith || 0;
+    if (e > 0.75 && f > 0.5)             return 'Thriving and faithful. Ready to build the future.';
+    if (e > 0.75)                         return 'Well-fed. Strong enough to share or reproduce.';
+    if (e < 0.2)                          return 'Hungry. Searching for food and community.';
+    if (f > 0.6)                          return 'Deep faith. The losses of the past give strength.';
+    return                                       'Papers in order. Finding their place in the swarm.';
+  }
+
+  // Build the rings section — only show rings the agent actually has
+  function buildRings(a) {
+    const rings = [];
+
+    // Trust ring — cyan, visible when trustCharge > 0.15
+    if (!a.seppukuDone && a.trustCharge > 0.15) {
+      rings.push({
+        color: `rgba(0,255,200,${Math.max(0.4, a.trustCharge * 0.8)})`,
+        text: `Trust Battery — ${(a.trustCharge * 100).toFixed(0)}% charge`
+      });
+    }
+
+    // Faith glow — gold, visible when faith > 0.3
+    if (!a.seppukuDone && (a.faith || 0) > 0.3) {
+      rings.push({
+        color: `rgba(255,215,80,${0.5 + (a.faith - 0.3) * 0.5})`,
+        text: `Faith — inner light, dampens grief intake`
+      });
+    }
+
+    // Grief ring — amber or pulsing orange depending on state
+    if (a.griefState === 'CRISIS') {
+      rings.push({
+        color: '#ff3c00',
+        text: `Crisis ring — grief at ${(a.griefLevel * 100).toFixed(0)}%, grace timer active`
+      });
+    } else if (a.griefState === 'GRIEVING') {
+      rings.push({
+        color: `rgba(255,165,0,${Math.max(0.4, a.griefLevel * 0.7)})`,
+        text: `Grief ring — carrying ${(a.griefLevel * 100).toFixed(0)}% loss`
+      });
+    }
+
+    // Sentinel glow
+    if (a.isSentinel) {
+      rings.push({
+        color: '#ff7800',
+        text: `Sentinel aura — locked at maximum grief, cannot exit`
+      });
+    }
+
+    // Ghost
+    if (a.seppukuDone) {
+      rings.push({
+        color: 'rgba(200,200,255,0.4)',
+        text: `Ghost residue — fading from the world`
+      });
+    }
+
+    // Dishonored — no rings, just darkness
+    if (a.griefState === 'DISHONORED' && !a.isSentinel) {
+      rings.push({
+        color: '#3a0000',
+        text: `No rings — all authority stripped`
+      });
+    }
+
+    if (rings.length === 0) {
+      rings.push({
+        color: 'rgba(100,100,120,0.3)',
+        text: `No visible rings — building trust`
+      });
+    }
+
+    return rings.map(r =>
+      `<div class="at-ring">` +
+        `<div class="at-ring-dot" style="background:${r.color}"></div>` +
+        `<span class="at-ring-text">${r.text}</span>` +
+      `</div>`
+    ).join('');
+  }
+
+  canvas.addEventListener('mousemove', function(e) {
+    if (!k26 || !k26.world) { tooltip.classList.remove('visible'); return; }
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    let closest = null, closestDist = 20;
+    for (const a of k26.world.agents) {
+      const d = Math.hypot(a.x - mx, a.y - my);
+      if (d < closestDist) { closestDist = d; closest = a; }
+    }
+
+    if (!closest) {
+      tooltip.classList.remove('visible');
+      lastHovered = null;
+      return;
+    }
+
+    // Position — keep card inside the canvas area
+    const tx = e.clientX - rect.left + 14;
+    const ty = e.clientY - rect.top - 10;
+    tooltip.style.left = Math.min(tx, rect.width - 245) + 'px';
+    tooltip.style.top  = Math.min(Math.max(ty, 4), rect.height - 260) + 'px';
+
+    const a = closest;
+    const badge = getBadge(a);
+    const gen   = a.generation || 0;
+    const energy = (a.energy != null ? a.energy : 1);
+    const trust  = a.trustCharge;
+    const grief  = a.griefLevel;
+    const faith  = a.faith || 0;
+    const evo    = a.evolution || 0;
+    const wisdom = a.wisdomScore || 0;
+    const cls    = a.socialClass || '—';
+
+    // Flagged = dishonored or sentinel; Honored = seppuku ghost
+    tooltip.className = 'agent-tooltip visible' +
+      (badge.cls === 'dishonored' || badge.cls === 'sentinel' ? ' flagged' : '') +
+      (badge.cls === 'ghost' ? ' honored' : '');
+
+    tooltip.innerHTML =
+      // ─ HEADER: ID + Status Badge ─
+      `<div class="at-header">` +
+        `<span class="at-id">NO. ${String(a.id).padStart(3,'0')}</span>` +
+        `<span class="at-badge ${badge.cls}">${badge.label}</span>` +
+      `</div>` +
+
+      // ─ BODY: Vital Statistics ─
+      `<div class="at-body">` +
+        (gen > 0 ? `<div class="at-row"><span class="at-label">Generation</span><span class="at-val">${gen}</span></div>` : '') +
+        `<div class="at-row"><span class="at-label">Energy</span><span class="at-val" style="color:${energy < 0.2 ? '#ff4400' : energy > 0.7 ? '#00cc66' : 'var(--text)'}">${energy.toFixed(2)}</span></div>` +
+        `<div class="at-row"><span class="at-label">Trust</span><span class="at-val" style="color:${trust < 0.15 ? '#ff4400' : 'rgba(0,255,200,0.8)'}">${trust.toFixed(2)}</span></div>` +
+        `<div class="at-row"><span class="at-label">Grief</span><span class="at-val" style="color:${grief > 0.7 ? '#ff3c00' : grief > 0.3 ? '#ff8800' : 'var(--text)'}">${grief.toFixed(2)}</span></div>` +
+        `<div class="at-row"><span class="at-label">Faith</span><span class="at-val" style="color:${faith > 0.5 ? '#ffd700' : faith > 0.3 ? 'rgba(255,215,80,0.7)' : 'var(--text)'}">${faith.toFixed(2)}</span></div>` +
+        `<div class="at-divider"></div>` +
+        `<div class="at-row"><span class="at-label">Evolution</span><span class="at-val" style="color:${evo > 0.5 ? '#cc88ff' : 'var(--text)'}">${evo.toFixed(2)}</span></div>` +
+        `<div class="at-row"><span class="at-label">Wisdom</span><span class="at-val">${wisdom.toFixed(2)}</span></div>` +
+        `<div class="at-row"><span class="at-label">Class</span><span class="at-val">${cls}</span></div>` +
+      `</div>` +
+
+      // ─ RINGS: Visual Indicator Explanation ─
+      `<div class="at-rings">` +
+        buildRings(a) +
+      `</div>` +
+
+      // ─ FOOTER: Status Verdict ─
+      `<div class="at-footer">${getVerdict(a)}</div>`;
+
+    lastHovered = a.id;
+  });
+
+  canvas.addEventListener('mouseleave', function() {
+    tooltip.classList.remove('visible');
+    lastHovered = null;
+  });
+})();
+
+// ── Canvas auto-size ──
+function sizeCanvas() {
+  const c = document.getElementById('canvas');
+  const w = c.parentElement;
+  // Use getBoundingClientRect for reliable sizing even before paint
+  const rect = w.getBoundingClientRect();
+  const dw = Math.max(rect.width, 400);
+  const dh = Math.max(rect.height, 300);
+  c.width = dw;
+  c.height = dh;
 }
-window.logLine = logLine;
+window.addEventListener('resize', sizeCanvas);
+
+// ═══════════ AUTO-START — the swarm is ALIVE on load ═══════════
+
+window.addEventListener('load', () => {
+  sizeCanvas();
+  runSim();
+
+  // Fade the hero overlay after 5 seconds
+  setTimeout(() => {
+    document.getElementById('hero-overlay').classList.add('faded');
+  }, 5000);
+
+  // Remove it from DOM after fade completes
+  setTimeout(() => {
+    const hero = document.getElementById('hero-overlay');
+    if (hero) hero.style.display = 'none';
+  }, 7000);
+});
+
+// ═══════════ SIM LIFECYCLE ═══════════
 
 function runSim() {
-  const count = parseInt(document.getElementById('agentCount').value) || 120;
-  resizeCanvas();
-  const canvas = document.getElementById('canvas');
-  world = new M.World(canvas.width, canvas.height, count);
-  running = true;
-  sparkHistory.pred = []; sparkHistory.trust = []; sparkHistory.grief = [];
-  updateStatus(true);
-  logLine(`System initialized — ${count} agents deployed`, 'sys');
+  sizeCanvas();
+  const count = parseInt(document.getElementById('agentCount').value) || 80;
+  if (k26) k26.stop();
+  k26 = new window.K26('canvas');
+  k26.init(count);
 
-  function loop() {
-    if (!running) return;
-    interact.compute(world);
-    world.advanceStep();
-    evolve.evolve(world);
-    drawWorld(canvas.getContext('2d'), world);
-    const em = extract.extract(world);
-    updateMetrics(em);
-    animId = requestAnimationFrame(loop);
-  }
-  loop();
+  // Hook UI updates BEFORE starting — the loop fires synchronously on start()
+  const origUI = k26.updateUI.bind(k26);
+  k26.updateUI = function(e) { origUI(e); updatePresentation(e); };
+
+  k26.start();
+
+  document.getElementById('status-tag').textContent = 'LIVE';
+  document.getElementById('ch-dot').style.background = 'var(--accent)';
+
+  narrate(pickRandom([
+    count + ' agents dropped into the void. No instructions. No leader. Just instinct.',
+    'The swarm is live. ' + count + ' personalities — each one unique, none of them scripted.',
+    count + ' minds, zero coordination. Watch what happens when survival is the only rule.',
+  ]));
+  addEvent('Swarm deployed — ' + count + ' agents, each with unique trust thresholds, grief limits, and risk tolerances.', 'emerge');
 }
 
 function stopSim() {
-  running = false;
-  if (animId) cancelAnimationFrame(animId);
-  updateStatus(false);
-  logLine('System halted', 'sys');
+  if (!k26) return;
+  k26.stop();
+  document.getElementById('status-tag').textContent = 'FROZEN';
+  document.getElementById('ch-dot').style.background = 'var(--amber)';
+  narrate('Frozen. The swarm hangs in place — mid-thought, mid-decision, mid-betrayal.');
 }
 
 function resetSim() {
-  stopSim();
-  world = null;
-  resizeCanvas();
-  const ctx = document.getElementById('canvas').getContext('2d');
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  sparkHistory.pred = []; sparkHistory.trust = []; sparkHistory.grief = [];
-  ['spark-pred','spark-trust','spark-grief'].forEach(id => {
-    const c = document.getElementById(id); c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  if (k26) k26.stop();
+  k26 = null;
+  sizeCanvas();
+  const c = document.getElementById('canvas');
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, c.width, c.height);
+
+  document.getElementById('status-tag').textContent = 'DEAD';
+  document.getElementById('ch-dot').style.background = 'var(--red)';
+  document.getElementById('ch-agents').textContent = '0';
+  document.getElementById('ch-time').textContent = '0';
+  document.getElementById('event-feed').innerHTML = '<div class="evt evt-time">Wiped. Nothing left but the canvas.</div>';
+
+  ['consensus','trust','grief','stability','cascade'].forEach(m => {
+    document.getElementById('m-' + m).textContent = '—';
+    document.getElementById('mb-' + m).style.width = '0';
   });
-  updateStatus(false);
-  document.getElementById('h-time').textContent = '0';
-  document.getElementById('h-agents').textContent = '0';
-  document.getElementById('ov-pred').textContent = '0.000';
-  document.getElementById('ov-pred').className = 'ov-big neutral';
-  logLine('System reset', 'sys');
+
+  narrate('Everything gone. Hit RESTART to bring them back.');
+  eventCount = 0;
+  prevState = {};
 }
 
-function updateStatus(live) {
-  const pill = document.getElementById('status-pill');
-  const label = document.getElementById('status-label');
-  pill.className = live ? 'status-pill live' : 'status-pill ready';
-  label.textContent = live ? 'LIVE' : 'STANDBY';
-  document.getElementById('bb-status').textContent = live ? 'Simulation active' : 'Ready';
+// ═══════════ SEED INJECTION ═══════════
+
+function injectSeeds() {
+  if (!k26 || !k26.world) {
+    narrate('Nothing to break — start the swarm first.');
+    return;
+  }
+  const signals = window.MurmurationModules.SeedInjector.fromForm();
+  k26.seedInjector.inject(k26.world, signals);
+
+  const btn = document.getElementById('injectBtn');
+  btn.style.background = 'var(--accent)';
+  btn.style.color = 'var(--bg)';
+  btn.textContent = 'DETONATED';
+  setTimeout(() => { btn.style.background = ''; btn.style.color = ''; btn.textContent = 'DETONATE'; }, 1500);
+
+  const active = [];
+  if (parseFloat(document.getElementById('pitviper').value) > 0) active.push('earthquake');
+  if (parseFloat(document.getElementById('electroreception').value) > 0) active.push('paranoia');
+  if (parseFloat(document.getElementById('lateralline').value) > 0) active.push('ticking bomb');
+  if (parseFloat(document.getElementById('echolocation').value) > 0) active.push('time warp');
+  if (parseFloat(document.getElementById('mantisshrimp').value) > 0.7) active.push('fresh blood');
+
+  if (active.length > 0) {
+    narrate(pickRandom([
+      'Chaos dropped: ' + active.join(', ') + '. The swarm didn\'t ask for this.',
+      active.join(' + ') + ' — injected. Now watch who adapts and who breaks.',
+      'You just hit them with ' + active.join(', ') + '. Some will survive. Some won\'t.',
+    ]));
+    addEvent('DETONATION — ' + active.join(', ') + ' unleashed on the swarm.', 'crisis');
+  } else {
+    narrate('All sliders at zero. You\'re detonating nothing. Move something first.');
+  }
 }
 
-function seedUpdate(input) {
-  const val = document.querySelector(`.signal-val[data-for="${input.id}"]`);
-  if (val) val.textContent = parseFloat(input.value).toFixed(2);
+function updateVal(input, valId) {
+  document.getElementById(valId).textContent = parseFloat(input.value).toFixed(2);
 }
 
-function getSignals() {
+// Patch seed fromForm
+window.MurmurationModules.SeedInjector.fromForm = function() {
   return {
-    PitViperDivergence: parseFloat(document.getElementById('s-pitviper').value) || 0,
-    ElectroreceptionAnomaly: parseFloat(document.getElementById('s-electro').value) || 0,
-    LateralLinePressure: parseFloat(document.getElementById('s-lateral').value) || 0,
-    EcholocationFrequency: parseFloat(document.getElementById('s-echo').value) || 0,
-    MantisShrimp16Bands: parseFloat(document.getElementById('s-mantis').value) || 0
+    PitViperDivergence:      Math.max(0, Math.min(1, parseFloat(document.getElementById('pitviper').value) || 0)),
+    ElectroreceptionAnomaly: Math.max(0, Math.min(1, parseFloat(document.getElementById('electroreception').value) || 0)),
+    LateralLinePressure:     Math.max(0, Math.min(1, parseFloat(document.getElementById('lateralline').value) || 0)),
+    EcholocationFrequency:   Math.max(0, Math.min(1, parseFloat(document.getElementById('echolocation').value) || 0)),
+    MantisShrimp16Bands:     Math.max(0, Math.min(1, parseFloat(document.getElementById('mantisshrimp').value) || 0))
   };
-}
+};
 
-function applySignals() {
-  if (!world) { logLine('No active simulation — initialize first', 'sys'); return; }
-  seed.inject(world, getSignals());
-  const btn = document.getElementById('applyBtn');
-  btn.classList.add('flash'); btn.textContent = 'APPLIED';
-  setTimeout(() => { btn.classList.remove('flash'); btn.textContent = 'APPLY PARAMETERS'; }, 600);
-  const active = Object.entries(getSignals()).filter(([,v]) => v > 0).map(([k,v]) => `${k.replace(/Divergence|Anomaly|Pressure|Frequency|16Bands/g,'')}=${v.toFixed(2)}`).join('  ');
-  logLine(`PARAMETERS APPLIED — ${active || 'baseline'}`, 'seed');
-}
+// ═══════════════════════════════════════════════════
+// NARRATIVE ENGINE — translates math into drama
+// ═══════════════════════════════════════════════════
 
-function updateMetrics(em) {
-  if (!em || !world) return;
-  const p = em.prediction, c = em.confidence;
+let prevState = {};
 
-  // Header
-  document.getElementById('h-time').textContent = world.time;
-  document.getElementById('h-agents').textContent = world.agents.filter(a => !a.seppukuDone && !a.isSentinel).length;
+function updatePresentation(e) {
+  const time = k26.world ? k26.world.time : 0;
+  const alive = k26.world ? k26.world.agents.filter(a => !a.seppukuDone).length : 0;
 
-  // Overlay
-  document.getElementById('ov-pred').textContent = p.toFixed(3);
-  document.getElementById('ov-pred').className = 'ov-big' + (Math.abs(p) > .3 ? (p > 0 ? ' hi' : ' negative') : ' neutral');
-  document.getElementById('ov-conf').textContent = c.toFixed(2);
-  const ct = document.getElementById('ov-cluster');
-  ct.textContent = em.clusters.toUpperCase();
-  ct.className = 'tag tag-' + em.clusters;
-  document.getElementById('ov-cascade').textContent = em.cascadeVelocity.toFixed(2);
-  document.getElementById('ov-stab').textContent = (em.stability || 0).toFixed(2);
-  document.getElementById('ov-wisdom').textContent = em.wisdomCount || 0;
+  document.getElementById('ch-agents').textContent = alive;
+  document.getElementById('ch-time').textContent = time;
 
-  // Bars
-  const trust = em.avgTrust || 0, grief = em.avgGrief || 0, stab = em.stability || 0;
-  document.getElementById('bar-trust').style.width = (trust * 100) + '%';
-  document.getElementById('m-trust').textContent = trust.toFixed(2);
-  document.getElementById('bar-grief').style.width = (grief * 100) + '%';
-  document.getElementById('m-grief').textContent = grief.toFixed(2);
-  document.getElementById('bar-stab').style.width = (stab * 100) + '%';
-  document.getElementById('m-stab').textContent = stab.toFixed(2);
+  setMetric('consensus', e.consensus, e.consensus > 0.7 ? 'var(--accent)' : e.consensus < 0.3 ? 'var(--red)' : 'var(--amber)');
+  setMetric('trust', e.avgTrust, e.avgTrust > 0.5 ? 'var(--cyan)' : 'var(--red)');
+  setMetric('grief', e.avgGrief, e.avgGrief > 0.5 ? 'var(--red)' : e.avgGrief > 0.2 ? 'var(--amber)' : 'var(--accent)');
+  setMetric('stability', e.stability || 0, (e.stability||0) > 0.7 ? 'var(--purple)' : 'var(--amber)');
+  setMetric('cascade', e.cascadeVelocity, e.cascadeVelocity > 0.5 ? 'var(--red)' : 'var(--cyan)');
 
-  // Cards
-  document.getElementById('m-leaders').textContent = em.highTrustCount || 0;
-  document.getElementById('m-leaders').className = 'mc-val' + ((em.highTrustCount || 0) > 5 ? ' hi' : '');
-  document.getElementById('m-depleted').textContent = em.lowTrustCount || 0;
-  document.getElementById('m-depleted').className = 'mc-val' + ((em.lowTrustCount || 0) > 10 ? ' lo' : '');
-  document.getElementById('m-grieving').textContent = em.grievingCount || 0;
-  document.getElementById('m-grieving').className = 'mc-val' + ((em.grievingCount || 0) > 5 ? ' warn' : '');
-  document.getElementById('m-crisis').textContent = em.crisisCount || 0;
-  document.getElementById('m-crisis').className = 'mc-val' + ((em.crisisCount || 0) > 0 ? ' lo' : '');
-  document.getElementById('m-seppuku').textContent = em.seppukuCount || 0;
-  document.getElementById('m-dishonor').textContent = em.dishonoredCount || 0;
-  document.getElementById('m-dishonor').className = 'mc-val' + ((em.dishonoredCount || 0) > 0 ? ' lo' : '');
-  document.getElementById('m-sentinel').textContent = em.hasSentinel ? `Node #${em.sentinelId}` : 'None';
-  document.getElementById('m-sentinel').className = 'mc-val' + (em.hasSentinel ? ' warn' : '');
+  if (time < 3) return;
 
-  // Sparklines (every 2nd frame)
-  if (world.time % 2 === 0) {
-    sparkHistory.pred.push(p); if (sparkHistory.pred.length > SPARK_LEN) sparkHistory.pred.shift();
-    sparkHistory.trust.push(trust); if (sparkHistory.trust.length > SPARK_LEN) sparkHistory.trust.shift();
-    sparkHistory.grief.push(grief); if (sparkHistory.grief.length > SPARK_LEN) sparkHistory.grief.shift();
-    drawSparkline('spark-pred', sparkHistory.pred, 'rgba(0,225,135,1)', [-1, 1]);
-    drawSparkline('spark-trust', sparkHistory.trust, 'rgba(0,180,216,1)', [0, 1]);
-    drawSparkline('spark-grief', sparkHistory.grief, 'rgba(245,158,11,1)', [0, 1]);
+  // ── First consensus ──
+  if (!prevState.firstConsensus && e.consensus > 0.5 && time > 15) {
+    prevState.firstConsensus = true;
+    narrate(pickRandom([
+      'They\'re aligning. Nobody told them to — they just started agreeing.',
+      'Consensus is forming. 80 strangers becoming one mind.',
+      'Watch — they\'re syncing up. This is emergence. This is the point.',
+    ]));
+    addEvent('First consensus — agents found agreement through nothing but proximity and instinct.', 'emerge');
   }
 
-  // Log
-  if (world.time % 40 === 0) {
-    const type = Math.abs(p) > .4 ? 'emerge' : Math.abs(p) > .15 ? 'evolve' : 'tick';
-    logLine(`T${world.time}  signal=${p.toFixed(3)}  conf=${c.toFixed(2)}  [${em.clusters}]  trust=${trust.toFixed(2)}  stress=${grief.toFixed(2)}`, type);
+  // ── High consensus ──
+  if (!prevState.hivemind && e.consensus > 0.8) {
+    prevState.hivemind = true;
+    narrate(pickRandom([
+      'Near-total agreement. The swarm is one organism now.',
+      'Hivemind achieved. They didn\'t vote. They didn\'t discuss. They just converged.',
+    ]));
+    addEvent('HIVEMIND — consensus above 0.8. The collective is speaking with one voice.', 'emerge');
+  }
+
+  // ── Consensus collapse ──
+  if (prevState.hivemind && e.consensus < 0.4) {
+    prevState.hivemind = false;
+    narrate(pickRandom([
+      'The agreement shattered. Factions are forming.',
+      'Unity is gone. Watch them split — this is how civilizations fracture.',
+    ]));
+    addEvent('FRACTURE — consensus collapsed. The swarm is splitting into competing factions.', 'trust');
+  }
+
+  // ── Seppuku ──
+  if (e.seppukuCount > (prevState.seppuku || 0)) {
+    prevState.seppuku = e.seppukuCount;
+    narrate(pickRandom([
+      'An agent just sacrificed itself. Its trust? Redistributed to survivors. Its memory? Permanent.',
+      'Seppuku — an agent chose the group over itself. That wisdom doesn\'t die. It echoes.',
+      'One fell so the rest could rise. That\'s not programmed. That\'s emergent honor.',
+    ]));
+    addEvent('SEPPUKU — agent chose sacrifice over selfishness. Trust redistributed. Wisdom preserved.', 'grief');
+  }
+
+  // ── Dishonor ──
+  if (e.dishonoredCount > (prevState.dishonored || 0)) {
+    prevState.dishonored = e.dishonoredCount;
+    narrate(pickRandom([
+      'Dishonored. An agent chose itself — now everyone can see the cost.',
+      'Selfishness has a price. That agent is now the sentinel — a walking warning.',
+    ]));
+    addEvent('DISHONORED — an agent refused to sacrifice. Now it serves as the cautionary tale.', 'crisis');
+  }
+
+  // ── Sentinel ──
+  if (e.hasSentinel && !prevState.sentinel) {
+    prevState.sentinel = true;
+    addEvent('SENTINEL ACTIVE — Agent #' + e.sentinelId + ' locked at maximum grief. The cost of selfishness, made visible.', 'grief');
+  }
+
+  // ── Crisis ──
+  if (e.crisisCount > 0 && !prevState.crisis) {
+    prevState.crisis = true;
+    narrate(pickRandom([
+      'Crisis. Agents are at the breaking point — sacrifice or selfishness. No middle ground.',
+      'The grief variable just hit critical. Someone\'s about to make a permanent choice.',
+    ]));
+    addEvent(e.crisisCount + ' agent(s) in crisis — grief overwhelming, decision imminent.', 'crisis');
+  }
+  if (e.crisisCount === 0 && prevState.crisis) prevState.crisis = false;
+
+  // ── Class emergence narration ──
+  if (k26 && k26.wealthEngine) {
+    const we = k26.wealthEngine;
+
+    // First elite
+    if (!prevState.firstElite && we.classCounts.ELITE > 0) {
+      prevState.firstElite = true;
+      narrate(pickRandom([
+        'An elite has emerged. Nobody elected them — wealth did.',
+        'Gold ring. The first agent crossed the wealth threshold. Class is born.',
+        'From nothing, inequality. One agent now shapes reality more than the rest.',
+      ]));
+      addEvent('ELITE EMERGED — first agent crossed the wealth threshold. Class system is live.', 'emerge');
+    }
+
+    // High inequality
+    if (!prevState.highGini && we.giniCoefficient > 0.55) {
+      prevState.highGini = true;
+      narrate(pickRandom([
+        'Inequality is extreme. The few own everything. The many own nothing. Sound familiar?',
+        'Gini above 0.55 — this society is a powder keg. Revolution conditions building.',
+      ]));
+      addEvent('INEQUALITY CRITICAL — Gini coefficient above 0.55. Revolution risk rising.', 'crisis');
+    }
+    if (prevState.highGini && we.giniCoefficient < 0.35) prevState.highGini = false;
+
+    // Revolution
+    if (we.revolutionCount > (prevState.revolutions || 0)) {
+      prevState.revolutions = we.revolutionCount;
+      narrate(pickRandom([
+        'REVOLUTION. The bottom rose. Wealth seized. Everything reshuffles. Nobody wins a revolution.',
+        'The destitute had nothing left to lose. The elites had everything to lose. Guess who blinked.',
+        'History repeats: inequality → grief → uprising → reset. Watch the cycle.',
+      ]));
+    }
+  }
+
+  // ── Periodic color commentary ──
+  if (time % 120 === 0 && time > 0) {
+    const lines = [];
+    if (e.avgTrust > 0.65) lines.push('Trust is thick — cooperation is paying off.');
+    if (e.avgTrust < 0.25) lines.push('Trust is starving. Isolation is winning.');
+    if (e.avgGrief > 0.4) lines.push('Grief is heavy. The swarm remembers what it lost.');
+    if (e.cascadeVelocity > 0.4) lines.push('Ideas moving at wildfire speed — one voice is reshaping the whole swarm.');
+    if (e.clusters === 'polarized') lines.push('Polarized. Two camps, no bridge. Sound familiar?');
+    if (e.stability > 0.85) lines.push('Rock solid. This swarm has figured itself out — for now.');
+    if (e.stability < 0.3) lines.push('Unstable. The whole thing could flip in 10 ticks.');
+
+    if (lines.length > 0) narrate(pickRandom(lines));
+  }
+
+  // ── Periodic log entries ──
+  if (time % 60 === 0 && time > 0) {
+    addEvent(
+      'consensus:' + e.consensus.toFixed(2) +
+      ' trust:' + (e.avgTrust||0).toFixed(2) +
+      ' grief:' + (e.avgGrief||0).toFixed(2) +
+      ' alive:' + alive,
+      'time'
+    );
+  }
+
+  // ── ECONOMY METRICS ──
+  if (k26 && k26.economy) {
+    const econ = k26.economy;
+
+    // Phase display
+    const phaseEl = document.getElementById('m-phase');
+    const phaseBar = document.getElementById('mb-phase');
+    if (phaseEl) {
+      phaseEl.textContent = econ.phase;
+      const phasePct = econ.phaseTimer / (econ.phaseTicks[econ.phase] || 500);
+      phaseBar.style.width = (phasePct * 100) + '%';
+      phaseBar.style.background =
+        econ.phase === 'GOLDEN'   ? 'var(--accent)' :
+        econ.phase === 'DISASTER' ? 'var(--red)' :
+        econ.phase === 'SCARCITY' ? 'var(--amber)' :
+                                     'var(--cyan)';
+      phaseEl.style.color =
+        econ.phase === 'GOLDEN'   ? 'var(--accent)' :
+        econ.phase === 'DISASTER' ? 'var(--red)' :
+        econ.phase === 'SCARCITY' ? 'var(--amber)' :
+                                     'var(--cyan)';
+    }
+
+    // Avg energy
+    const liveAgents = k26.world.agents.filter(a => !a.seppukuDone && a.griefState !== 'DISHONORED' && a.griefState !== 'STARVED');
+    if (liveAgents.length > 0) {
+      const avgEnergy = liveAgents.reduce((s, a) => s + (a.energy || 0), 0) / liveAgents.length;
+      setMetric('energy', avgEnergy, avgEnergy > 0.5 ? '#ffcc00' : avgEnergy > 0.25 ? 'var(--amber)' : 'var(--red)');
+    }
+
+    // Starvation deaths
+    const cyclesEl = document.getElementById('m-cycles');
+    if (cyclesEl) cyclesEl.textContent = econ.totalBirths;
+
+    // Faith & Evolution
+    if (liveAgents.length > 0) {
+      const avgFaith = liveAgents.reduce((s, a) => s + (a.faith || 0), 0) / liveAgents.length;
+      setMetric('faith', avgFaith,
+        econ._godPresent ? '#ffd700' : avgFaith > 0.3 ? 'rgba(255,215,80,0.7)' : 'rgba(255,215,80,0.3)');
+
+      const avgEvo = liveAgents.reduce((s, a) => s + (a.evolution || 0), 0) / liveAgents.length;
+      const evoNorm = Math.min(1, avgEvo / 3); // normalize to 0-1 for bar (cap at 3.0)
+      setMetric('evolution', avgEvo,
+        avgEvo > 1.0 ? '#cc88ff' : avgEvo > 0.3 ? 'rgba(180,120,255,0.6)' : 'rgba(180,120,255,0.3)');
+    }
+
+    // Wealth & class metrics
+    if (k26.wealthEngine) {
+      const we = k26.wealthEngine;
+      setMetric('gini', we.giniCoefficient,
+        we.giniCoefficient > 0.6 ? 'var(--red)' :
+        we.giniCoefficient > 0.35 ? 'var(--amber)' : 'var(--accent)');
+
+      const ce = document.getElementById('c-elite');
+      const cm = document.getElementById('c-merchant');
+      const cw = document.getElementById('c-worker');
+      const cd = document.getElementById('c-destitute');
+      if (ce) ce.textContent = we.classCounts.ELITE;
+      if (cm) cm.textContent = we.classCounts.MERCHANT;
+      if (cw) cw.textContent = we.classCounts.WORKER;
+      if (cd) cd.textContent = we.classCounts.DESTITUTE;
+
+      const revEl = document.getElementById('m-revolutions');
+      if (revEl) revEl.textContent = we.revolutionCount;
+    }
+
+    // Warning log — evaluate and fire if threshold crossed
+    if (k26.warningLog) {
+      const warning = k26.warningLog.evaluate(e, time);
+      if (warning) {
+        addEvent('⚠ CASCADE WARNING — risk score ' + warning.score.toFixed(2) + ' — grief:' + warning.evidence.avgGrief.toFixed(2) + ' trust:' + warning.evidence.avgTrust.toFixed(2), 'crisis');
+      }
+    }
   }
 }
 
-function copySnapshot() {
-  if (!world) return;
-  const em = extract.extract(world);
-  const snap = {
-    platform: 'Murmuration by Gnosquam', version: '1.0',
-    timestamp: new Date().toISOString(), cycle: world.time,
-    agentCount: world.agents.length,
-    activeCount: world.agents.filter(a => !a.seppukuDone && !a.isSentinel).length,
-    collectiveSignal: em.prediction, confidence: em.confidence,
-    clusterState: em.clusters, cascadeVelocity: em.cascadeVelocity,
-    stability: em.stability, networkTrust: em.avgTrust,
-    highTrustNodes: em.highTrustCount, depletedNodes: em.lowTrustCount,
-    systemicStress: em.avgGrief, nodesUnderStress: em.grievingCount,
-    criticalNodes: em.crisisCount, honoredExits: em.seppukuCount,
-    nodeFailures: em.dishonoredCount,
-    sentinel: em.hasSentinel ? { active: true, nodeId: em.sentinelId } : { active: false },
-    collectiveWisdom: em.wisdomCount,
-    environment: { ...world.env }
+function setMetric(name, value, color) {
+  const v = typeof value === 'number' ? value : 0;
+  document.getElementById('m-' + name).textContent = v.toFixed(2);
+  const bar = document.getElementById('mb-' + name);
+  bar.style.width = Math.min(100, Math.abs(v) * 100) + '%';
+  bar.style.background = color;
+}
+
+// ── NARRATION ──
+
+let narrationTimer = null;
+function narrate(text) {
+  const el = document.getElementById('narration');
+  el.classList.remove('visible');
+  clearTimeout(narrationTimer);
+  narrationTimer = setTimeout(() => {
+    el.textContent = text;
+    el.classList.add('visible');
+  }, 150);
+}
+
+// ── EVENT FEED ──
+
+function addEvent(text, type) {
+  const feed = document.getElementById('event-feed');
+  const div = document.createElement('div');
+  div.className = 'evt evt-' + type;
+  const t = k26 && k26.world ? k26.world.time : 0;
+  div.innerHTML = '<span class="evt-time">T' + t + '</span> ' + text;
+  feed.insertBefore(div, feed.firstChild);
+  eventCount++;
+  while (feed.children.length > MAX_EVENTS) feed.removeChild(feed.lastChild);
+}
+
+// ── UTILS ──
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// Override engine log — only surface dramatic events, not routine ticks
+window.logLine = function(msg, type) {
+  if (type === 'emerge') addEvent(msg, 'emerge');
+};
+
+// ═══════════════════════════════════════════════════
+// CIVILIZATION SAVE / LOAD — never lose a swarm again
+// ═══════════════════════════════════════════════════
+
+function saveCivilization() {
+  if (!k26 || !k26.world) {
+    document.getElementById('save-status').textContent = 'No swarm running.';
+    return;
+  }
+  const world = k26.world;
+  const snapshot = {
+    meta: {
+      savedAt: new Date().toISOString(),
+      tick: world.time,
+      alive: world.agents.filter(a => !a.seppukuDone).length,
+      dead: world.agents.filter(a => a.seppukuDone).length,
+      total: world.agents.length,
+      width: world.width,
+      height: world.height
+    },
+    env: { ...world.env },
+    collectiveMemory: world.collectiveMemory ? [...world.collectiveMemory] : [],
+    sentinel: world.sentinel ? world.sentinel.id : null,
+    agents: world.agents.map(a => ({
+      id: a.id, x: a.x, y: a.y, vx: a.vx, vy: a.vy, radius: a.radius,
+      personality: { ...a.personality },
+      beliefState: { ...a.beliefState },
+      trustCharge: a.trustCharge,
+      griefLevel: a.griefLevel,
+      griefState: a.griefState,
+      graceTimer: a.graceTimer,
+      wisdomScore: a.wisdomScore,
+      isSentinel: a.isSentinel,
+      seppukuDone: a.seppukuDone,
+      energy: a.energy != null ? a.energy : null,
+      generation: a.generation || 0,
+      faith: a.faith || 0,
+      evolution: a.evolution || 0,
+      wealth: a.wealth != null ? a.wealth : null,
+      socialClass: a.socialClass || null,
+      memory: a.memory ? a.memory.slice(-10) : [],
+      _prevDrawdown: a._prevDrawdown || 0
+    })),
+    economy: k26.economy ? k26.economy.serialize() : null,
+    wealth: k26.wealthEngine ? k26.wealthEngine.serialize() : null
   };
-  navigator.clipboard.writeText(JSON.stringify(snap, null, 2)).then(() => logLine('Snapshot exported to clipboard', 'sys'));
+
+  const json = JSON.stringify(snapshot, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'murmuration-T' + snapshot.meta.tick + '-' + snapshot.meta.alive + 'alive-' + Date.now() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  const status = document.getElementById('save-status');
+  status.textContent = 'Saved: ' + snapshot.meta.alive + ' alive, ' + snapshot.meta.dead + ' dead, tick ' + snapshot.meta.tick;
+  status.style.color = 'var(--accent)';
+  setTimeout(() => { status.style.color = 'var(--text-dim)'; }, 3000);
+
+  addEvent('SNAPSHOT SAVED — T' + snapshot.meta.tick + ' — ' + snapshot.meta.alive + ' alive, ' + snapshot.meta.dead + ' dead', 'emerge');
 }
 
-function copyReport() {
-  if (!world) return;
-  const em = extract.extract(world);
-  const p = em.prediction, c = em.confidence;
-  const direction = p > .15 ? 'BULLISH' : p < -.15 ? 'BEARISH' : 'NEUTRAL';
-  const risk = em.avgGrief > .4 ? 'ELEVATED' : em.avgGrief > .2 ? 'MODERATE' : 'LOW';
-  const report = `MURMURATION INTELLIGENCE REPORT
-Generated: ${new Date().toISOString()}
-Platform: Gnosquam Sovereign AI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-COLLECTIVE SIGNAL: ${p.toFixed(4)} (${direction})
-CONFIDENCE: ${(c * 100).toFixed(1)}%
-CLUSTER STATE: ${em.clusters.toUpperCase()}
-
-NETWORK HEALTH
-  Trust Index: ${(em.avgTrust * 100).toFixed(1)}%
-  High-Trust Nodes: ${em.highTrustCount}
-  Depleted Nodes: ${em.lowTrustCount}
-
-SYSTEMIC RISK: ${risk}
-  Stress Level: ${(em.avgGrief * 100).toFixed(1)}%
-  Nodes Under Stress: ${em.grievingCount}
-  Critical: ${em.crisisCount}
-  Sentinel Active: ${em.hasSentinel ? 'Yes (Node #' + em.sentinelId + ')' : 'No'}
-
-COLLECTIVE MEMORY
-  Honored Exits: ${em.seppukuCount}
-  Node Failures: ${em.dishonoredCount}
-  Wisdom Accumulated: ${em.wisdomCount}
-
-SIMULATION: Cycle ${world.time} | ${world.agents.filter(a => !a.seppukuDone && !a.isSentinel).length} active agents
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Murmuration — Collective Intelligence Platform
-gnosquam.com`;
-  navigator.clipboard.writeText(report).then(() => logLine('Intelligence report exported to clipboard', 'sys'));
+function loadCivilization(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const snapshot = JSON.parse(e.target.result);
+      restoreCivilization(snapshot);
+    } catch(err) {
+      document.getElementById('save-status').textContent = 'Load failed: ' + err.message;
+      document.getElementById('save-status').style.color = 'var(--red)';
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // reset so same file can be reloaded
 }
 
-window.addEventListener('resize', resizeCanvas);
-window.addEventListener('load', resizeCanvas);
+function restoreCivilization(snapshot) {
+  const Agent = window.MurmurationModules.Agent;
+  const World = window.MurmurationModules.World;
+
+  // Stop current sim
+  if (k26) k26.stop();
+
+  sizeCanvas();
+  const c = document.getElementById('canvas');
+
+  // Create new K26 instance but DON'T call init (that creates random agents)
+  k26 = new window.K26('canvas');
+  const w = snapshot.meta.width || c.width;
+  const h = snapshot.meta.height || c.height;
+
+  // Build world shell without random agents
+  k26.world = new World(w, h, 0); // 0 agents — we'll rebuild them
+
+  // Scale factor if canvas size changed
+  const sx = c.width / w;
+  const sy = c.height / h;
+
+  // Rebuild agents from snapshot
+  k26.world.agents = snapshot.agents.map(sa => {
+    const agent = new Agent(sa.id, sa.x * sx, sa.y * sy, sa.personality);
+    agent.vx = sa.vx || 0;
+    agent.vy = sa.vy || 0;
+    agent.radius = sa.radius || 5;
+    agent.beliefState = sa.beliefState || {};
+    agent.trustCharge = sa.trustCharge;
+    agent.griefLevel = sa.griefLevel;
+    agent.griefState = sa.griefState;
+    agent.graceTimer = sa.graceTimer || 0;
+    agent.wisdomScore = sa.wisdomScore || 0;
+    agent.isSentinel = sa.isSentinel || false;
+    agent.seppukuDone = sa.seppukuDone || false;
+    agent.memory = sa.memory || [];
+    agent._prevDrawdown = sa._prevDrawdown || 0;
+    if (sa.energy != null) agent.energy = sa.energy;
+    if (sa.generation != null) agent.generation = sa.generation;
+    if (sa.faith != null) agent.faith = sa.faith;
+    if (sa.evolution != null) agent.evolution = sa.evolution;
+    if (sa.wealth != null) agent.wealth = sa.wealth;
+    if (sa.socialClass) agent.socialClass = sa.socialClass;
+    return agent;
+  });
+
+  // Restore world state
+  k26.world.time = snapshot.meta.tick || 0;
+  if (snapshot.env) Object.assign(k26.world.env, snapshot.env);
+  if (snapshot.collectiveMemory) k26.world.collectiveMemory = snapshot.collectiveMemory;
+
+  // Restore economy
+  if (window.MurmurationModules.Economy) {
+    if (snapshot.economy) {
+      k26.economy = window.MurmurationModules.Economy.restore(k26.world, snapshot.economy);
+    } else {
+      k26.economy = new window.MurmurationModules.Economy(k26.world);
+    }
+  }
+  // Restore wealth engine
+  if (window.MurmurationModules.WealthEngine && k26.economy) {
+    if (snapshot.wealth) {
+      k26.wealthEngine = window.MurmurationModules.WealthEngine.restore(k26.world, k26.economy, snapshot.wealth);
+    } else {
+      k26.wealthEngine = new window.MurmurationModules.WealthEngine(k26.world, k26.economy);
+    }
+  }
+
+  if (window.MurmurationModules.WarningLog) {
+    k26.warningLog = new window.MurmurationModules.WarningLog();
+  }
+
+  // Reconnect sentinel
+  if (snapshot.sentinel != null) {
+    const sentinelAgent = k26.world.agents.find(a => a.id === snapshot.sentinel);
+    if (sentinelAgent) k26.world.sentinel = sentinelAgent;
+  }
+
+  // Hook UI and start
+  const origUI = k26.updateUI.bind(k26);
+  k26.updateUI = function(em) { origUI(em); updatePresentation(em); };
+  k26.start();
+
+  // Update UI
+  document.getElementById('status-tag').textContent = 'LIVE';
+  document.getElementById('ch-dot').style.background = 'var(--accent)';
+  prevState = {};
+
+  const status = document.getElementById('save-status');
+  status.textContent = 'Restored: T' + snapshot.meta.tick + ' — ' + snapshot.meta.alive + ' alive, ' + snapshot.meta.dead + ' dead';
+  status.style.color = 'var(--accent)';
+
+  narrate('Civilization restored from snapshot. Tick ' + snapshot.meta.tick + '. ' + snapshot.meta.alive + ' survivors resume.');
+  addEvent('CIVILIZATION RESTORED — T' + snapshot.meta.tick + ' — ' + snapshot.meta.alive + ' alive from archive', 'emerge');
+}
 </script>
 </body>
 </html>
