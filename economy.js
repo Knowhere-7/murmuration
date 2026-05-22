@@ -55,7 +55,7 @@ window.MurmurationModules.Economy = class Economy {
 
     // ── Resource zones ──
     this.zones = [];
-    this.initZones(opts.zoneCount || 8);
+    this.initZones(opts.zoneCount || 4);
 
     // ── Cycle state ──
     this.phase       = 'GOLDEN';
@@ -71,6 +71,11 @@ window.MurmurationModules.Economy = class Economy {
 
     // ── Stats ──
     this.totalHarvested = 0;
+
+    // ── Migration / wind — slowly rotating directional bias ──
+    // Creates the swooping, flowing movement that defines a murmuration
+    this._windAngle = Math.random() * Math.PI * 2;
+    this._windSpeed = 0.03; // gentle but persistent
   }
 
   // ── RESOURCE ZONES ──────────────────────────────────────────
@@ -84,7 +89,7 @@ window.MurmurationModules.Economy = class Economy {
       this.zones.push({
         x: margin + Math.random() * (w - margin * 2),
         y: margin + Math.random() * (h - margin * 2),
-        radius: 80 + Math.random() * 60,
+        radius: 90 + Math.random() * 60,
         richness: 0.6 + Math.random() * 0.4,
         depleted: 0
       });
@@ -172,6 +177,13 @@ window.MurmurationModules.Economy = class Economy {
     // Zone regeneration
     for (const zone of this.zones) {
       zone.depleted = Math.max(0, zone.depleted - 0.0005 * mult.zoneShrink);
+    }
+
+    // Wind rotation — slow drift creates sweeping flock motion
+    this._windAngle += 0.003 + Math.sin(this.world.time * 0.001) * 0.002;
+    // Occasional gust — sharper direction change
+    if (Math.random() < 0.002) {
+      this._windAngle += (Math.random() - 0.5) * 1.2;
     }
 
     // ── AGENT ECONOMY LOOP ──
@@ -406,12 +418,18 @@ window.MurmurationModules.Economy = class Economy {
   applyMovementDrive(agent, atZone, alive) {
     const energy = agent.energy;
 
+    // ── MIGRATION WIND — the murmuration swoops ──
+    // Slowly rotating directional bias. Everyone feels it.
+    // This is what makes the swarm FLOW instead of sitting still.
+    agent.vx += Math.cos(this._windAngle) * this._windSpeed;
+    agent.vy += Math.sin(this._windAngle) * this._windSpeed;
+
     // Gentle gravity toward world center — prevents scatter to edges
     const cx = this.world.width / 2, cy = this.world.height / 2;
     const edgeDist = Math.hypot(agent.x - cx, agent.y - cy);
     const maxDist = Math.min(cx, cy);
-    if (edgeDist > maxDist * 0.5) {
-      const gravity = 0.04 * ((edgeDist / maxDist) - 0.5);
+    if (edgeDist > maxDist * 0.4) {
+      const gravity = 0.06 * ((edgeDist / maxDist) - 0.4);
       this._nudge(agent, cx, cy, gravity);
     }
 
@@ -434,26 +452,11 @@ window.MurmurationModules.Economy = class Economy {
     const livingNearby = neighbors.filter(n =>
       !n.seppukuDone && n.griefState !== 'DISHONORED');
 
-    if (livingNearby.length < 4 && alive.length > 1) {
-      // Find nearest cluster of agents (average position of closest 5)
-      const sorted = [];
-      for (const other of alive) {
-        if (other === agent) continue;
-        sorted.push({ a: other, d: Math.hypot(agent.x - other.x, agent.y - other.y) });
-      }
-      sorted.sort((a, b) => a.d - b.d);
-      const closest5 = sorted.slice(0, 5);
-      if (closest5.length > 0) {
-        const avgX = closest5.reduce((s, o) => s + o.a.x, 0) / closest5.length;
-        const avgY = closest5.reduce((s, o) => s + o.a.y, 0) / closest5.length;
-        // Lonelier = stronger pull. 0 neighbors → 0.15, 3 neighbors → 0.04
-        const loneliness = 0.04 + (4 - livingNearby.length) * 0.035;
-        this._nudge(agent, avgX, avgY, loneliness);
-      }
-    }
+    // Social cohesion now handled by boids flocking in world.js.
+    // Economy only handles food-seeking, sharing, and pilgrimage drives.
 
-    // DRIVE 3: Well-fed + near zone → occasionally explore a different zone
-    if (energy > 0.7 && atZone && Math.random() < 0.002) {
+    // DRIVE 3: Well-fed + near zone → explore a different zone
+    if (energy > 0.6 && atZone && Math.random() < 0.008) {
       const otherZones = this.zones.filter(z => {
         const d = Math.hypot(agent.x - z.x, agent.y - z.y);
         return d > z.radius * 2;
