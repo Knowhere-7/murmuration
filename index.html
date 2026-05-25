@@ -29,8 +29,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 @keyframes pulse-glow{0%,100%{opacity:.5;text-shadow:none}50%{opacity:1;text-shadow:0 0 8px var(--accent-mid)}}
 
 /* ── LAYOUT ── */
-.main{display:flex;min-height:calc(100vh - 46px)}
-.canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;min-height:70vh}
+.main{display:flex;height:calc(100vh - 46px);overflow:hidden}
+.canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;overflow:hidden}
 .sidebar{width:340px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
 
 /* ── HERO OVERLAY on canvas — fades out on interaction ── */
