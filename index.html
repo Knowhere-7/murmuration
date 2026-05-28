@@ -1105,6 +1105,57 @@ function updatePresentation(e) {
   setMetric('stability', e.stability || 0, (e.stability||0) > 0.7 ? 'var(--purple)' : 'var(--amber)');
   setMetric('cascade', e.cascadeVelocity, e.cascadeVelocity > 0.5 ? 'var(--red)' : 'var(--cyan)');
 
+  // ── Phase 1: Compute ambient background state ──
+  // Utopia = high trust + low grief → deep blue
+  // Stress = high disturbance/pressure → dark green
+  // Grief  = high avg grief → deep red
+  // Blends smoothly between states; intensity ramps gently
+  if (k26.world) {
+    const grief = e.avgGrief || 0;
+    const trust = e.avgTrust || 0;
+    const dist  = k26.world.env.disturbance || 0;
+    const press = k26.world.env.pressure || 0;
+    const stress = Math.min(1, (dist + press) * 0.6);
+
+    // Determine dominant state and blend
+    let r = 0, g = 0, b = 0, intensity = 0;
+
+    // Grief channel — deep red, fading to black at edges
+    if (grief > 0.25) {
+      const w = Math.min(1, (grief - 0.25) / 0.5); // ramps 0.25→0.75
+      r += 120 * w;
+      g += 8 * w;
+      b += 15 * w;
+      intensity = Math.max(intensity, w);
+    }
+    // Stress channel — dark green, fading to black at edges
+    if (stress > 0.15) {
+      const w = Math.min(1, (stress - 0.15) / 0.6);
+      r += 12 * w;
+      g += 80 * w;
+      b += 20 * w;
+      intensity = Math.max(intensity, w * 0.8);
+    }
+    // Utopia channel — deep blue center (trust high AND grief low)
+    if (trust > 0.45 && grief < 0.2) {
+      const w = Math.min(1, (trust - 0.45) / 0.35) * (1 - grief * 3);
+      r += 10 * w;
+      g += 20 * w;
+      b += 120 * w;
+      intensity = Math.max(intensity, w * 0.7);
+    }
+
+    // Smooth transition — lerp toward target to avoid flicker
+    const prev = k26.world._ambientState || { r: 0, g: 0, b: 0, intensity: 0 };
+    const lerpRate = 0.03; // slow blend — takes ~1-2 seconds to shift
+    k26.world._ambientState = {
+      r: prev.r + (r - prev.r) * lerpRate,
+      g: prev.g + (g - prev.g) * lerpRate,
+      b: prev.b + (b - prev.b) * lerpRate,
+      intensity: prev.intensity + (intensity - prev.intensity) * lerpRate
+    };
+  }
+
   if (time < 3) return;
 
   // ── First consensus ──
