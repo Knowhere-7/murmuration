@@ -198,79 +198,131 @@ window.MurmurationModules.K26 = class K26 {
   }
 
   /**
-   * Phase 4: Nebula clouds — large gaseous formations that drift slowly.
-   * Positions are generated once (lazy init) and persist for the session.
-   * Colors are tinted by the ambient emotional state so they shift with the swarm mood.
+   * Phase 4: Nebula clouds — massive gaseous formations like deep space.
+   * Three tiers: large anchor clouds, medium filaments, small dense knots.
+   * Covers roughly half the canvas with random organic distribution.
    */
   _drawNebulaClouds(ctx, W, H) {
-    // Lazy-init cloud positions — 5-7 clouds scattered across the canvas
     if (!this._nebulaClouds) {
-      // Seeded pseudo-random using canvas dimensions for consistency
       const seed = (x) => {
         let s = x + 0.5;
         s = Math.sin(s * 127.1 + s * 311.7) * 43758.5453;
         return s - Math.floor(s);
       };
-      const count = 6;
+
       this._nebulaClouds = [];
-      for (let i = 0; i < count; i++) {
+      let idx = 0;
+
+      // Tier 1: 4 massive anchor clouds — the big formations
+      for (let i = 0; i < 4; i++) {
+        const subCount = 4 + Math.floor(seed(idx + 80) * 3); // 4-6 sub-blobs
+        const subs = [];
+        for (let s = 0; s < subCount; s++) {
+          subs.push({
+            dx: seed(idx + s * 7 + 100) * 180 - 90,
+            dy: seed(idx + s * 7 + 101) * 180 - 90,
+            rMul: 0.5 + seed(idx + s * 7 + 102) * 0.7
+          });
+        }
         this._nebulaClouds.push({
-          // Spread clouds across the canvas, avoiding dead center (ambient glow lives there)
-          baseX: W * (0.1 + seed(i * 3) * 0.8),
-          baseY: H * (0.1 + seed(i * 3 + 1) * 0.8),
-          radius: 120 + seed(i * 3 + 2) * 220,       // 120–340px — bigger formations
-          // Each cloud has a unique hue offset and drift phase
-          hueShift: seed(i * 7) * 60 - 30,             // ±30° from base
-          driftPhaseX: seed(i * 11) * Math.PI * 2,
-          driftPhaseY: seed(i * 13) * Math.PI * 2,
-          driftRadius: 15 + seed(i * 17) * 35,         // 15–50px drift
-          driftSpeed: 0.0003 + seed(i * 19) * 0.0004,  // slow — ~15-25 sec full cycle
-          baseAlpha: 0.06 + seed(i * 23) * 0.08,        // 0.06–0.14 — visible gaseous glow
-          // Sub-clouds for complexity: 2-3 overlapping blobs per cloud
-          subCount: 2 + Math.floor(seed(i * 29) * 2),  // 2-3 sub-blobs
-          subOffsets: [
-            { dx: seed(i * 31) * 100 - 50, dy: seed(i * 37) * 100 - 50, rMul: 0.7 + seed(i * 41) * 0.5 },
-            { dx: seed(i * 43) * 100 - 50, dy: seed(i * 47) * 100 - 50, rMul: 0.6 + seed(i * 53) * 0.6 },
-            { dx: seed(i * 59) * 80 - 40,  dy: seed(i * 61) * 80 - 40,  rMul: 0.5 + seed(i * 67) * 0.5 }
-          ]
+          baseX: W * (-0.05 + seed(idx) * 1.1),     // allow slight overflow off edges
+          baseY: H * (-0.05 + seed(idx + 1) * 1.1),
+          radius: 200 + seed(idx + 2) * 300,         // 200–500px — massive
+          hueShift: seed(idx + 3) * 80 - 40,
+          driftPhaseX: seed(idx + 4) * Math.PI * 2,
+          driftPhaseY: seed(idx + 5) * Math.PI * 2,
+          driftRadius: 20 + seed(idx + 6) * 40,
+          driftSpeed: 0.00015 + seed(idx + 7) * 0.00025,
+          baseAlpha: 0.10 + seed(idx + 8) * 0.10,    // 0.10–0.20
+          subCount, subOffsets: subs
         });
+        idx += 20;
+      }
+
+      // Tier 2: 8 medium filament clouds — elongated wisps connecting the anchors
+      for (let i = 0; i < 8; i++) {
+        const subCount = 3 + Math.floor(seed(idx + 80) * 3); // 3-5 sub-blobs
+        const subs = [];
+        // Filaments stretch in one direction — elongated sub-blob placement
+        const stretchAngle = seed(idx + 90) * Math.PI;
+        for (let s = 0; s < subCount; s++) {
+          const along = (s / subCount - 0.5) * 2; // -1 to 1 along the filament
+          subs.push({
+            dx: Math.cos(stretchAngle) * along * 120 + (seed(idx + s * 7 + 100) * 50 - 25),
+            dy: Math.sin(stretchAngle) * along * 120 + (seed(idx + s * 7 + 101) * 50 - 25),
+            rMul: 0.4 + seed(idx + s * 7 + 102) * 0.5
+          });
+        }
+        this._nebulaClouds.push({
+          baseX: W * (-0.05 + seed(idx) * 1.1),
+          baseY: H * (-0.05 + seed(idx + 1) * 1.1),
+          radius: 100 + seed(idx + 2) * 180,         // 100–280px
+          hueShift: seed(idx + 3) * 100 - 50,
+          driftPhaseX: seed(idx + 4) * Math.PI * 2,
+          driftPhaseY: seed(idx + 5) * Math.PI * 2,
+          driftRadius: 10 + seed(idx + 6) * 30,
+          driftSpeed: 0.0002 + seed(idx + 7) * 0.0004,
+          baseAlpha: 0.07 + seed(idx + 8) * 0.09,    // 0.07–0.16
+          subCount, subOffsets: subs
+        });
+        idx += 20;
+      }
+
+      // Tier 3: 12 small dense knots — bright concentrated patches
+      for (let i = 0; i < 12; i++) {
+        const subCount = 2 + Math.floor(seed(idx + 80) * 2); // 2-3 tight blobs
+        const subs = [];
+        for (let s = 0; s < subCount; s++) {
+          subs.push({
+            dx: seed(idx + s * 7 + 100) * 50 - 25,
+            dy: seed(idx + s * 7 + 101) * 50 - 25,
+            rMul: 0.6 + seed(idx + s * 7 + 102) * 0.5
+          });
+        }
+        this._nebulaClouds.push({
+          baseX: W * (seed(idx) * 1.0),
+          baseY: H * (seed(idx + 1) * 1.0),
+          radius: 40 + seed(idx + 2) * 100,          // 40–140px — small but punchy
+          hueShift: seed(idx + 3) * 120 - 60,        // wider color variation
+          driftPhaseX: seed(idx + 4) * Math.PI * 2,
+          driftPhaseY: seed(idx + 5) * Math.PI * 2,
+          driftRadius: 8 + seed(idx + 6) * 20,
+          driftSpeed: 0.0003 + seed(idx + 7) * 0.0005,
+          baseAlpha: 0.12 + seed(idx + 8) * 0.14,    // 0.12–0.26 — brightest tier
+          subCount, subOffsets: subs
+        });
+        idx += 20;
       }
     }
 
     const now = Date.now();
     const amb = this.world ? this.world._ambientState : null;
 
-    // Base nebula color — richer purple-blue, shifts with ambient emotional state
-    let baseR = 70, baseG = 35, baseB = 130;  // vivid purple-blue
+    // Base nebula palette — rich purple-blue, responds to swarm emotion
+    let baseR = 75, baseG = 30, baseB = 140;
     if (amb && amb.intensity > 0.01) {
-      // Blend toward the ambient color — stronger influence for visible tinting
-      const blend = Math.min(0.6, amb.intensity * 1.5);
-      baseR = baseR + (amb.r * 0.6 - baseR) * blend;
+      const blend = Math.min(0.65, amb.intensity * 1.5);
+      baseR = baseR + (amb.r * 0.7 - baseR) * blend;
       baseG = baseG + (amb.g * 0.5 - baseG) * blend;
-      baseB = baseB + (amb.b * 0.7 - baseB) * blend;
+      baseB = baseB + (amb.b * 0.8 - baseB) * blend;
     }
 
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter'; // additive — clouds merge and stack
+    ctx.globalCompositeOperation = 'lighter';
 
     for (const cloud of this._nebulaClouds) {
-      // Drift position
       const x = cloud.baseX + Math.sin(now * cloud.driftSpeed + cloud.driftPhaseX) * cloud.driftRadius;
       const y = cloud.baseY + Math.cos(now * cloud.driftSpeed * 0.7 + cloud.driftPhaseY) * cloud.driftRadius;
 
-      // Slow alpha pulse — clouds breathe
-      const breathe = 0.7 + 0.3 * Math.sin(now * cloud.driftSpeed * 1.5 + cloud.driftPhaseX * 2);
+      const breathe = 0.75 + 0.25 * Math.sin(now * cloud.driftSpeed * 1.5 + cloud.driftPhaseX * 2);
       const alpha = cloud.baseAlpha * breathe;
 
-      // Tint per cloud: shift hue slightly from the base
       const shift = cloud.hueShift / 60;
-      const cr = Math.round(Math.max(0, Math.min(255, baseR + shift * 30)));
-      const cg = Math.round(Math.max(0, Math.min(255, baseG + shift * 10)));
-      const cb = Math.round(Math.max(0, Math.min(255, baseB - shift * 20)));
+      const cr = Math.round(Math.max(0, Math.min(255, baseR + shift * 40)));
+      const cg = Math.round(Math.max(0, Math.min(255, baseG + shift * 15)));
+      const cb = Math.round(Math.max(0, Math.min(255, baseB - shift * 25)));
 
-      // Draw sub-blobs that form the cloud
-      const subs = cloud.subCount;
-      for (let s = 0; s < subs; s++) {
+      for (let s = 0; s < cloud.subCount; s++) {
         const sub = cloud.subOffsets[s];
         const sx = x + sub.dx;
         const sy = y + sub.dy;
@@ -278,9 +330,9 @@ window.MurmurationModules.K26 = class K26 {
 
         const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr);
         grad.addColorStop(0,    `rgba(${cr}, ${cg}, ${cb}, ${alpha})`);
-        grad.addColorStop(0.25, `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.85})`);
-        grad.addColorStop(0.5,  `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.45})`);
-        grad.addColorStop(0.75, `rgba(${cr >> 1}, ${cg >> 1}, ${cb >> 1}, ${alpha * 0.15})`);
+        grad.addColorStop(0.2,  `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.9})`);
+        grad.addColorStop(0.45, `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.5})`);
+        grad.addColorStop(0.7,  `rgba(${cr >> 1}, ${cg >> 1}, ${cb >> 1}, ${alpha * 0.18})`);
         grad.addColorStop(1,    `rgba(0, 0, 0, 0)`);
 
         ctx.fillStyle = grad;
