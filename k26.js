@@ -218,20 +218,20 @@ window.MurmurationModules.K26 = class K26 {
           // Spread clouds across the canvas, avoiding dead center (ambient glow lives there)
           baseX: W * (0.1 + seed(i * 3) * 0.8),
           baseY: H * (0.1 + seed(i * 3 + 1) * 0.8),
-          radius: 80 + seed(i * 3 + 2) * 180,        // 80–260px
+          radius: 120 + seed(i * 3 + 2) * 220,       // 120–340px — bigger formations
           // Each cloud has a unique hue offset and drift phase
           hueShift: seed(i * 7) * 60 - 30,             // ±30° from base
           driftPhaseX: seed(i * 11) * Math.PI * 2,
           driftPhaseY: seed(i * 13) * Math.PI * 2,
           driftRadius: 15 + seed(i * 17) * 35,         // 15–50px drift
           driftSpeed: 0.0003 + seed(i * 19) * 0.0004,  // slow — ~15-25 sec full cycle
-          baseAlpha: 0.015 + seed(i * 23) * 0.025,     // 0.015–0.040 — very faint
+          baseAlpha: 0.06 + seed(i * 23) * 0.08,        // 0.06–0.14 — visible gaseous glow
           // Sub-clouds for complexity: 2-3 overlapping blobs per cloud
           subCount: 2 + Math.floor(seed(i * 29) * 2),  // 2-3 sub-blobs
           subOffsets: [
-            { dx: seed(i * 31) * 60 - 30, dy: seed(i * 37) * 60 - 30, rMul: 0.6 + seed(i * 41) * 0.5 },
-            { dx: seed(i * 43) * 60 - 30, dy: seed(i * 47) * 60 - 30, rMul: 0.5 + seed(i * 53) * 0.6 },
-            { dx: seed(i * 59) * 50 - 25, dy: seed(i * 61) * 50 - 25, rMul: 0.4 + seed(i * 67) * 0.4 }
+            { dx: seed(i * 31) * 100 - 50, dy: seed(i * 37) * 100 - 50, rMul: 0.7 + seed(i * 41) * 0.5 },
+            { dx: seed(i * 43) * 100 - 50, dy: seed(i * 47) * 100 - 50, rMul: 0.6 + seed(i * 53) * 0.6 },
+            { dx: seed(i * 59) * 80 - 40,  dy: seed(i * 61) * 80 - 40,  rMul: 0.5 + seed(i * 67) * 0.5 }
           ]
         });
       }
@@ -240,14 +240,14 @@ window.MurmurationModules.K26 = class K26 {
     const now = Date.now();
     const amb = this.world ? this.world._ambientState : null;
 
-    // Base nebula color — purple-blue default, shifts with ambient emotional state
-    let baseR = 40, baseG = 20, baseB = 80;  // deep purple-blue
+    // Base nebula color — richer purple-blue, shifts with ambient emotional state
+    let baseR = 70, baseG = 35, baseB = 130;  // vivid purple-blue
     if (amb && amb.intensity > 0.01) {
-      // Blend toward the ambient color but keep it muted and shifted toward purple
-      const blend = Math.min(0.5, amb.intensity);
-      baseR = baseR + (amb.r * 0.4 - baseR) * blend;
-      baseG = baseG + (amb.g * 0.3 - baseG) * blend;
-      baseB = baseB + (amb.b * 0.5 - baseB) * blend;
+      // Blend toward the ambient color — stronger influence for visible tinting
+      const blend = Math.min(0.6, amb.intensity * 1.5);
+      baseR = baseR + (amb.r * 0.6 - baseR) * blend;
+      baseG = baseG + (amb.g * 0.5 - baseG) * blend;
+      baseB = baseB + (amb.b * 0.7 - baseB) * blend;
     }
 
     ctx.save();
@@ -277,10 +277,11 @@ window.MurmurationModules.K26 = class K26 {
         const sr = cloud.radius * sub.rMul;
 
         const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr);
-        grad.addColorStop(0,   `rgba(${cr}, ${cg}, ${cb}, ${alpha})`);
-        grad.addColorStop(0.4, `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.5})`);
-        grad.addColorStop(0.7, `rgba(${cr >> 1}, ${cg >> 1}, ${cb >> 1}, ${alpha * 0.2})`);
-        grad.addColorStop(1,   `rgba(${cr >> 2}, ${cg >> 2}, ${cb >> 2}, 0)`);
+        grad.addColorStop(0,    `rgba(${cr}, ${cg}, ${cb}, ${alpha})`);
+        grad.addColorStop(0.25, `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.85})`);
+        grad.addColorStop(0.5,  `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.45})`);
+        grad.addColorStop(0.75, `rgba(${cr >> 1}, ${cg >> 1}, ${cb >> 1}, ${alpha * 0.15})`);
+        grad.addColorStop(1,    `rgba(0, 0, 0, 0)`);
 
         ctx.fillStyle = grad;
         ctx.beginPath();
