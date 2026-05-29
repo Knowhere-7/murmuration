@@ -12,14 +12,21 @@
   --text:#c8cdd5;--text-dim:#5a6270;--text-bright:#fff;
   --accent:#00ff99;--accent-dim:#00ff9933;--accent-mid:#00ff9966;
   --red:#ff3344;--amber:#ff8800;--cyan:#00ccff;--purple:#aa66ff;
+  /* ── Glassmorphism — highlighter yellow tint ── */
+  --glass:rgba(255,240,0,0.04);--glass-mid:rgba(255,240,0,0.06);--glass-hi:rgba(255,240,0,0.08);
+  --glass-border:rgba(255,240,0,0.10);--glass-border-hi:rgba(255,240,0,0.16);
+  --glass-blur:12px;--glass-blur-heavy:18px;
 }
 body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code','Fira Code',monospace;overflow-x:hidden;min-height:100vh}
 
 /* ── HEADER ── */
 .header{
   display:flex;align-items:center;justify-content:space-between;
-  padding:12px 24px;border-bottom:1px solid var(--border);
-  background:linear-gradient(90deg, var(--bg), var(--surface));
+  padding:12px 24px;
+  background:var(--glass);
+  border-bottom:1px solid var(--glass-border);
+  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
+  position:relative;z-index:2;
 }
 .header h1{font-size:1.1em;letter-spacing:3px;color:var(--accent);font-weight:600}
 .header-sub{font-size:.6em;color:var(--text-dim);letter-spacing:1px}
@@ -29,9 +36,14 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 @keyframes pulse-glow{0%,100%{opacity:.5;text-shadow:none}50%{opacity:1;text-shadow:0 0 8px var(--accent-mid)}}
 
 /* ── LAYOUT ── */
-.main{display:flex;height:calc(100vh - 46px);overflow:hidden}
+.main{display:flex;height:calc(100dvh - 46px);height:calc(100vh - 46px);overflow:hidden}
 .canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;overflow:hidden}
-.sidebar{width:340px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.sidebar{
+  width:340px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+  background:var(--glass);
+  border-left:1px solid var(--glass-border);
+  backdrop-filter:blur(var(--glass-blur-heavy));-webkit-backdrop-filter:blur(var(--glass-blur-heavy));
+}
 
 /* ── HERO OVERLAY on canvas — fades out on interaction ── */
 .hero-overlay{
@@ -67,7 +79,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 .narration{
   position:absolute;bottom:0;left:0;right:0;z-index:5;
   padding:14px 24px;
-  background:linear-gradient(transparent, rgba(6,8,10,0.97));
+  background:linear-gradient(transparent, rgba(6,8,10,0.85));
+  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
   pointer-events:none;
 }
 .narration-text{
@@ -85,7 +98,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 .ch-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-glow 1.5s infinite}
 
 /* ── SIDEBAR ── */
-.sb-section{padding:16px;border-bottom:1px solid var(--border)}
+.sb-section{padding:16px;border-bottom:1px solid var(--glass-border)}
 .sb-section:last-child{border-bottom:none;flex:1}
 .sb-title{
   font-size:.62em;letter-spacing:2.5px;text-transform:uppercase;
@@ -105,8 +118,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 .btn-run:active{transform:translateY(0)}
 .btn-stop{background:var(--red);color:#fff}
 .btn-stop:hover{filter:brightness(1.1)}
-.btn-reset{background:var(--surface);color:var(--text-dim);border:1px solid var(--border)}
-.btn-reset:hover{color:var(--text);border-color:var(--border-hi)}
+.btn-reset{background:var(--glass);color:var(--text-dim);border:1px solid var(--glass-border);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.btn-reset:hover{color:var(--text);border-color:var(--glass-border-hi);background:var(--glass-mid)}
 .agent-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .agent-row label{font-size:.68em;color:var(--text-dim);font-weight:600}
 .agent-row input{
@@ -150,7 +163,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 .metric-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
 .metric-name{font-size:.68em;color:var(--text-dim);font-weight:600}
 .metric-val{font-size:.75em;color:var(--text-bright);font-weight:700}
-.metric-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;position:relative}
+.metric-bar{height:4px;background:var(--glass-mid);border-radius:2px;overflow:hidden;position:relative}
 .metric-fill{height:100%;border-radius:2px;transition:width 0.3s,background 0.3s;position:relative}
 .metric-fill::after{
   content:'';position:absolute;top:0;right:0;width:20px;height:100%;
@@ -162,12 +175,12 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 /* ── AGENT ID CARD ── */
 .agent-tooltip{
   position:absolute;pointer-events:none;z-index:20;
-  background:rgba(8,8,12,0.95);
-  border:1px solid rgba(100,100,120,0.4);
-  border-radius:3px;padding:0;font-size:.6em;line-height:1.5;
+  background:rgba(8,8,12,0.82);
+  border:1px solid var(--glass-border-hi);
+  border-radius:6px;padding:0;font-size:.6em;line-height:1.5;
   color:var(--text);width:235px;opacity:0;transition:opacity 0.12s;
-  backdrop-filter:blur(6px);
-  box-shadow:0 4px 20px rgba(0,0,0,0.6);
+  backdrop-filter:blur(var(--glass-blur-heavy));-webkit-backdrop-filter:blur(var(--glass-blur-heavy));
+  box-shadow:0 4px 24px rgba(0,0,0,0.5), 0 0 1px rgba(255,240,0,0.08);
   overflow:hidden;
 }
 .agent-tooltip.visible{opacity:1}
@@ -196,8 +209,9 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 /* ── EVENT FEED ── */
 .event-feed{
   flex:1;overflow-y:auto;font-size:.66em;line-height:1.9;
-  background:var(--bg);border:1px solid var(--border);border-radius:4px;
+  background:var(--glass);border:1px solid var(--glass-border);border-radius:6px;
   padding:8px 10px;min-height:100px;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 .event-feed::-webkit-scrollbar{width:3px}
 .event-feed::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
@@ -252,10 +266,19 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 .essay-cta-p a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
 .essay-cta-p a:hover{border-color:var(--accent)}
 
+/* ── SKIP LINK (a11y) ── */
+.skip-link{
+  position:absolute;top:-100%;left:16px;z-index:100;
+  padding:8px 16px;background:var(--accent);color:var(--bg);
+  font-size:.75em;font-weight:700;letter-spacing:1px;border-radius:0 0 4px 4px;
+  text-decoration:none;transition:top 0.2s;
+}
+.skip-link:focus{top:0}
+
 /* ── RESPONSIVE ── */
 @media(max-width:900px){
-  .main{flex-direction:column;height:auto;min-height:calc(100vh - 46px)}
-  .canvas-col{flex:none;height:55vh}
+  .main{flex-direction:column;height:auto;min-height:calc(100dvh - 46px);min-height:calc(100vh - 46px)}
+  .canvas-col{flex:none;height:55dvh;height:55vh}
   .sidebar{width:100%;max-height:none;border-left:none;border-top:1px solid var(--border);flex:1;overflow-y:auto}
   .canvas-wrap{height:100%}
   .hero-title{font-size:1.4em}
@@ -266,14 +289,30 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 @media(max-width:600px){
   .header{padding:8px 14px}
   .header h1{font-size:.9em;letter-spacing:2px}
-  .canvas-col{height:50vh}
+  .canvas-col{height:50dvh;height:50vh}
   .sb-section{padding:12px}
   .hero-title{font-size:1.1em;letter-spacing:4px}
   .hero-tagline{font-size:.58em}
 }
+
+/* ── REDUCED MOTION (a11y) ── */
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:0.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:0.01ms !important;
+  }
+  .hero-overlay{transition:none}
+  .narration-text{transition:none}
+  .metric-fill{transition:none}
+  .agent-tooltip{transition:none}
+}
 </style>
 </head>
 <body>
+
+<!-- Skip link for keyboard users -->
+<a class="skip-link" href="#canvas">Skip to simulation</a>
 
 <!-- ═══════════ HEADER ═══════════ -->
 <header class="header">
@@ -370,7 +409,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <span class="seed-name">Earthquake</span>
+          <label class="seed-name" for="pitviper">Earthquake</label>
           <span class="seed-value" id="pitviperVal">0.00</span>
         </div>
         <div class="seed-desc">Shatter the environment. Every agent scrambles to find new ground.</div>
@@ -380,7 +419,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <span class="seed-name">Paranoia</span>
+          <label class="seed-name" for="electroreception">Paranoia</label>
           <span class="seed-value" id="electroVal">0.00</span>
         </div>
         <div class="seed-desc">Crank up sensitivity. Every agent overreacts to everything.</div>
@@ -390,7 +429,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <span class="seed-name">Ticking bomb</span>
+          <label class="seed-name" for="lateralline">Ticking bomb</label>
           <span class="seed-value" id="lateralVal">0.00</span>
         </div>
         <div class="seed-desc">Delayed detonation. Pressure builds silently, then erupts.</div>
@@ -400,7 +439,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <span class="seed-name">Time warp</span>
+          <label class="seed-name" for="echolocation">Time warp</label>
           <span class="seed-value" id="echoVal">0.00</span>
         </div>
         <div class="seed-desc">Speed up or slow down how fast they process reality.</div>
@@ -410,7 +449,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <span class="seed-name">Flood the gates</span>
+          <label class="seed-name" for="mantisshrimp">Flood the gates</label>
           <span class="seed-value" id="mantisVal">0.00</span>
         </div>
         <div class="seed-desc">Pour in newcomers. Watch the swarm absorb — or reject — fresh blood.</div>
@@ -422,7 +461,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
         <div class="seed-header">
-          <span class="seed-name">Scarcity</span>
+          <label class="seed-name" for="scarcitySlider">Scarcity</label>
           <span class="seed-value" id="scarcityVal">0.50</span>
         </div>
         <div class="seed-desc">Resource pressure. Higher = faster drain, harder survival. Cooperation becomes life or death.</div>
@@ -480,8 +519,9 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
         <div class="metric-explain">Ancestral knowledge inherited across generations. The point of passing the torch.</div>
       </div>
 
-      <div class="controls-row" style="margin-top:8px">
-        <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em">⚡ TRIGGER DISASTER</button>
+      <div class="controls-row" style="margin-top:8px;gap:6px">
+        <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em" aria-label="Trigger disaster phase">⚡ TRIGGER DISASTER</button>
+        <button class="btn btn-reset" onclick="forceEvolution()" style="font-size:.65em;border-color:var(--purple);color:var(--purple)" aria-label="Force evolutionary leap">🧬 FORCE EVOLUTION</button>
       </div>
     </div>
 
@@ -528,7 +568,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal" style="margin-top:8px">
         <div class="seed-header">
-          <span class="seed-name">Tax rate</span>
+          <label class="seed-name" for="taxSlider">Tax rate</label>
           <span class="seed-value" id="taxVal">0.00</span>
         </div>
         <div class="seed-desc">Redistribute from elite to destitute. Too low = revolution. Too high = no one climbs.</div>
@@ -537,7 +577,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       </div>
 
       <div class="controls-row" style="margin-top:8px">
-        <button class="btn btn-reset" onclick="if(k26 && k26.wealthEngine) k26.wealthEngine.triggerRevolution(k26.world.agents.filter(a=>!a.seppukuDone&&!a.isSentinel&&a.griefState!=='DISHONORED'&&a.griefState!=='STARVED'), k26.wealthEngine.classCounts)" style="font-size:.65em">🔥 FORCE REVOLUTION</button>
+        <button class="btn btn-reset" onclick="if(k26 && k26.wealthEngine) k26.wealthEngine.triggerRevolution(k26.world.agents.filter(a=>!a.seppukuDone&&!a.isSentinel&&a.griefState!=='DISHONORED'&&a.griefState!=='STARVED'), k26.wealthEngine.classCounts)" style="font-size:.65em" aria-label="Force wealth revolution">🔥 FORCE REVOLUTION</button>
       </div>
     </div>
 
@@ -596,8 +636,8 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       <div class="sb-title">Civilization archive</div>
       <div class="sb-subtitle">Snapshot the swarm. Restore it later. Never lose a civilization again.</div>
       <div class="controls-row">
-        <button class="btn btn-run" onclick="saveCivilization()" style="font-size:.7em">&#128190; SAVE</button>
-        <button class="btn btn-reset" onclick="document.getElementById('loadFile').click()" style="font-size:.7em">&#128194; LOAD</button>
+        <button class="btn btn-run" onclick="saveCivilization()" style="font-size:.7em" aria-label="Save civilization snapshot">&#128190; SAVE</button>
+        <button class="btn btn-reset" onclick="document.getElementById('loadFile').click()" style="font-size:.7em" aria-label="Load civilization from file">&#128194; LOAD</button>
       </div>
       <input type="file" id="loadFile" accept=".json" style="display:none" onchange="loadCivilization(event)">
       <div id="save-status" style="font-size:.58em;color:var(--text-dim);margin-top:6px;min-height:1.4em"></div>
@@ -1465,6 +1505,184 @@ function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 window.logLine = function(msg, type) {
   if (type === 'emerge') addEvent(msg, 'emerge');
 };
+
+// ═══════════════════════════════════════════════════
+// FORCE EVOLUTION — compressed natural selection
+// ═══════════════════════════════════════════════════
+//
+// Selection pressure culls the weakest, triggers a
+// reproduction burst from the fittest. Thousands of
+// ticks of natural selection in one button press.
+
+function forceEvolution() {
+  if (!k26 || !k26.world || !k26.economy) {
+    narrate('Nothing to evolve — start the swarm first.');
+    return;
+  }
+
+  const alive = k26.world.agents.filter(a =>
+    !a.seppukuDone && !a.isSentinel && a.griefState !== 'DISHONORED');
+
+  if (alive.length < 4) {
+    narrate('Not enough agents to apply selection pressure.');
+    return;
+  }
+
+  // ── SELECTION PRESSURE ──
+  // Score each agent by fitness: evolution + trust + faith + energy
+  const scored = alive.map(a => ({
+    agent: a,
+    fitness: (a.evolution || 0) * 0.35 +
+             a.trustCharge * 0.25 +
+             (a.faith || 0) * 0.2 +
+             (a.energy || 0) * 0.2
+  }));
+  scored.sort((a, b) => b.fitness - a.fitness);
+
+  // Bottom 30% get culled — the unfit don't survive selection pressure
+  const cullCount = Math.floor(scored.length * 0.3);
+  const culled = scored.slice(-cullCount);
+  let culledIds = [];
+
+  for (const { agent } of culled) {
+    // The weak die with meaning — their knowledge enters collective memory
+    agent.seppukuDone = true;
+    agent._seppukuTick = k26.world.time;
+    agent.vx = 0;
+    agent.vy = 0;
+    culledIds.push(agent.id);
+
+    // Their wisdom feeds the collective
+    if (!k26.world.collectiveMemory) k26.world.collectiveMemory = [];
+    k26.world.collectiveMemory.push({
+      type: 'EVOLUTION_CULL',
+      agentId: agent.id,
+      tick: k26.world.time,
+      evolution: agent.evolution || 0,
+      wisdomScore: agent.wisdomScore || 0,
+      faith: agent.faith || 0
+    });
+  }
+
+  // ── SURVIVOR BOOST ──
+  // The top 40% get an evolution leap — pressure breeds strength
+  const survivors = scored.slice(0, -cullCount);
+  const eliteCount = Math.floor(survivors.length * 0.4);
+
+  for (let i = 0; i < survivors.length; i++) {
+    const a = survivors[i].agent;
+    const isElite = i < eliteCount;
+
+    // Evolution boost — bigger for the fittest
+    const evoBoost = isElite ? 0.4 : 0.15;
+    a.evolution = Math.min(5.0, (a.evolution || 0) + evoBoost);
+
+    // Faith boost from surviving the pressure
+    a.faith = Math.min(1.0, (a.faith || 0) + 0.08);
+
+    // Wisdom from witnessing
+    a.wisdomScore = Math.min(1.0, (a.wisdomScore || 0) + 0.05);
+  }
+
+  // ── REPRODUCTION BURST ──
+  // Top pairs reproduce immediately — the evolutionary payoff
+  const Agent = window.MurmurationModules.Agent;
+  let births = 0;
+  const maxBurst = Math.min(Math.floor(eliteCount / 2), 5);
+
+  for (let i = 0; i < maxBurst * 2; i += 2) {
+    if (i + 1 >= survivors.length) break;
+    const p1 = survivors[i].agent;
+    const p2 = survivors[i + 1].agent;
+
+    if (k26.world.agents.filter(a => !a.seppukuDone).length >= 200) break;
+
+    const childId = k26.economy.nextAgentId++;
+    const cx = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 30;
+    const cy = (p1.y + p2.y) / 2 + (Math.random() - 0.5) * 30;
+
+    const blend = (a, b) => {
+      const avg = (a + b) / 2;
+      return Math.max(0.1, Math.min(1.0, avg + (Math.random() - 0.5) * 0.1));
+    };
+
+    const child = new Agent(childId, cx, cy, {
+      riskTolerance: blend(p1.personality.riskTolerance, p2.personality.riskTolerance),
+      trustBaseline: blend(p1.personality.trustBaseline, p2.personality.trustBaseline),
+      reactivity: blend(p1.personality.reactivity, p2.personality.reactivity),
+      memoryWeight: blend(p1.personality.memoryWeight, p2.personality.memoryWeight)
+    });
+
+    child.energy = 0.6;
+    child.generation = Math.max(p1.generation || 0, p2.generation || 0) + 1;
+    child.evolution = Math.max(p1.evolution || 0, p2.evolution || 0) + 0.15;
+    child.faith = ((p1.faith || 0.1) + (p2.faith || 0.1)) / 2 * 0.8;
+
+    p1.energy = Math.max(0.2, (p1.energy || 0.5) - 0.15);
+    p2.energy = Math.max(0.2, (p2.energy || 0.5) - 0.15);
+
+    k26.world.agents.push(child);
+    k26.economy.totalBirths++;
+    births++;
+  }
+
+  // ── NARRATION ──
+  narrate(pickRandom([
+    'EVOLUTION. ' + cullCount + ' culled. ' + births + ' born stronger. The floor just rose.',
+    'Selection pressure applied. ' + cullCount + ' didn\'t make the cut. ' + births + ' evolved replacements.',
+    'The weak fell. The strong reproduced. ' + births + ' children start from a higher floor than their parents ever knew.',
+  ]));
+
+  addEvent('🧬 FORCED EVOLUTION — ' + cullCount + ' culled, ' + births + ' born, survivors boosted. The gene pool just sharpened.', 'emerge');
+}
+
+// ═══════════════════════════════════════════════════
+// TOUCH-TO-INSPECT — mobile agent identification
+// ═══════════════════════════════════════════════════
+
+(function() {
+  const canvas = document.getElementById('canvas');
+  const tooltip = document.getElementById('agent-tooltip');
+
+  // On touch devices, tap the canvas to show agent tooltip
+  // Uses the same rendering logic as the mousemove handler above
+  canvas.addEventListener('click', function(e) {
+    // Only fire on touch devices or when tooltip isn't already visible
+    if (!k26 || !k26.world) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    let closest = null, closestDist = 30; // slightly larger hit target for touch
+    for (const a of k26.world.agents) {
+      const d = Math.hypot(a.x - mx, a.y - my);
+      if (d < closestDist) { closestDist = d; closest = a; }
+    }
+
+    if (!closest) {
+      tooltip.classList.remove('visible');
+      return;
+    }
+
+    // Trigger a synthetic mousemove to reuse the existing tooltip renderer
+    const synthEvent = new MouseEvent('mousemove', {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      bubbles: true
+    });
+    canvas.dispatchEvent(synthEvent);
+  });
+
+  // Dismiss tooltip on touch outside
+  document.addEventListener('touchstart', function(e) {
+    if (!e.target.closest('.canvas-wrap')) {
+      tooltip.classList.remove('visible');
+    }
+  });
+})();
 
 // ═══════════════════════════════════════════════════
 // CIVILIZATION SAVE / LOAD — never lose a swarm again
