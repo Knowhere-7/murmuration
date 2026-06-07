@@ -576,6 +576,25 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
         <div class="seed-header">
+          <span class="seed-name">Colony Doctrine</span>
+          <span class="seed-value" id="treatyLabel" style="color:var(--accent)">—</span>
+        </div>
+        <div class="seed-desc">Set each colony's intent. Peace doctrine enables cooperative zone-sharing and suppresses raids. War doctrine enables coordinated attacks. Both choosing peace can produce a treaty.</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn-inject" onclick="setDoctrine('A','peace')"  style="flex:1;font-size:.65em;padding:6px 4px;color:#c8a0ff;border-color:rgba(180,120,255,0.35)">A — PEACE</button>
+          <button class="btn-inject" onclick="setDoctrine('A','neutral')" style="flex:1;font-size:.65em;padding:6px 4px">A — NEUTRAL</button>
+          <button class="btn-inject" onclick="setDoctrine('A','war')"    style="flex:1;font-size:.65em;padding:6px 4px;color:#ff6040;border-color:rgba(255,80,50,0.35)">A — WAR</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+          <button class="btn-inject" onclick="setDoctrine('B','peace')"  style="flex:1;font-size:.65em;padding:6px 4px;color:#40e8d0;border-color:rgba(40,200,180,0.35)">B — PEACE</button>
+          <button class="btn-inject" onclick="setDoctrine('B','neutral')" style="flex:1;font-size:.65em;padding:6px 4px">B — NEUTRAL</button>
+          <button class="btn-inject" onclick="setDoctrine('B','war')"    style="flex:1;font-size:.65em;padding:6px 4px;color:#ff6040;border-color:rgba(255,80,50,0.35)">B — WAR</button>
+        </div>
+        <button class="btn-inject" id="ratifyBtn" onclick="ratifyTreaty()" style="width:100%;margin-top:8px;background:rgba(100,220,150,0.08);border-color:rgba(100,220,150,0.3);color:rgba(100,220,150,0.9);font-size:.65em;display:none">✦ RATIFY TREATY</button>
+      </div>
+
+      <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="seed-header">
           <span class="seed-name">Resource Depletion</span>
           <span class="seed-value" id="scarcityVal">0.50</span>
         </div>
@@ -1222,6 +1241,51 @@ function resetSim() {
   eventCount = 0;
   prevState = {};
 }
+
+// ═══════════ DOCTRINE + TREATY ═══════════
+
+function setDoctrine(colony, doctrine) {
+  if (!k26 || !k26.world) { narrate('Start the swarm first.'); return; }
+  k26.world.setDoctrine(colony, doctrine);
+  updateTreatyUI();
+}
+
+function ratifyTreaty() {
+  if (!k26 || !k26.world) return;
+  k26.world.ratifyTreaty();
+  updateTreatyUI();
+}
+
+function updateTreatyUI() {
+  if (!k26 || !k26.world) return;
+  const w = k26.world;
+  const label = document.getElementById('treatyLabel');
+  const ratifyBtn = document.getElementById('ratifyBtn');
+  if (!label) return;
+
+  const ts = w.treatyState || 'none';
+  const dA = (w.doctrine && w.doctrine.A) || 'neutral';
+  const dB = (w.doctrine && w.doctrine.B) || 'neutral';
+
+  if (ts === 'active') {
+    label.textContent = '✦ TREATY';
+    label.style.color = 'rgba(100,220,150,0.9)';
+    ratifyBtn.style.display = 'none';
+  } else if (ts.startsWith('proposed')) {
+    label.textContent = '🕊 PROPOSED';
+    label.style.color = '#c8a0ff';
+    ratifyBtn.style.display = 'block';
+  } else {
+    const states = { peace: '🕊', war: '⚔', war_leaning: '⚠', peace_leaning: '◌', neutral: '—' };
+    label.textContent = `A:${states[dA]||'—'} B:${states[dB]||'—'}`;
+    label.style.color = 'var(--accent)';
+    // Show ratify button if both set to peace
+    ratifyBtn.style.display = (dA === 'peace' && dB === 'peace') ? 'block' : 'none';
+  }
+}
+
+// Poll treaty state every 2 seconds
+setInterval(updateTreatyUI, 2000);
 
 // ═══════════ UNALIGNED ═══════════
 

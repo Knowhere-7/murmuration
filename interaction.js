@@ -83,7 +83,7 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
 
           // Decision runs every 45 ticks per agent — staggered by id to avoid lock-step
           if (world.time % 45 === agent.id % 45) {
-            const decision = this._chooseConflictAction(agent);
+            const decision = this._chooseConflictAction(agent, world);
             this._applyDecision(agent, neighbor, decision, world);
             interactions.push({
               from: agent.id, to: neighbor.id,
@@ -138,7 +138,7 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
   // Four options, all balanced — the cheapest one for THIS agent wins.
   // Weights are trait-derived, not random. Character determines outcome.
 
-  _chooseConflictAction(agent) {
+  _chooseConflictAction(agent, world) {
     const grief   = agent.griefLevel   || 0;
     const trust   = agent.trustCharge  || 0.5;
     const faith   = agent.faith        || 0.1;
@@ -154,11 +154,31 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
     let withdrawW  = energy* 0.40 + faith * 0.30 + calm   * 0.30;
     let escalateW  = grief * 0.50 + (1 - trust) * 0.30 + (1 - faith) * 0.20;
 
-    // Cross-colony conflict: yielding territory is much harder — this is existential
+    // Cross-colony conflict weights depend on colony doctrine
     if (agent._crossColonyConflict) {
-      yieldW    *= 0.3;   // rarely yield ground to a different colony
-      withdrawW *= 0.5;   // retreat is costly — you're ceding the zone
-      escalateW *= 1.6;   // fight harder for shared resources
+      const doctrine = (typeof world !== 'undefined' && world?.doctrine?.[agent.colony || 'A']) || 'neutral';
+      const treatyActive = (typeof world !== 'undefined' && world?.treatyState === 'active');
+
+      if (treatyActive || doctrine === 'peace') {
+        // Peace doctrine: strongly prefer yield + negotiate — war is a treaty violation
+        yieldW     *= 2.5;
+        negotiateW *= 2.0;
+        escalateW  *= 0.1;  // almost never escalate — it would break the peace
+      } else if (doctrine === 'peace_leaning') {
+        yieldW     *= 1.6;
+        negotiateW *= 1.4;
+        escalateW  *= 0.5;
+      } else if (doctrine === 'war' || doctrine === 'war_leaning') {
+        // War doctrine: this is existential — fight for it
+        yieldW    *= 0.2;
+        withdrawW *= 0.4;
+        escalateW *= 2.0;
+      } else {
+        // Neutral: cross-colony tension but no doctrine lock
+        yieldW    *= 0.3;
+        withdrawW *= 0.5;
+        escalateW *= 1.6;
+      }
     }
 
     // As conflict deepens, all options become harder except escalate (sunk-cost trap)
@@ -196,17 +216,30 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
         break;
 
       case 'negotiate':
-        // Costs both sides — but the conflict cools and both learn something
         agent.updateTrust(-0.006);
         neighbor.updateTrust(-0.006);
         agent._conflictTicks = Math.max(0, agent._conflictTicks - 25);
         agent._conflictLevel = Math.max(1, agent._conflictLevel - 1);
-        // Resolved conflict = real evolution event — you handled something hard
         if (agent._conflictTicks === 0) {
           agent.accumulateEvolution(0.15, 'conflict_resolved');
           neighbor.accumulateEvolution(0.08, 'conflict_resolved');
-          agent._conflictWith  = null;
-          agent._conflictLevel = 0;
+          agent._conflictWith        = null;
+          agent._conflictLevel       = 0;
+          agent._crossColonyConflict = false;
+
+          // Cross-colony negotiated resolution → propose treaty if both colonies willing
+          if (agent._crossColonyConflict && world?.treatyState === 'none') {
+            const agentColony    = agent.colony    || 'A';
+            const neighborColony = neighbor.colony || 'A';
+            const aDoc = world.doctrine?.[agentColony]    || 'neutral';
+            const bDoc = world.doctrine?.[neighborColony] || 'neutral';
+            if (aDoc.includes('peace') || bDoc.includes('peace')) {
+              world.treatyState = `proposed:${agentColony}`;
+              if (window.logLine) {
+                window.logLine(`🕊 NEGOTIATION — Colony ${agentColony} proposes peace to Colony ${neighborColony}`, 'evolve');
+              }
+            }
+          }
         }
         break;
 

@@ -27,8 +27,20 @@ window.MurmurationModules.World = class World {
     // ST-3 Sacred Grounds — where honored agents chose death, pilgrimage sites
     this.sacredGrounds = [];
     // ST-2 Sentinel — one per world, the cautionary tale
-    // Replaced whenever a new agent is dishonored
     this.sentinel = null;
+
+    // ── COLONY DOCTRINE — the choice between war and peace ──
+    // 'war'     : coordinated aggression, raid enemy zones, escalate cross-colony conflicts
+    // 'peace'   : signal cooperation, shared zones regenerate faster, no raids
+    // 'neutral' : default — follow agent-level trait weights
+    // Doctrine can be set manually (UI) or drift emergently from colony-wide faith/trust avg
+    this.doctrine = { A: 'neutral', B: 'neutral' };
+
+    // Treaty state — tracks whether a formal truce has been established
+    // 'none' | 'proposed:A' | 'proposed:B' | 'active'
+    this.treatyState  = 'none';
+    this.treatyTick   = 0;    // when the active treaty was formed
+    this.treatyBreaks = 0;    // how many times a treaty has broken down
 
     // Commons network — contested resource nodes. Each has supply (0-1) that
     // depletes under occupation and regenerates when empty. Holding a zone
@@ -112,6 +124,38 @@ window.MurmurationModules.World = class World {
     }
     if (window.logLine) {
       window.logLine(`⚠ UNALIGNED — ${count} agents entered the system`, 'warn');
+    }
+  }
+
+  /** Set a colony's doctrine manually. 'war' | 'peace' | 'neutral' */
+  setDoctrine(colony, doctrine) {
+    if (!this.doctrine) this.doctrine = { A: 'neutral', B: 'neutral' };
+    this.doctrine[colony] = doctrine;
+    if (window.logLine) {
+      const icon = doctrine === 'peace' ? '🕊' : doctrine === 'war' ? '⚔' : '◈';
+      window.logLine(`${icon} Colony ${colony} doctrine → ${doctrine.toUpperCase()}`, 'evolve');
+    }
+    // If both manually set to peace → activate treaty
+    if (this.doctrine.A === 'peace' && this.doctrine.B === 'peace') {
+      this.ratifyTreaty();
+    }
+    // If either set to war → break any active treaty
+    if (doctrine === 'war' && this.treatyState === 'active') {
+      this.treatyState = 'none';
+      this.treatyBreaks++;
+      if (window.logLine) window.logLine(`💔 TREATY BROKEN — Colony ${colony} chose war`, 'crisis');
+    }
+  }
+
+  /** Formally activate the treaty between colonies */
+  ratifyTreaty() {
+    this.treatyState = 'active';
+    this.treatyTick  = this.time;
+    if (window.logLine) window.logLine('✦ TREATY RATIFIED — colonies enter cooperative mode', 'evolve');
+    // Evolution burst for all active agents on both sides — peace is an achievement
+    const active = this.agents.filter(a => !a.seppukuDone && !a.isSentinel && a.colony !== 'U');
+    for (const a of active) {
+      if (a.accumulateEvolution) a.accumulateEvolution(0.2, 'treaty_ratified');
     }
   }
 
@@ -458,64 +502,141 @@ window.MurmurationModules.World = class World {
       }
     }
 
+    // ── DOCTRINE DRIFT — faith + trust nudge colonies toward peace; grief + loss toward war ──
+    // Runs every 120 ticks. Manual doctrine setting overrides drift.
+    if (this.time % 120 === 0) {
+      for (const colony of ['A', 'B']) {
+        if (this.doctrine[colony] === 'war' || this.doctrine[colony] === 'peace') continue; // manual lock
+
+        const members = active.filter(a => (a.colony || 'A') === colony);
+        if (members.length === 0) continue;
+        const avgFaith = members.reduce((s, a) => s + (a.faith || 0), 0) / members.length;
+        const avgTrust = members.reduce((s, a) => s + (a.trustCharge || 0), 0) / members.length;
+        const avgGrief = members.reduce((s, a) => s + (a.griefLevel || 0), 0) / members.length;
+
+        const peacePressure = (avgFaith * 0.5 + avgTrust * 0.5) - avgGrief * 0.6;
+        if      (peacePressure >  0.25) this.doctrine[colony] = 'peace_leaning';
+        else if (peacePressure < -0.15) this.doctrine[colony] = 'war_leaning';
+        else                           this.doctrine[colony] = 'neutral';
+      }
+
+      // ── TREATY PROPOSAL CHECK ──
+      // If both colonies are peace-leaning and share a zone → auto-propose treaty
+      if (this.doctrine.A === 'peace_leaning' && this.doctrine.B === 'peace_leaning'
+          && this.treatyState === 'none') {
+        const sharedZone = this.commonsLayout.some(z => z.controller === 'CONTESTED');
+        if (!sharedZone) { // both peaceful AND not currently fighting over anything
+          this.treatyState = 'proposed:auto';
+          if (window.logLine) window.logLine('🕊 TREATY PROPOSED — both colonies signaling peace', 'evolve');
+        }
+      }
+
+      // ── TREATY BREAK CHECK ──
+      // Active treaty breaks if either colony's grief spikes (war pressure overrides peace)
+      if (this.treatyState === 'active') {
+        const grievingA = active.filter(a => (a.colony||'A')==='A' && a.griefLevel > 0.7).length;
+        const grievingB = active.filter(a => a.colony === 'B'       && a.griefLevel > 0.7).length;
+        const totalA    = active.filter(a => (a.colony||'A')==='A').length || 1;
+        const totalB    = active.filter(a => a.colony === 'B').length || 1;
+        if (grievingA / totalA > 0.4 || grievingB / totalB > 0.4) {
+          this.treatyState = 'none';
+          this.treatyBreaks++;
+          if (window.logLine) window.logLine(`💔 TREATY BROKEN (grief spike) — breaks: ${this.treatyBreaks}`, 'crisis');
+        }
+      }
+    }
+
     // ── COLONY COORDINATION — the core of fire-ant vs army-ant dynamics ──
     // Each colony coordinates as a unit: defend held zones, rally to raid contested ones.
     // Coordination strength scales with group size — more agents = stronger collective force.
 
+    const treatyActive = this.treatyState === 'active';
+
     for (const colony of ['A', 'B']) {
-      const myAgents = active.filter(a => (a.colony || 'A') === colony && !a.isSentinel);
+      const myAgents   = active.filter(a => (a.colony || 'A') === colony && !a.isSentinel);
       if (myAgents.length < 2) continue;
+
+      const myDoctrine = this.doctrine[colony];
+      const isPeaceful = myDoctrine === 'peace' || myDoctrine === 'peace_leaning' || treatyActive;
+      const isWarlike  = myDoctrine === 'war'   || myDoctrine === 'war_leaning';
 
       for (const layout of this.commonsLayout) {
         const zone = zones.find(z => z.name === layout.name);
         if (!zone) continue;
 
         const defenders = myAgents.filter(a => a._commonsZone?.name === layout.name);
-        const invaders  = active.filter(a => {
+        const others    = active.filter(a => {
           const ac = a.colony || 'A';
-          return ac !== colony && a._commonsZone?.name === layout.name && !a.isSentinel;
+          return ac !== colony && a._commonsZone?.name === layout.name && !a.isSentinel && a.colony !== 'U';
         });
+        const hasEnemy  = others.length > 0;
 
-        // ── ZONE DEFENSE: occupied by us + enemy present → push toward enemy centroid ──
-        // Agents close ranks and move as a unit against the intruder
-        if (defenders.length > 0 && invaders.length > 0) {
-          const ecx = invaders.reduce((s, e) => s + e.x, 0) / invaders.length;
-          const ecy = invaders.reduce((s, e) => s + e.y, 0) / invaders.length;
-          const groupForce = Math.min(0.22, 0.06 + defenders.length * 0.03);
-          for (const def of defenders) {
-            const dx = ecx - def.x, dy = ecy - def.y;
-            const d = Math.hypot(dx, dy);
-            if (d > 3 && d < zone.r * 1.5) { // only push within zone boundary
-              def.vx += (dx / d) * groupForce;
-              def.vy += (dy / d) * groupForce;
+        if (defenders.length > 0 && hasEnemy) {
+          const otherColony  = others[0].colony || 'A';
+          const theyPeaceful = this.doctrine[otherColony] === 'peace'
+                            || this.doctrine[otherColony] === 'peace_leaning'
+                            || treatyActive;
+
+          if (isPeaceful && theyPeaceful) {
+            // ── COOPERATIVE ZONE: both peaceful → share zone, supply regenerates faster ──
+            // Supply bonus applied here — agents mingle instead of fight
+            layout.supply = Math.min(1.0, layout.supply + 0.002); // regeneration bonus
+            for (const def of defenders) {
+              def.trustCharge = Math.min(1.0, def.trustCharge + 0.003);
+              // Peaceful coexistence builds evolution through understanding
+              def._peaceTicks = (def._peaceTicks || 0) + 1;
+              if (def._peaceTicks % 200 === 0 && def.accumulateEvolution) {
+                def.accumulateEvolution(0.12, 'peaceful_coexistence');
+              }
             }
-            // Combat survival = evolution pressure
-            def._combatTicks = (def._combatTicks || 0) + 1;
-            if (def._combatTicks % 150 === 0 && def.accumulateEvolution) {
-              def.accumulateEvolution(0.08, 'zone_defense');
+            // Log first peaceful share
+            if (!layout._peacefulSharedLogged && defenders.length > 0 && others.length > 0) {
+              layout._peacefulSharedLogged = true;
+              if (window.logLine) window.logLine(`🕊 ${layout.name} — shared peacefully by both colonies`, 'evolve');
             }
+          } else if (!isPeaceful) {
+            // ── ZONE DEFENSE: push toward enemy centroid — war doctrine ──
+            const ecx = others.reduce((s, e) => s + e.x, 0) / others.length;
+            const ecy = others.reduce((s, e) => s + e.y, 0) / others.length;
+            const groupForce = Math.min(0.22, 0.06 + defenders.length * 0.03);
+            for (const def of defenders) {
+              const dx = ecx - def.x, dy = ecy - def.y;
+              const d = Math.hypot(dx, dy);
+              if (d > 3 && d < zone.r * 1.5) {
+                def.vx += (dx / d) * groupForce;
+                def.vy += (dy / d) * groupForce;
+              }
+              def._combatTicks = (def._combatTicks || 0) + 1;
+              if (def._combatTicks % 150 === 0 && def.accumulateEvolution) {
+                def.accumulateEvolution(0.08, 'zone_defense');
+              }
+            }
+            layout._peacefulSharedLogged = false; // reset if peace breaks
           }
+        } else {
+          layout._peacefulSharedLogged = false;
         }
 
-        // ── COORDINATED RAID: enemy holds zone, we have mass nearby → attack together ──
-        // Requires minimum 2 agents within approach band — lone agents don't raid
-        const isEnemyZone = layout.controller && layout.controller !== 'CONTESTED' && layout.controller !== colony;
-        const isContested = layout.controller === 'CONTESTED';
-        if ((isEnemyZone || isContested) && defenders.length === 0) {
-          const nearbyRaiders = myAgents.filter(a => {
-            if (a.inCommons) return false;
-            const d = Math.hypot(a.x - zone.cx, a.y - zone.cy);
-            return d < zone.r * 4.5 && d > zone.r * 0.8;
-          });
-          if (nearbyRaiders.length >= 2) {
-            // Group has enough mass — coordinate the push
-            const rallyStrength = Math.min(0.28, 0.08 + nearbyRaiders.length * 0.04);
-            for (const raider of nearbyRaiders) {
-              const dx = zone.cx - raider.x, dy = zone.cy - raider.y;
-              const d = Math.hypot(dx, dy);
-              if (d > 1) {
-                raider.vx += (dx / d) * rallyStrength;
-                raider.vy += (dy / d) * rallyStrength;
+        // ── COORDINATED RAID: only when war doctrine or neutral ──
+        // Peace doctrine suppresses raids entirely
+        if (!isPeaceful) {
+          const isEnemyZone = layout.controller && layout.controller !== 'CONTESTED' && layout.controller !== colony;
+          const isContested = layout.controller === 'CONTESTED';
+          if ((isEnemyZone || isContested) && defenders.length === 0) {
+            const nearbyRaiders = myAgents.filter(a => {
+              if (a.inCommons) return false;
+              const d = Math.hypot(a.x - zone.cx, a.y - zone.cy);
+              return d < zone.r * 4.5 && d > zone.r * 0.8;
+            });
+            if (nearbyRaiders.length >= 2) {
+              const rallyStrength = Math.min(0.28, 0.08 + nearbyRaiders.length * 0.04);
+              for (const raider of nearbyRaiders) {
+                const dx = zone.cx - raider.x, dy = zone.cy - raider.y;
+                const d = Math.hypot(dx, dy);
+                if (d > 1) {
+                  raider.vx += (dx / d) * rallyStrength;
+                  raider.vy += (dy / d) * rallyStrength;
+                }
               }
             }
           }
