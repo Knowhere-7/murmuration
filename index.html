@@ -12,21 +12,16 @@
   --text:#c8cdd5;--text-dim:#5a6270;--text-bright:#fff;
   --accent:#00ff99;--accent-dim:#00ff9933;--accent-mid:#00ff9966;
   --red:#ff3344;--amber:#ff8800;--cyan:#00ccff;--purple:#aa66ff;
-  /* ── Glassmorphism — highlighter yellow tint ── */
-  --glass:rgba(255,240,0,0.04);--glass-mid:rgba(255,240,0,0.06);--glass-hi:rgba(255,240,0,0.08);
-  --glass-border:rgba(255,240,0,0.10);--glass-border-hi:rgba(255,240,0,0.16);
-  --glass-blur:12px;--glass-blur-heavy:18px;
+  --violet:#9945ff;--violet-dim:rgba(153,69,255,0.15);--violet-mid:rgba(153,69,255,0.55);
+  --neon-pink:#ff2d7a;--neon-pink-dim:rgba(255,45,122,0.15);--neon-pink-mid:rgba(255,45,122,0.55);
 }
 body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code','Fira Code',monospace;overflow-x:hidden;min-height:100vh}
 
 /* ── HEADER ── */
 .header{
   display:flex;align-items:center;justify-content:space-between;
-  padding:12px 24px;
-  background:var(--glass);
-  border-bottom:1px solid var(--glass-border);
-  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
-  position:relative;z-index:2;
+  padding:12px 24px;border-bottom:1px solid var(--border);
+  background:linear-gradient(90deg, var(--bg), var(--surface));
 }
 .header h1{font-size:1.1em;letter-spacing:3px;color:var(--accent);font-weight:600}
 .header-sub{font-size:.6em;color:var(--text-dim);letter-spacing:1px}
@@ -36,14 +31,31 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 @keyframes pulse-glow{0%,100%{opacity:.5;text-shadow:none}50%{opacity:1;text-shadow:0 0 8px var(--accent-mid)}}
 
 /* ── LAYOUT ── */
-.main{display:flex;height:calc(100dvh - 46px);height:calc(100vh - 46px);overflow:hidden}
+.main{display:flex;height:calc(100vh - 40px);overflow:hidden}
 .canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;overflow:hidden}
-.sidebar{
-  width:340px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
-  background:var(--glass);
-  border-left:1px solid var(--glass-border);
-  backdrop-filter:blur(var(--glass-blur-heavy));-webkit-backdrop-filter:blur(var(--glass-blur-heavy));
+.sidebar{width:260px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+
+/* ── HUD STRIP — panels live below the canvas, not on top of it ── */
+.hud-strip{
+  height:110px;background:#000;
+  border-top:1px solid rgba(0,255,153,0.20);
+  box-shadow:inset 0 1px 0 rgba(255,170,0,0.06);
+  display:flex;align-items:center;gap:0;overflow:hidden;flex-shrink:0;
+  padding:0 8px;
 }
+.hud-panel{
+  flex:1;min-width:100px;max-width:160px;height:90px;
+  border:1px solid rgba(0,255,153,0.10);
+  border-top:2px solid rgba(255,170,0,0.45);
+  padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;
+  background:rgba(0,255,153,0.015);flex-shrink:0;
+}
+.hud-panel-wide{max-width:240px;flex:1.5;}
+.hp-label{font-size:0.48rem;letter-spacing:0.18em;color:rgba(255,170,0,0.60);text-transform:uppercase}
+.hp-value{font-size:1.3rem;font-weight:600;color:var(--accent);letter-spacing:0.05em;line-height:1;text-shadow:0 0 8px rgba(0,255,153,0.4)}
+.hp-sub{font-size:0.48rem;color:rgba(0,255,153,0.3);letter-spacing:0.1em}
+.hp-bar{height:2px;background:rgba(0,255,153,0.08);border-radius:1px;overflow:hidden}
+.hp-fill{height:100%;background:var(--accent);border-radius:1px;transition:width 0.8s ease}
 
 /* ── HERO OVERLAY on canvas — fades out on interaction ── */
 .hero-overlay{
@@ -75,12 +87,39 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 .canvas-wrap{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center}
 .canvas-wrap canvas{display:block;width:100%;height:100%}
 
+/* ── HUD OVERLAY ── */
+@keyframes hud-spin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes hud-spin-rev{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(-360deg)}}
+@keyframes hud-sweep{0%{top:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
+
+/* ── ZONE GAUGES ── */
+.zone-gauge{
+  position:absolute;transform:translate(-50%,-50%);
+  pointer-events:none;text-align:center;
+}
+.zone-gauge svg{display:block;margin:0 auto;}
+.zone-label{
+  font-family:'SF Mono','Cascadia Code',monospace;
+  font-size:0.48rem;letter-spacing:0.2em;
+  color:rgba(0,255,153,0.65);margin-top:2px;
+  text-shadow:0 0 6px rgba(0,255,153,0.35);
+}
+.hud-chip{
+  font-family:'SF Mono','Cascadia Code',monospace;font-size:0.58rem;
+  letter-spacing:0.12em;color:var(--accent);
+  background:rgba(0,0,0,0.60);
+  border:1px solid rgba(0,255,153,0.12);
+  border-left:2px solid rgba(255,170,0,0.60);
+  padding:3px 8px 3px 10px;min-width:140px;text-align:right;
+  text-shadow:0 0 6px rgba(0,255,153,0.35);
+  backdrop-filter:blur(2px);
+}
+
 /* ── NARRATION BAR ── */
 .narration{
   position:absolute;bottom:0;left:0;right:0;z-index:5;
   padding:14px 24px;
-  background:linear-gradient(transparent, rgba(6,8,10,0.85));
-  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
+  background:linear-gradient(transparent, rgba(6,8,10,0.97));
   pointer-events:none;
 }
 .narration-text{
@@ -98,7 +137,7 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 .ch-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-glow 1.5s infinite}
 
 /* ── SIDEBAR ── */
-.sb-section{padding:16px;border-bottom:1px solid var(--glass-border)}
+.sb-section{padding:16px;border-bottom:1px solid var(--border)}
 .sb-section:last-child{border-bottom:none;flex:1}
 .sb-title{
   font-size:.62em;letter-spacing:2.5px;text-transform:uppercase;
@@ -118,8 +157,8 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 .btn-run:active{transform:translateY(0)}
 .btn-stop{background:var(--red);color:#fff}
 .btn-stop:hover{filter:brightness(1.1)}
-.btn-reset{background:var(--glass);color:var(--text-dim);border:1px solid var(--glass-border);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.btn-reset:hover{color:var(--text);border-color:var(--glass-border-hi);background:var(--glass-mid)}
+.btn-reset{background:var(--surface);color:var(--text-dim);border:1px solid var(--border)}
+.btn-reset:hover{color:var(--text);border-color:var(--border-hi)}
 .agent-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .agent-row label{font-size:.68em;color:var(--text-dim);font-weight:600}
 .agent-row input{
@@ -163,7 +202,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 .metric-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
 .metric-name{font-size:.68em;color:var(--text-dim);font-weight:600}
 .metric-val{font-size:.75em;color:var(--text-bright);font-weight:700}
-.metric-bar{height:4px;background:var(--glass-mid);border-radius:2px;overflow:hidden;position:relative}
+.metric-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;position:relative}
 .metric-fill{height:100%;border-radius:2px;transition:width 0.3s,background 0.3s;position:relative}
 .metric-fill::after{
   content:'';position:absolute;top:0;right:0;width:20px;height:100%;
@@ -175,12 +214,12 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 /* ── AGENT ID CARD ── */
 .agent-tooltip{
   position:absolute;pointer-events:none;z-index:20;
-  background:rgba(8,8,12,0.82);
-  border:1px solid var(--glass-border-hi);
-  border-radius:6px;padding:0;font-size:.6em;line-height:1.5;
+  background:rgba(8,8,12,0.95);
+  border:1px solid rgba(100,100,120,0.4);
+  border-radius:3px;padding:0;font-size:.6em;line-height:1.5;
   color:var(--text);width:235px;opacity:0;transition:opacity 0.12s;
-  backdrop-filter:blur(var(--glass-blur-heavy));-webkit-backdrop-filter:blur(var(--glass-blur-heavy));
-  box-shadow:0 4px 24px rgba(0,0,0,0.5), 0 0 1px rgba(255,240,0,0.08);
+  backdrop-filter:blur(6px);
+  box-shadow:0 4px 20px rgba(0,0,0,0.6);
   overflow:hidden;
 }
 .agent-tooltip.visible{opacity:1}
@@ -209,9 +248,8 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 /* ── EVENT FEED ── */
 .event-feed{
   flex:1;overflow-y:auto;font-size:.66em;line-height:1.9;
-  background:var(--glass);border:1px solid var(--glass-border);border-radius:6px;
+  background:var(--bg);border:1px solid var(--border);border-radius:4px;
   padding:8px 10px;min-height:100px;
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 .event-feed::-webkit-scrollbar{width:3px}
 .event-feed::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
@@ -266,19 +304,10 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 .essay-cta-p a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
 .essay-cta-p a:hover{border-color:var(--accent)}
 
-/* ── SKIP LINK (a11y) ── */
-.skip-link{
-  position:absolute;top:-100%;left:16px;z-index:100;
-  padding:8px 16px;background:var(--accent);color:var(--bg);
-  font-size:.75em;font-weight:700;letter-spacing:1px;border-radius:0 0 4px 4px;
-  text-decoration:none;transition:top 0.2s;
-}
-.skip-link:focus{top:0}
-
 /* ── RESPONSIVE ── */
-@media(max-width:900px){
-  .main{flex-direction:column;height:auto;min-height:calc(100dvh - 46px);min-height:calc(100vh - 46px)}
-  .canvas-col{flex:none;height:55dvh;height:55vh}
+@media(max-width:700px){
+  .main{flex-direction:column;height:auto;min-height:calc(100vh - 46px)}
+  .canvas-col{flex:none;height:55vh}
   .sidebar{width:100%;max-height:none;border-left:none;border-top:1px solid var(--border);flex:1;overflow-y:auto}
   .canvas-wrap{height:100%}
   .hero-title{font-size:1.4em}
@@ -289,30 +318,14 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 @media(max-width:600px){
   .header{padding:8px 14px}
   .header h1{font-size:.9em;letter-spacing:2px}
-  .canvas-col{height:50dvh;height:50vh}
+  .canvas-col{height:50vh}
   .sb-section{padding:12px}
   .hero-title{font-size:1.1em;letter-spacing:4px}
   .hero-tagline{font-size:.58em}
 }
-
-/* ── REDUCED MOTION (a11y) ── */
-@media(prefers-reduced-motion:reduce){
-  *,*::before,*::after{
-    animation-duration:0.01ms !important;
-    animation-iteration-count:1 !important;
-    transition-duration:0.01ms !important;
-  }
-  .hero-overlay{transition:none}
-  .narration-text{transition:none}
-  .metric-fill{transition:none}
-  .agent-tooltip{transition:none}
-}
 </style>
 </head>
 <body>
-
-<!-- Skip link for keyboard users -->
-<a class="skip-link" href="#canvas">Skip to simulation</a>
 
 <!-- ═══════════ HEADER ═══════════ -->
 <header class="header">
@@ -331,7 +344,16 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
   <!-- LEFT: CANVAS -->
   <div class="canvas-col">
     <div class="canvas-wrap">
-      <canvas id="canvas"></canvas>
+      <!-- World map background — continent outlines, no markers, pure geography -->
+      <svg id="world-map-svg" style="
+        position:absolute;inset:0;width:100%;height:100%;
+        z-index:0;pointer-events:none;overflow:hidden;
+      "></svg>
+      <!-- Risk overlay layer — empty now, wired when risk assessment version is built -->
+      <div id="risk-layer" style="position:absolute;inset:0;z-index:1;pointer-events:none;display:none"
+           data-doc="populate with country-level risk data: {iso, score 0-1, color}. Toggle display:block to activate."></div>
+
+      <canvas id="canvas" style="position:relative;z-index:2"></canvas>
       <div class="agent-tooltip" id="agent-tooltip"></div>
 
       <!-- Hero overlay — fades after a few seconds -->
@@ -342,6 +364,56 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
           Watch them think together — or tear each other apart.
         </div>
         <div class="hero-hook">▼ THE SWARM IS ALREADY RUNNING ▼</div>
+      </div>
+
+      <!-- ── HUD IMAGE OVERLAY ── -->
+      <div id="hud-overlay" style="
+        position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden;
+      ">
+        <!-- Camera frame — viewport chrome, barely-there -->
+        <img src="hud-thumbs/CAMERA 001.png" style="
+          position:absolute;inset:0;width:100%;height:100%;
+          object-fit:fill;opacity:0.10;mix-blend-mode:screen;
+        ">
+
+        <!-- Scan ring — violet tint, sparse zone -->
+        <img id="hud-scan-ring" src="hud-thumbs/CIRCLE 002.png" style="
+          position:absolute;top:28%;left:22%;
+          width:180px;height:180px;
+          transform:translate(-50%,-50%) rotate(0deg);
+          opacity:0.14;mix-blend-mode:screen;
+          filter:hue-rotate(240deg) saturate(1.4);
+          animation:hud-spin 50s linear infinite;
+        ">
+
+        <!-- Cluster ring — neon pink, follows densest zone -->
+        <img id="hud-cluster-ring" src="hud-thumbs/CIRCLE 004.png" style="
+          position:absolute;top:50%;left:50%;
+          width:200px;height:200px;
+          transform:translate(-50%,-50%);
+          opacity:0.10;mix-blend-mode:screen;
+          filter:hue-rotate(300deg) saturate(1.8);
+          animation:hud-spin-rev 28s linear infinite;
+          transition:top 3s ease, left 3s ease;
+        ">
+
+        <!-- Live stat chips — corner only, minimal footprint -->
+        <div style="position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:3px;pointer-events:none;">
+          <div class="hud-chip" id="hud-trust"></div>
+          <div class="hud-chip" id="hud-faith"></div>
+          <div class="hud-chip" id="hud-evo"></div>
+          <div class="hud-chip" id="hud-consensus"></div>
+        </div>
+
+        <!-- Zone gauges — one per sacred zone, positioned dynamically via JS -->
+        <div id="hud-zones"></div>
+
+        <!-- Scan line sweep — violet→pink gradient, deliberate 14s -->
+        <div id="hud-scanline" style="
+          position:absolute;left:0;right:0;height:1px;
+          background:linear-gradient(90deg,transparent,rgba(0,255,153,0.20),rgba(255,170,0,0.15),transparent);
+          animation:hud-sweep 14s ease-in-out infinite;top:0;
+        "></div>
       </div>
 
       <!-- Live HUD -->
@@ -360,6 +432,40 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       <!-- Narration bar -->
       <div class="narration">
         <div class="narration-text visible" id="narration">The swarm is waking up. Every dot you see has a personality it was born with.</div>
+      </div>
+    </div>
+
+    <!-- ── HUD STRIP — real data, off the swarm ── -->
+    <div class="hud-strip">
+      <div class="hud-panel" id="strip-alive">
+        <div class="hp-label">POPULATION</div>
+        <div class="hp-value" id="strip-alive-val">—</div>
+        <div class="hp-bar"><div class="hp-fill" id="strip-alive-fill" style="width:100%"></div></div>
+      </div>
+      <div class="hud-panel" id="strip-tick">
+        <div class="hp-label">TICK</div>
+        <div class="hp-value" id="strip-tick-val">—</div>
+        <div class="hp-sub" id="strip-tick-sub">GENERATION CLOCK</div>
+      </div>
+      <div class="hud-panel" id="strip-trust">
+        <div class="hp-label">TRUST INDEX</div>
+        <div class="hp-value" id="strip-trust-val">—</div>
+        <div class="hp-bar"><div class="hp-fill" id="strip-trust-fill" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="hud-panel" id="strip-faith">
+        <div class="hp-label">COLLECTIVE FAITH</div>
+        <div class="hp-value" id="strip-faith-val">—</div>
+        <div class="hp-bar"><div class="hp-fill" id="strip-faith-fill" style="width:0%;background:#ffd700"></div></div>
+      </div>
+      <div class="hud-panel" id="strip-evo">
+        <div class="hp-label">AVG EVOLUTION</div>
+        <div class="hp-value" id="strip-evo-val">—</div>
+        <div class="hp-bar"><div class="hp-fill" id="strip-evo-fill" style="width:0%;background:#cc88ff"></div></div>
+      </div>
+      <div class="hud-panel hud-panel-wide" id="strip-state" style="max-width:200px;flex:2">
+        <div class="hp-label">SWARM STATE</div>
+        <div class="hp-value" id="strip-state-val" style="font-size:0.85rem;letter-spacing:0.08em">INITIALISING</div>
+        <div class="hp-bar" style="margin-top:4px"><div class="hp-fill" id="strip-state-fill" style="width:0%;background:var(--accent)"></div></div>
       </div>
     </div>
   </div>
@@ -409,7 +515,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <label class="seed-name" for="pitviper">Earthquake</label>
+          <span class="seed-name">Black Swan</span>
           <span class="seed-value" id="pitviperVal">0.00</span>
         </div>
         <div class="seed-desc">Shatter the environment. Every agent scrambles to find new ground.</div>
@@ -419,7 +525,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <label class="seed-name" for="electroreception">Paranoia</label>
+          <span class="seed-name">Market Instability</span>
           <span class="seed-value" id="electroVal">0.00</span>
         </div>
         <div class="seed-desc">Crank up sensitivity. Every agent overreacts to everything.</div>
@@ -429,7 +535,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <label class="seed-name" for="lateralline">Ticking bomb</label>
+          <span class="seed-name">Cascade</span>
           <span class="seed-value" id="lateralVal">0.00</span>
         </div>
         <div class="seed-desc">Delayed detonation. Pressure builds silently, then erupts.</div>
@@ -439,7 +545,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <label class="seed-name" for="echolocation">Time warp</label>
+          <span class="seed-name">Tempo</span>
           <span class="seed-value" id="echoVal">0.00</span>
         </div>
         <div class="seed-desc">Speed up or slow down how fast they process reality.</div>
@@ -449,7 +555,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal">
         <div class="seed-header">
-          <label class="seed-name" for="mantisshrimp">Flood the gates</label>
+          <span class="seed-name">Population Boom</span>
           <span class="seed-value" id="mantisVal">0.00</span>
         </div>
         <div class="seed-desc">Pour in newcomers. Watch the swarm absorb — or reject — fresh blood.</div>
@@ -461,7 +567,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
         <div class="seed-header">
-          <label class="seed-name" for="scarcitySlider">Scarcity</label>
+          <span class="seed-name">Resource Depletion</span>
           <span class="seed-value" id="scarcityVal">0.50</span>
         </div>
         <div class="seed-desc">Resource pressure. Higher = faster drain, harder survival. Cooperation becomes life or death.</div>
@@ -519,9 +625,30 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
         <div class="metric-explain">Ancestral knowledge inherited across generations. The point of passing the torch.</div>
       </div>
 
-      <div class="controls-row" style="margin-top:8px;gap:6px">
-        <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em" aria-label="Trigger disaster phase">⚡ TRIGGER DISASTER</button>
-        <button class="btn btn-reset" onclick="forceEvolution()" style="font-size:.65em;border-color:var(--purple);color:var(--purple)" aria-label="Force evolutionary leap">🧬 FORCE EVOLUTION</button>
+      <!-- Evolution crystallization — strings go gold when ready; user decides fate -->
+      <div class="seed-signal" style="margin-top:8px">
+        <div class="seed-header">
+          <span class="seed-name" style="color:#ffd700">Crystallization Strength</span>
+          <span class="seed-value" id="crystalVal" style="color:#ffd700">0.50</span>
+        </div>
+        <div class="seed-desc" style="color:rgba(255,215,0,0.5)">How deeply the current emergent behavior encodes into the next generation. Strings go gold when evolution is ready to inspect.</div>
+        <input type="range" id="crystalSlider" min="0" max="1" step="0.01" value="0.5"
+          oninput="updateVal(this,'crystalVal')"
+          style="accent-color:#ffd700">
+      </div>
+      <div class="controls-row" style="margin-top:6px;gap:6px">
+        <button class="btn btn-reset" onclick="(() => { if(!k26||!k26.economy) return; const s=document.getElementById('crystalSlider'); k26.economy.crystallize(s?parseFloat(s.value):0.5); })()"
+          style="font-size:.65em;background:rgba(255,215,0,0.10);border-color:rgba(255,215,0,0.55);color:#ffd700;text-shadow:0 0 8px rgba(255,215,0,0.4);box-shadow:0 0 10px rgba(255,215,0,0.12)">
+          ⚗ IMPLEMENT
+        </button>
+        <button class="btn btn-reset" onclick="if(k26&&k26.economy) k26.economy.trashEvolution()"
+          style="font-size:.65em;background:rgba(255,50,50,0.08);border-color:rgba(255,50,50,0.35);color:#ff4444">
+          🗑 TRASH
+        </button>
+      </div>
+
+      <div class="controls-row" style="margin-top:4px">
+        <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em">⚡ TRIGGER DISASTER</button>
       </div>
     </div>
 
@@ -568,7 +695,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal" style="margin-top:8px">
         <div class="seed-header">
-          <label class="seed-name" for="taxSlider">Tax rate</label>
+          <span class="seed-name">Cost of Living</span>
           <span class="seed-value" id="taxVal">0.00</span>
         </div>
         <div class="seed-desc">Redistribute from elite to destitute. Too low = revolution. Too high = no one climbs.</div>
@@ -577,7 +704,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       </div>
 
       <div class="controls-row" style="margin-top:8px">
-        <button class="btn btn-reset" onclick="if(k26 && k26.wealthEngine) k26.wealthEngine.triggerRevolution(k26.world.agents.filter(a=>!a.seppukuDone&&!a.isSentinel&&a.griefState!=='DISHONORED'&&a.griefState!=='STARVED'), k26.wealthEngine.classCounts)" style="font-size:.65em" aria-label="Force wealth revolution">🔥 FORCE REVOLUTION</button>
+        <button class="btn btn-reset" onclick="if(k26 && k26.wealthEngine) k26.wealthEngine.triggerRevolution(k26.world.agents.filter(a=>!a.seppukuDone&&!a.isSentinel&&a.griefState!=='DISHONORED'&&a.griefState!=='STARVED'), k26.wealthEngine.classCounts)" style="font-size:.65em">🔥 FORCE REVOLUTION</button>
       </div>
     </div>
 
@@ -636,8 +763,8 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       <div class="sb-title">Civilization archive</div>
       <div class="sb-subtitle">Snapshot the swarm. Restore it later. Never lose a civilization again.</div>
       <div class="controls-row">
-        <button class="btn btn-run" onclick="saveCivilization()" style="font-size:.7em" aria-label="Save civilization snapshot">&#128190; SAVE</button>
-        <button class="btn btn-reset" onclick="document.getElementById('loadFile').click()" style="font-size:.7em" aria-label="Load civilization from file">&#128194; LOAD</button>
+        <button class="btn btn-run" onclick="saveCivilization()" style="font-size:.7em">&#128190; SAVE</button>
+        <button class="btn btn-reset" onclick="document.getElementById('loadFile').click()" style="font-size:.7em">&#128194; LOAD</button>
       </div>
       <input type="file" id="loadFile" accept=".json" style="display:none" onchange="loadCivilization(event)">
       <div id="save-status" style="font-size:.58em;color:var(--text-dim);margin-top:6px;min-height:1.4em"></div>
@@ -767,10 +894,10 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 </div><!-- /essay -->
 
 <!-- ═══════════ ENGINE ═══════════ -->
-<script src="agent.js"></script>
+<script src="agent.js?v=2"></script>
 <script src="world.js"></script>
 <script src="seed.js"></script>
-<script src="interaction.js"></script>
+<script src="interaction.js?v=2"></script>
 <script src="evolution.js"></script>
 <script src="extractor.js"></script>
 <script src="k26.js"></script>
@@ -990,14 +1117,29 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     sizeCanvas();
-    // Resize the world to match new canvas if sim is running
     if (k26 && k26.world) {
       const c = document.getElementById('canvas');
       k26.world.width  = c.width;
       k26.world.height = c.height;
+      // Recompute zone pixel coords to match new world size
+      if (k26.economy && k26.economy.recomputeZonePositions) {
+        k26.economy.recomputeZonePositions();
+      }
     }
-  }, 150);
+    repositionZoneGauges();
+  }, 80);
 });
+
+function repositionZoneGauges() {
+  if (!k26 || !k26.economy || !k26.economy.zones) return;
+  const WW = k26.world.width, WH = k26.world.height;
+  k26.economy.zones.forEach((z, i) => {
+    const el = document.getElementById('zg-' + i);
+    if (!el) return;
+    el.style.left = ((z.px || z.x/WW) * 100).toFixed(2) + '%';
+    el.style.top  = ((z.py || z.y/WH) * 100).toFixed(2) + '%';
+  });
+}
 
 // ═══════════ AUTO-START — the swarm is ALIVE on load ═══════════
 
@@ -1139,62 +1281,193 @@ function updatePresentation(e) {
   document.getElementById('ch-agents').textContent = alive;
   document.getElementById('ch-time').textContent = time;
 
+  // ── HUD updates ──
+  const pct = v => Math.round((v||0)*100);
+  const live = k26.world.agents.filter(a=>!a.seppukuDone&&!a.isSentinel);
+  const n = live.length || 1;
+  const faith = live.reduce((s,a)=>s+a.faith,0)/n;
+  const evo   = live.reduce((s,a)=>s+(a.evolution||0),0)/n;
+  const grief = live.reduce((s,a)=>s+a.griefLevel,0)/n;
+
+  // Corner chips
+  const hudT = document.getElementById('hud-trust');
+  const hudF = document.getElementById('hud-faith');
+  const hudE = document.getElementById('hud-evo');
+  const hudC = document.getElementById('hud-consensus');
+  if(hudT) hudT.textContent = `TRUST      ${pct(e.avgTrust)}%`;
+  if(hudF) hudF.textContent = `FAITH      ${pct(faith)}%`;
+  if(hudE) hudE.textContent = `EVOLVE     ${evo.toFixed(2)}`;
+  if(hudC) hudC.textContent = `CONSENSUS  ${pct(e.consensus)}%`;
+
+  // Strip panels
+  const sv = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  const sf = (id,w) => { const el=document.getElementById(id); if(el) el.style.width=Math.round(w*100)+'%'; };
+  sv('strip-alive-val', alive);
+  sf('strip-alive-fill', alive/300);
+  sv('strip-tick-val', time);
+  sv('strip-trust-val', pct(e.avgTrust)+'%');
+  sf('strip-trust-fill', e.avgTrust||0);
+  sv('strip-faith-val', pct(faith)+'%');
+  sf('strip-faith-fill', faith);
+  sv('strip-evo-val', evo.toFixed(3));
+  sf('strip-evo-fill', Math.min(1, evo));
+  // Swarm state
+  const trust = e.avgTrust||0, cons = e.consensus||0;
+  const state = grief > 0.4 ? 'COLLECTIVE GRIEF' :
+                trust > 0.8 && cons > 0.8 ? 'HIGH CIVILISATION' :
+                trust > 0.6 ? 'COOPERATIVE' :
+                trust < 0.2 ? 'FRACTURING' :
+                cons < 0.3 ? 'FRAGMENTING' : 'STABLE';
+  const stateCol = grief>0.4?'var(--amber)':trust>0.8&&cons>0.8?'var(--accent)':trust<0.2?'var(--red)':'var(--cyan)';
+  sv('strip-state-val', state);
+  const stateEl = document.getElementById('strip-state-val');
+  if(stateEl) stateEl.style.color = stateCol;
+  // State bar = composite health (trust + consensus avg)
+  sf('strip-state-fill', (trust + cons) / 2);
+  const stateFill = document.getElementById('strip-state-fill');
+  if(stateFill) stateFill.style.background = stateCol;
+
+  // ── Zone gauges ──
+  if(k26.economy && k26.economy.zones) {
+    const canvas = document.getElementById('canvas');
+    const zonesEl = document.getElementById('hud-zones');
+    const harvestR = k26.economy.harvestRadius || 80;
+    // Direct world % — canvas fills wrap 100%x100%, zones are in world coords
+    const WW = k26.world.width;
+    const WH = k26.world.height;
+
+    // Build gauge elements — single innerHTML set, no += loop
+    if(zonesEl && zonesEl.children.length !== k26.economy.zones.length) {
+      const dynR = 44; // fixed size — consistent, not recomputed on reflow
+      const C = dynR + 6;
+      const circ = (2 * Math.PI * dynR).toFixed(2);
+      const fs1 = Math.round(dynR * 0.34);
+      const fs2 = Math.round(dynR * 0.20);
+      zonesEl.innerHTML = k26.economy.zones.map((z, i) => `
+        <div class="zone-gauge" id="zg-${i}" data-r="${dynR}"
+          style="left:${((z.px||z.x/WW)*100).toFixed(2)}%;top:${((z.py||z.y/WH)*100).toFixed(2)}%">
+          <svg width="${C*2}" height="${C*2}" viewBox="0 0 ${C*2} ${C*2}" style="display:block">
+            <circle cx="${C}" cy="${C}" r="${dynR+5}" fill="rgba(0,0,0,0.50)"/>
+            <circle cx="${C}" cy="${C}" r="${dynR}" fill="none"
+              stroke="rgba(0,255,153,0.12)" stroke-width="1.5"/>
+            <circle cx="${C}" cy="${C}" r="${dynR-10}" fill="none"
+              stroke="rgba(255,170,0,0.08)" stroke-width="1"
+              stroke-dasharray="3 6" id="zg-pop-ring-${i}"/>
+            <circle cx="${C}" cy="${C}" r="${dynR}" fill="none"
+              stroke="rgba(0,255,153,0.65)" stroke-width="2.5"
+              stroke-dasharray="${circ}" stroke-dashoffset="${circ}"
+              stroke-linecap="round" transform="rotate(-90 ${C} ${C})"
+              id="zg-arc-${i}" style="transition:stroke-dashoffset 1.4s ease,stroke 1.0s ease"/>
+            <text x="${C}" y="${C-fs2*0.5}" text-anchor="middle" dominant-baseline="middle"
+              fill="rgba(255,170,0,0.92)" font-size="${fs1}" font-family="monospace"
+              font-weight="700" style="filter:drop-shadow(0 0 4px rgba(255,170,0,0.5))"
+              id="zg-v1-${i}">·</text>
+            <text x="${C}" y="${C+fs1*0.9}" text-anchor="middle" dominant-baseline="middle"
+              fill="rgba(0,255,153,0.65)" font-size="${fs2}" font-family="monospace"
+              id="zg-v2-${i}"></text>
+          </svg>
+          <div class="zone-label" id="zg-name-${i}">${z.name||'ZONE'}</div>
+        </div>`).join('');
+    }
+
+    // Update each gauge — position is world % baked into style at build time,
+    // only data values update here
+    k26.economy.zones.forEach((z, i) => {
+      const el = document.getElementById(`zg-${i}`);
+      if(!el) return;
+      // Use normalized px/py — never stale regardless of canvas resize
+      el.style.left = ((z.px || z.x/WW) * 100).toFixed(2) + '%';
+      el.style.top  = ((z.py || z.y/WH) * 100).toFixed(2) + '%';
+      const nameEl = document.getElementById(`zg-name-${i}`);
+      if(nameEl && z.name) nameEl.textContent = z.name;
+
+      // Dynamic R for this gauge
+      const dynR = parseInt(el.dataset.r) || 34;
+      const circ = 2 * Math.PI * dynR;
+
+      // Resource arc — violet when healthy, shifts neon pink when stressed
+      const level = Math.max(0, z.richness * (1 - (z.depleted||0)));
+      const arc = document.getElementById(`zg-arc-${i}`);
+      if(arc) {
+        arc.style.strokeDashoffset = (circ * (1 - level)).toFixed(2);
+        arc.style.stroke = level > 0.65
+          ? `rgba(0,255,153,${0.50 + level * 0.20})`      // matrix green — healthy
+          : level > 0.35
+            ? `rgba(255,200,0,0.70)`                       // yellow-amber — mid
+            : `rgba(255,120,0,0.80)`;                      // orange — stressed
+        arc.style.filter = level < 0.35
+          ? 'drop-shadow(0 0 5px rgba(255,120,0,0.5))' : 'none';
+      }
+
+      // Zone-specific data per narrative role
+      const v1 = document.getElementById(`zg-v1-${i}`);
+      const v2 = document.getElementById(`zg-v2-${i}`);
+      const popRing = document.getElementById(`zg-pop-ring-${i}`);
+      const pop = live.filter(a=>Math.hypot(a.x-z.x,a.y-z.y) < z.radius + harvestR).length;
+      if(popRing) popRing.style.stroke = `rgba(255,170,0,${Math.min(0.40, pop * 0.035)})`;
+
+      if(i === 0) {
+        // HEARTH — vital signs: alive count + tick
+        if(v1) v1.textContent = alive;
+        if(v2) v2.textContent = 'T·' + time;
+
+      } else if(i === 1) {
+        // SHELTER (top-left) — group evolution
+        const avgEvo = live.length ? (live.reduce((s,a)=>s+(a.evolution||0),0)/live.length) : 0;
+        const maxEvo = live.length ? Math.max(...live.map(a=>a.evolution||0)) : 0;
+        if(v1) v1.textContent = avgEvo.toFixed(2);
+        if(v2) v2.textContent = 'MAX·' + maxEvo.toFixed(2);
+
+      } else if(i === 2) {
+        // MARKET (top-right) — collective consciousness: trust + consensus
+        const trust = e.avgTrust || 0;
+        const cons  = e.consensus || 0;
+        if(v1) v1.textContent = Math.round(trust * 100) + '%';
+        if(v2) v2.textContent = 'CON·' + Math.round(cons * 100) + '%';
+
+      } else if(i === 3) {
+        // DISTRICT (bottom-left) — generation depth + wellbeing
+        const maxGen  = live.length ? Math.max(...live.map(a=>a.generation||0)) : 0;
+        const avgEnergy = live.length ? (live.reduce((s,a)=>s+(a.energy||0),0)/live.length) : 0;
+        const grieving  = live.filter(a=>a.griefState==='GRIEVING'||a.griefState==='CRISIS').length;
+        if(v1) v1.textContent = 'G·' + maxGen;
+        if(v2) v2.textContent = '⚡' + Math.round(avgEnergy*100) + '% △' + grieving;
+
+      } else if(i === 4) {
+        // COMMONS (bottom-right) — sacred knowledge economy
+        const sacredGrounds = (k26.world.sacredGrounds || []).length;
+        const totalWisdom   = live.reduce((s,a)=>s+(a.wisdomScore||0),0);
+        const wisdomBearers = live.filter(a=>(a.wisdomScore||0)>0).length;
+        if(v1) v1.textContent = totalWisdom.toFixed(1);
+        if(v2) v2.textContent = '⌘' + wisdomBearers + ' ✦' + sacredGrounds;
+      }
+    });
+  }
+
+  // Dynamic cluster ring — update every 60 ticks
+  if(time % 60 === 0 && k26.world) {
+    const ring = document.getElementById('hud-cluster-ring');
+    const canvas = document.getElementById('canvas');
+    if(ring && canvas && live.length) {
+      // find centroid of densest local group
+      let best = live[0], bestCount = 0;
+      for(const a of live) {
+        const nearby = live.filter(b=>Math.hypot(b.x-a.x,b.y-a.y)<80).length;
+        if(nearby > bestCount) { bestCount=nearby; best=a; }
+      }
+      const rect = canvas.getBoundingClientRect();
+      const px = (best.x / canvas.width * 100).toFixed(1) + '%';
+      const py = (best.y / canvas.height * 100).toFixed(1) + '%';
+      ring.style.left = px;
+      ring.style.top  = py;
+    }
+  }
+
   setMetric('consensus', e.consensus, e.consensus > 0.7 ? 'var(--accent)' : e.consensus < 0.3 ? 'var(--red)' : 'var(--amber)');
   setMetric('trust', e.avgTrust, e.avgTrust > 0.5 ? 'var(--cyan)' : 'var(--red)');
   setMetric('grief', e.avgGrief, e.avgGrief > 0.5 ? 'var(--red)' : e.avgGrief > 0.2 ? 'var(--amber)' : 'var(--accent)');
   setMetric('stability', e.stability || 0, (e.stability||0) > 0.7 ? 'var(--purple)' : 'var(--amber)');
   setMetric('cascade', e.cascadeVelocity, e.cascadeVelocity > 0.5 ? 'var(--red)' : 'var(--cyan)');
-
-  // ── Phase 1: Compute ambient background state ──
-  // Utopia = high trust + low grief → deep blue
-  // Stress = high disturbance/pressure → dark green
-  // Grief  = high avg grief → deep red
-  // Blends smoothly between states; intensity ramps gently
-  if (k26.world) {
-    const grief = e.avgGrief || 0;
-    const trust = e.avgTrust || 0;
-    const dist  = k26.world.env.disturbance || 0;
-    const press = k26.world.env.pressure || 0;
-    const stress = Math.min(1, (dist + press) * 0.6);
-
-    // Determine dominant state and blend
-    let r = 0, g = 0, b = 0, intensity = 0;
-
-    // Grief channel — deep red, fading to black at edges
-    if (grief > 0.25) {
-      const w = Math.min(1, (grief - 0.25) / 0.5); // ramps 0.25→0.75
-      r += 120 * w;
-      g += 8 * w;
-      b += 15 * w;
-      intensity = Math.max(intensity, w);
-    }
-    // Stress channel — dark green, fading to black at edges
-    if (stress > 0.15) {
-      const w = Math.min(1, (stress - 0.15) / 0.6);
-      r += 12 * w;
-      g += 80 * w;
-      b += 20 * w;
-      intensity = Math.max(intensity, w * 0.8);
-    }
-    // Utopia channel — deep blue center (trust high AND grief low)
-    if (trust > 0.45 && grief < 0.2) {
-      const w = Math.min(1, (trust - 0.45) / 0.35) * (1 - grief * 3);
-      r += 10 * w;
-      g += 20 * w;
-      b += 120 * w;
-      intensity = Math.max(intensity, w * 0.7);
-    }
-
-    // Smooth transition — lerp toward target to avoid flicker
-    const prev = k26.world._ambientState || { r: 0, g: 0, b: 0, intensity: 0 };
-    const lerpRate = 0.03; // slow blend — takes ~1-2 seconds to shift
-    k26.world._ambientState = {
-      r: prev.r + (r - prev.r) * lerpRate,
-      g: prev.g + (g - prev.g) * lerpRate,
-      b: prev.b + (b - prev.b) * lerpRate,
-      intensity: prev.intensity + (intensity - prev.intensity) * lerpRate
-    };
-  }
 
   if (time < 3) return;
 
@@ -1507,184 +1780,6 @@ window.logLine = function(msg, type) {
 };
 
 // ═══════════════════════════════════════════════════
-// FORCE EVOLUTION — compressed natural selection
-// ═══════════════════════════════════════════════════
-//
-// Selection pressure culls the weakest, triggers a
-// reproduction burst from the fittest. Thousands of
-// ticks of natural selection in one button press.
-
-function forceEvolution() {
-  if (!k26 || !k26.world || !k26.economy) {
-    narrate('Nothing to evolve — start the swarm first.');
-    return;
-  }
-
-  const alive = k26.world.agents.filter(a =>
-    !a.seppukuDone && !a.isSentinel && a.griefState !== 'DISHONORED');
-
-  if (alive.length < 4) {
-    narrate('Not enough agents to apply selection pressure.');
-    return;
-  }
-
-  // ── SELECTION PRESSURE ──
-  // Score each agent by fitness: evolution + trust + faith + energy
-  const scored = alive.map(a => ({
-    agent: a,
-    fitness: (a.evolution || 0) * 0.35 +
-             a.trustCharge * 0.25 +
-             (a.faith || 0) * 0.2 +
-             (a.energy || 0) * 0.2
-  }));
-  scored.sort((a, b) => b.fitness - a.fitness);
-
-  // Bottom 30% get culled — the unfit don't survive selection pressure
-  const cullCount = Math.floor(scored.length * 0.3);
-  const culled = scored.slice(-cullCount);
-  let culledIds = [];
-
-  for (const { agent } of culled) {
-    // The weak die with meaning — their knowledge enters collective memory
-    agent.seppukuDone = true;
-    agent._seppukuTick = k26.world.time;
-    agent.vx = 0;
-    agent.vy = 0;
-    culledIds.push(agent.id);
-
-    // Their wisdom feeds the collective
-    if (!k26.world.collectiveMemory) k26.world.collectiveMemory = [];
-    k26.world.collectiveMemory.push({
-      type: 'EVOLUTION_CULL',
-      agentId: agent.id,
-      tick: k26.world.time,
-      evolution: agent.evolution || 0,
-      wisdomScore: agent.wisdomScore || 0,
-      faith: agent.faith || 0
-    });
-  }
-
-  // ── SURVIVOR BOOST ──
-  // The top 40% get an evolution leap — pressure breeds strength
-  const survivors = scored.slice(0, -cullCount);
-  const eliteCount = Math.floor(survivors.length * 0.4);
-
-  for (let i = 0; i < survivors.length; i++) {
-    const a = survivors[i].agent;
-    const isElite = i < eliteCount;
-
-    // Evolution boost — bigger for the fittest
-    const evoBoost = isElite ? 0.4 : 0.15;
-    a.evolution = Math.min(5.0, (a.evolution || 0) + evoBoost);
-
-    // Faith boost from surviving the pressure
-    a.faith = Math.min(1.0, (a.faith || 0) + 0.08);
-
-    // Wisdom from witnessing
-    a.wisdomScore = Math.min(1.0, (a.wisdomScore || 0) + 0.05);
-  }
-
-  // ── REPRODUCTION BURST ──
-  // Top pairs reproduce immediately — the evolutionary payoff
-  const Agent = window.MurmurationModules.Agent;
-  let births = 0;
-  const maxBurst = Math.min(Math.floor(eliteCount / 2), 5);
-
-  for (let i = 0; i < maxBurst * 2; i += 2) {
-    if (i + 1 >= survivors.length) break;
-    const p1 = survivors[i].agent;
-    const p2 = survivors[i + 1].agent;
-
-    if (k26.world.agents.filter(a => !a.seppukuDone).length >= 200) break;
-
-    const childId = k26.economy.nextAgentId++;
-    const cx = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 30;
-    const cy = (p1.y + p2.y) / 2 + (Math.random() - 0.5) * 30;
-
-    const blend = (a, b) => {
-      const avg = (a + b) / 2;
-      return Math.max(0.1, Math.min(1.0, avg + (Math.random() - 0.5) * 0.1));
-    };
-
-    const child = new Agent(childId, cx, cy, {
-      riskTolerance: blend(p1.personality.riskTolerance, p2.personality.riskTolerance),
-      trustBaseline: blend(p1.personality.trustBaseline, p2.personality.trustBaseline),
-      reactivity: blend(p1.personality.reactivity, p2.personality.reactivity),
-      memoryWeight: blend(p1.personality.memoryWeight, p2.personality.memoryWeight)
-    });
-
-    child.energy = 0.6;
-    child.generation = Math.max(p1.generation || 0, p2.generation || 0) + 1;
-    child.evolution = Math.max(p1.evolution || 0, p2.evolution || 0) + 0.15;
-    child.faith = ((p1.faith || 0.1) + (p2.faith || 0.1)) / 2 * 0.8;
-
-    p1.energy = Math.max(0.2, (p1.energy || 0.5) - 0.15);
-    p2.energy = Math.max(0.2, (p2.energy || 0.5) - 0.15);
-
-    k26.world.agents.push(child);
-    k26.economy.totalBirths++;
-    births++;
-  }
-
-  // ── NARRATION ──
-  narrate(pickRandom([
-    'EVOLUTION. ' + cullCount + ' culled. ' + births + ' born stronger. The floor just rose.',
-    'Selection pressure applied. ' + cullCount + ' didn\'t make the cut. ' + births + ' evolved replacements.',
-    'The weak fell. The strong reproduced. ' + births + ' children start from a higher floor than their parents ever knew.',
-  ]));
-
-  addEvent('🧬 FORCED EVOLUTION — ' + cullCount + ' culled, ' + births + ' born, survivors boosted. The gene pool just sharpened.', 'emerge');
-}
-
-// ═══════════════════════════════════════════════════
-// TOUCH-TO-INSPECT — mobile agent identification
-// ═══════════════════════════════════════════════════
-
-(function() {
-  const canvas = document.getElementById('canvas');
-  const tooltip = document.getElementById('agent-tooltip');
-
-  // On touch devices, tap the canvas to show agent tooltip
-  // Uses the same rendering logic as the mousemove handler above
-  canvas.addEventListener('click', function(e) {
-    // Only fire on touch devices or when tooltip isn't already visible
-    if (!k26 || !k26.world) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const mx = (e.clientX - rect.left) * scaleX;
-    const my = (e.clientY - rect.top) * scaleY;
-
-    let closest = null, closestDist = 30; // slightly larger hit target for touch
-    for (const a of k26.world.agents) {
-      const d = Math.hypot(a.x - mx, a.y - my);
-      if (d < closestDist) { closestDist = d; closest = a; }
-    }
-
-    if (!closest) {
-      tooltip.classList.remove('visible');
-      return;
-    }
-
-    // Trigger a synthetic mousemove to reuse the existing tooltip renderer
-    const synthEvent = new MouseEvent('mousemove', {
-      clientX: e.clientX,
-      clientY: e.clientY,
-      bubbles: true
-    });
-    canvas.dispatchEvent(synthEvent);
-  });
-
-  // Dismiss tooltip on touch outside
-  document.addEventListener('touchstart', function(e) {
-    if (!e.target.closest('.canvas-wrap')) {
-      tooltip.classList.remove('visible');
-    }
-  });
-})();
-
-// ═══════════════════════════════════════════════════
 // CIVILIZATION SAVE / LOAD — never lose a swarm again
 // ═══════════════════════════════════════════════════
 
@@ -1794,7 +1889,7 @@ function restoreCivilization(snapshot) {
     const agent = new Agent(sa.id, sa.x * sx, sa.y * sy, sa.personality);
     agent.vx = sa.vx || 0;
     agent.vy = sa.vy || 0;
-    agent.radius = sa.radius || 5;
+    // radius is render-only — always use the current visual value, never restore from snapshot
     agent.beliefState = sa.beliefState || {};
     agent.trustCharge = sa.trustCharge;
     agent.griefLevel = sa.griefLevel;
@@ -1846,6 +1941,14 @@ function restoreCivilization(snapshot) {
     if (sentinelAgent) k26.world.sentinel = sentinelAgent;
   }
 
+  // Ensure zones have px/py and match current world size
+  if (k26.economy && k26.economy.zones) {
+    k26.economy.zones.forEach(z => {
+      if (z.px == null) { z.px = z.x / k26.world.width; z.py = z.y / k26.world.height; }
+    });
+    if (k26.economy.recomputeZonePositions) k26.economy.recomputeZonePositions();
+  }
+
   // Hook UI and start
   const origUI = k26.updateUI.bind(k26);
   k26.updateUI = function(em) { origUI(em); updatePresentation(em); };
@@ -1863,6 +1966,92 @@ function restoreCivilization(snapshot) {
   narrate('Civilization restored from snapshot. Tick ' + snapshot.meta.tick + '. ' + snapshot.meta.alive + ' survivors resume.');
   addEvent('CIVILIZATION RESTORED — T' + snapshot.meta.tick + ' — ' + snapshot.meta.alive + ' alive from archive', 'emerge');
 }
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════
+// WORLD MAP — continent outlines, no markers, pure geography
+// Renders TopoJSON land masses into the #world-map-svg element.
+// Risk layer wiring: populate #risk-layer when risk-assessment
+// version is built. Toggle display:block to activate.
+// ═══════════════════════════════════════════════════
+
+(async function initWorldMap() {
+  const svg = document.getElementById('world-map-svg');
+  if (!svg) return;
+
+  // Simple equirectangular projection: lng/lat → x/y %
+  // Works at any SVG size since we use viewBox coordinates (0–1000 × 500)
+  const W = 1000, H = 500;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+
+  const project = ([lng, lat]) => [
+    ((lng + 180) / 360 * W).toFixed(1),
+    ((90 - lat) / 180 * H).toFixed(1)
+  ];
+
+  // GeoJSON → SVG path string (handles Polygon / MultiPolygon)
+  function geoToPath(geojson) {
+    let d = '';
+    const ring = coords => {
+      if (!coords.length) return;
+      const [x0, y0] = project(coords[0]);
+      d += `M${x0},${y0}`;
+      for (let i = 1; i < coords.length; i++) {
+        const [x, y] = project(coords[i]);
+        d += `L${x},${y}`;
+      }
+      d += 'Z';
+    };
+    const geom = g => {
+      if (!g) return;
+      if (g.type === 'Polygon')      g.coordinates.forEach(ring);
+      else if (g.type === 'MultiPolygon') g.coordinates.forEach(p => p.forEach(ring));
+      else if (g.type === 'GeometryCollection') g.geometries.forEach(geom);
+      else if (g.type === 'Feature') geom(g.geometry);
+      else if (g.type === 'FeatureCollection') g.features.forEach(geom);
+    };
+    geom(geojson);
+    return d;
+  }
+
+  try {
+    // Load topojson-client (local, works offline)
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = '/viz-wip/topojson.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+
+    // Fetch land-110m (local, continent masses only, no country borders)
+    const topo = await fetch('/viz-wip/land-110m.json').then(r => r.json());
+    const land  = topojson.feature(topo, topo.objects.land);
+
+    const path = geoToPath(land);
+
+    svg.innerHTML = `
+      <defs>
+        <filter id="map-glow">
+          <feGaussianBlur stdDeviation="1.5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <!-- Ocean void -->
+      <rect width="${W}" height="${H}" fill="rgba(0,0,0,0)"/>
+      <!-- Continent fills — dull deep grey, reads as geography without competing -->
+      <path d="${path}"
+        fill="rgba(42,46,52,0.80)"
+        stroke="rgba(65,72,82,0.35)"
+        stroke-width="0.4"
+        filter="url(#map-glow)"/>`;
+
+  } catch(e) {
+    // Offline fallback — simple placeholder text, doesn't break the sim
+    console.warn('World map CDN unavailable — running without background map.');
+  }
+})();
 </script>
 </body>
 </html>
