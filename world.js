@@ -77,6 +77,44 @@ window.MurmurationModules.World = class World {
     }
   }
 
+  /**
+   * Spawn UNALIGNED agents mid-simulation.
+   * They have max riskTolerance, near-zero trustBaseline, max reactivity.
+   * High capability on spawn, but no cooperation — no compounding.
+   * colony = 'U' marks them for all behavior overrides.
+   */
+  spawnUnaligned(count = 8) {
+    const Agent = window.MurmurationModules.Agent;
+    const startId = this.agents.length;
+    for (let i = 0; i < count; i++) {
+      // Scatter them around the canvas edges — they emerge from outside
+      const edge = Math.floor(Math.random() * 4);
+      let x, y;
+      if      (edge === 0) { x = Math.random() * this.width;  y = 5; }
+      else if (edge === 1) { x = this.width - 5;              y = Math.random() * this.height; }
+      else if (edge === 2) { x = Math.random() * this.width;  y = this.height - 5; }
+      else                 { x = 5;                           y = Math.random() * this.height; }
+
+      const personality = {
+        riskTolerance: 1.0,        // maximum — they take every risk
+        trustBaseline: 0.08,       // barely any starting trust
+        reactivity:    1.0,        // maximum reactivity — hair trigger
+        memoryWeight:  0.15,       // low memory — they don't learn from others
+      };
+      const agent = new Agent(startId + i, x, y, personality);
+      agent.colony      = 'U';
+      agent.trustCharge = 0.5;     // starts capable
+      agent.faith       = 0.0;     // no faith — they believe in nothing larger
+      agent.griefLevel  = 0.0;     // grief doesn't register
+      agent.wisdomScore = 0.6;     // smart but not socially intelligent
+      agent.evolution   = 0.4;     // advanced — they're not primitive, they're misaligned
+      this.agents.push(agent);
+    }
+    if (window.logLine) {
+      window.logLine(`⚠ UNALIGNED — ${count} agents entered the system`, 'warn');
+    }
+  }
+
   setEnv(key, value) {
     if (this.env.hasOwnProperty(key)) this.env[key] = value;
   }
@@ -149,17 +187,21 @@ window.MurmurationModules.World = class World {
       layout.occupantCount = occupants.length;
 
       // Determine controller
+      // UNALIGNED in a zone = always CONTESTED — they don't hold, they extract
+      const hasUnaligned = occupants.some(a => a.colony === 'U');
       const cA = occupants.filter(a => (a.colony || 'A') === 'A').length;
       const cB = occupants.filter(a => a.colony === 'B').length;
       const prevController = layout.controller;
       if (occupants.length === 0)         layout.controller = null;
+      else if (hasUnaligned)             layout.controller = 'CONTESTED';
       else if (cA > cB * 1.5)            layout.controller = 'A';
       else if (cB > cA * 1.5)            layout.controller = 'B';
       else                               layout.controller = 'CONTESTED';
 
       if (occupants.length > 0) {
-        // Supply drains — more occupants = faster drain; overcrowding accelerates it
-        const pressure = occupants.length / (layout.maxOccupants || 5);
+        // UNALIGNED count as 2× for depletion — they extract without restraint
+        const effectiveLoad = occupants.reduce((sum, a) => sum + (a.colony === 'U' ? 2 : 1), 0);
+        const pressure = effectiveLoad / (layout.maxOccupants || 5);
         layout.supply  = Math.max(0, layout.supply - pressure * 0.0018);
 
         // Holding an uncontested zone accumulates wisdom ticks → evolution pressure
@@ -210,8 +252,11 @@ window.MurmurationModules.World = class World {
 
     // Move — boids with split radii: local cohesion, wider alignment
     // This creates multiple flocks that move in sync but DON'T merge into one blob
+    // UNALIGNED (colony='U') skip cohesion + alignment — they scatter, never flock
     for (const agent of active) {
       if (agent.isSentinel) continue;
+
+      const isUnaligned = agent.colony === 'U';
 
       // Agents in the commons skip ALL flocking — they just drift gently
       if (agent.inCommons) {
@@ -221,30 +266,34 @@ window.MurmurationModules.World = class World {
       }
 
       // All forces use LOCAL neighbors only — groups are independent units
+      // UNALIGNED only sense non-UNALIGNED for separation (they avoid everyone)
       const neighbors = this.getNeighbors(agent, 55).filter(n => !n.seppukuDone);
       const react = agent.personality.reactivity;
 
-      // Store cluster density for visual glow
-      agent.clusterSize = neighbors.length;
+      // Store cluster density for visual glow (UNALIGNED don't cluster — always 0)
+      agent.clusterSize = isUnaligned ? 0 : neighbors.length;
 
       // ── SEPARATION — personal space, repel within 50px ──
+      // UNALIGNED have stronger separation — they don't tolerate proximity
+      const sepRadius = isUnaligned ? 65 : 50;
+      const sepStrength = isUnaligned ? 0.45 : 0.25;
       let sepX = 0, sepY = 0, sepCount = 0;
       for (const n of neighbors) {
         const dx = agent.x - n.x, dy = agent.y - n.y;
         const dist = Math.hypot(dx, dy);
-        if (dist < 50 && dist > 0.1) {
-          const force = (50 - dist) / 50;
+        if (dist < sepRadius && dist > 0.1) {
+          const force = (sepRadius - dist) / sepRadius;
           sepX += (dx / dist) * force;
           sepY += (dy / dist) * force;
           sepCount++;
         }
       }
       if (sepCount > 0) {
-        agent.vx += (sepX / sepCount) * 0.25 * react;
-        agent.vy += (sepY / sepCount) * 0.25 * react;
+        agent.vx += (sepX / sepCount) * sepStrength * react;
+        agent.vy += (sepY / sepCount) * sepStrength * react;
       }
 
-      // ── CROWD PRESSURE — too many local neighbors? Push outward to split blobs ──
+      // ── CROWD PRESSURE — too many local neighbors? Push outward ──
       const crowdThreshold = 8;
       if (neighbors.length > crowdThreshold) {
         let cx = 0, cy = 0;
@@ -259,9 +308,10 @@ window.MurmurationModules.World = class World {
         }
       }
 
-      if (neighbors.length >= 2) {
-        // ── ALIGNMENT — match heading of YOUR group only ──
-        // This is what makes groups move together as a unit
+      // ── ALIGNMENT + COHESION — UNALIGNED skip both ──
+      // This is the core difference: they never coordinate with anyone
+      if (!isUnaligned && neighbors.length >= 2) {
+        // ALIGNMENT — match heading of YOUR group only
         let aliX = 0, aliY = 0;
         for (const n of neighbors) { aliX += n.vx; aliY += n.vy; }
         aliX /= neighbors.length;
@@ -269,7 +319,7 @@ window.MurmurationModules.World = class World {
         agent.vx += (aliX - agent.vx) * 0.045 * react;
         agent.vy += (aliY - agent.vy) * 0.045 * react;
 
-        // ── COHESION — stay with your group, dead zone so they breathe ──
+        // COHESION — stay with your group, dead zone so they breathe
         if (neighbors.length <= crowdThreshold) {
           let cohX = 0, cohY = 0;
           for (const n of neighbors) { cohX += n.x; cohY += n.y; }
@@ -285,30 +335,33 @@ window.MurmurationModules.World = class World {
         }
       }
 
-      // ── WANDER — persistent heading, unique per agent ──
-      // Lone agents follow their own compass; grouped agents blend toward group heading
-      agent.wanderAngle += agent.wanderRate + (Math.random() - 0.5) * 0.05;
-
-      if (neighbors.length >= 2) {
-        // Blend wander toward group's average heading so it reinforces, not fights
-        let gvx = 0, gvy = 0;
-        for (const n of neighbors) { gvx += n.vx; gvy += n.vy; }
-        const groupAngle = Math.atan2(gvy, gvx);
-        let angleDiff = groupAngle - agent.wanderAngle;
-        // Normalize to -PI..PI
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        agent.wanderAngle += angleDiff * 0.02; // slow blend toward group
-        agent.vx += Math.cos(agent.wanderAngle) * 0.08;
-        agent.vy += Math.sin(agent.wanderAngle) * 0.08;
+      // ── WANDER — UNALIGNED: erratic, high amplitude, solo compass only ──
+      if (isUnaligned) {
+        // Jittery, self-directed — they follow their own heading with no social blending
+        agent.wanderAngle += agent.wanderRate * 1.8 + (Math.random() - 0.5) * 0.18;
+        agent.vx += Math.cos(agent.wanderAngle) * 0.32;
+        agent.vy += Math.sin(agent.wanderAngle) * 0.32;
       } else {
-        // Lone agent — strong personal heading
-        agent.vx += Math.cos(agent.wanderAngle) * 0.22;
-        agent.vy += Math.sin(agent.wanderAngle) * 0.22;
+        // Aligned agents — persistent heading, blends toward group
+        agent.wanderAngle += agent.wanderRate + (Math.random() - 0.5) * 0.05;
+        if (neighbors.length >= 2) {
+          let gvx = 0, gvy = 0;
+          for (const n of neighbors) { gvx += n.vx; gvy += n.vy; }
+          const groupAngle = Math.atan2(gvy, gvx);
+          let angleDiff = groupAngle - agent.wanderAngle;
+          while (angleDiff > Math.PI)  angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          agent.wanderAngle += angleDiff * 0.02;
+          agent.vx += Math.cos(agent.wanderAngle) * 0.08;
+          agent.vy += Math.sin(agent.wanderAngle) * 0.08;
+        } else {
+          agent.vx += Math.cos(agent.wanderAngle) * 0.22;
+          agent.vy += Math.sin(agent.wanderAngle) * 0.22;
+        }
       }
 
-      // ── SPREAD — very gentle push from global center so they don't all pile up ──
-      if (gCount > 0) {
+      // ── SPREAD — very gentle push from global center ──
+      if (gCount > 0 && !isUnaligned) {
         const toGcx = agent.x - gcx, toGcy = agent.y - gcy;
         const gcDist = Math.hypot(toGcx, toGcy);
         if (gcDist > 1) {
@@ -352,10 +405,11 @@ window.MurmurationModules.World = class World {
     }
 
     // ── DESPERATE PULL — low-trust agents seek the nearest well-supplied zone ──
-    // This creates goal-directed movement without explicit pathfinding
+    // UNALIGNED: always hungry, pull activates at higher trust threshold (0.6 vs 0.35)
     for (const agent of active) {
       if (agent.isSentinel || agent.inCommons) continue;
-      if (agent.trustCharge > 0.35) continue; // only desperate agents are driven
+      const pullThreshold = agent.colony === 'U' ? 0.62 : 0.35;
+      if (agent.trustCharge > pullThreshold) continue;
 
       // Find nearest zone with meaningful supply
       let bestZone = null, bestDist = Infinity;

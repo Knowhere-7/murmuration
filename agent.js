@@ -313,6 +313,54 @@ window.MurmurationModules.Agent = class Agent {
       return;
     }
 
+    // UNALIGNED — clinical red-white. No warmth, no faith glow, no cooperative signal.
+    // They're not broken — they're optimized for self. That's the problem.
+    if (this.colony === 'U') {
+      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 600);
+      const trust = this.trustCharge || 0;
+      const alive = 0.3 + trust * 0.5;
+
+      // Body — harsh red, dim when low trust (they're draining themselves)
+      ctx.shadowBlur  = this.radius * 1.8;
+      ctx.shadowColor = `rgba(255,50,30,${alive})`;
+      ctx.fillStyle   = `hsl(4, 95%, ${38 + trust * 18}%)`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Hot white core — same as aligned but cold, no hue tint
+      ctx.fillStyle = `rgba(255,200,190,0.5)`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,0.9)`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Trust ring — red not violet; shows they DO have a trust battery, they just don't share it
+      if (trust > 0.15) {
+        ctx.strokeStyle = `rgba(255,80,50,${trust * 0.7})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Crisis ring — same as aligned (they still die)
+      if (this.griefState === 'CRISIS') {
+        ctx.strokeStyle = `rgba(255,70,50,${0.5 + pulse * 0.5})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 4.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      return;
+    }
+
     // ACTIVE / GRIEVING / CRISIS — violet/pink palette, agents are the show
     const belief = this.beliefState.current || 0;
     const energy = this.energy != null ? this.energy : 1;
