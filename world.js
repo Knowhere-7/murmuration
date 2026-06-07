@@ -228,11 +228,17 @@ window.MurmurationModules.World = class World {
           }
         }
 
-        // Log contested takeover events
-        if (prevController && prevController !== 'CONTESTED' && layout.controller !== prevController) {
+        // Zone capture: controller changed from one colony to another → evolution burst for winners
+        if (prevController && prevController !== layout.controller) {
+          const newCtrl = layout.controller;
           if (window.logLine) {
-            const newCtrl = layout.controller || 'none';
-            window.logLine(`⚔ ${layout.name} — control shift → ${newCtrl}`, 'warn');
+            window.logLine(`⚔ ${layout.name} — control shift: ${prevController||'?'} → ${newCtrl||'none'}`, 'warn');
+          }
+          // Winners get an evolution burst — they fought for it and won
+          if (newCtrl && newCtrl !== 'CONTESTED') {
+            for (const winner of occupants.filter(a => (a.colony || 'A') === newCtrl)) {
+              if (winner.accumulateEvolution) winner.accumulateEvolution(0.28, 'zone_capture');
+            }
           }
         }
       } else {
@@ -448,6 +454,71 @@ window.MurmurationModules.World = class World {
         if (d > 1) {
           a.vx += (toCx / d) * 0.2;
           a.vy += (toCy / d) * 0.2;
+        }
+      }
+    }
+
+    // ── COLONY COORDINATION — the core of fire-ant vs army-ant dynamics ──
+    // Each colony coordinates as a unit: defend held zones, rally to raid contested ones.
+    // Coordination strength scales with group size — more agents = stronger collective force.
+
+    for (const colony of ['A', 'B']) {
+      const myAgents = active.filter(a => (a.colony || 'A') === colony && !a.isSentinel);
+      if (myAgents.length < 2) continue;
+
+      for (const layout of this.commonsLayout) {
+        const zone = zones.find(z => z.name === layout.name);
+        if (!zone) continue;
+
+        const defenders = myAgents.filter(a => a._commonsZone?.name === layout.name);
+        const invaders  = active.filter(a => {
+          const ac = a.colony || 'A';
+          return ac !== colony && a._commonsZone?.name === layout.name && !a.isSentinel;
+        });
+
+        // ── ZONE DEFENSE: occupied by us + enemy present → push toward enemy centroid ──
+        // Agents close ranks and move as a unit against the intruder
+        if (defenders.length > 0 && invaders.length > 0) {
+          const ecx = invaders.reduce((s, e) => s + e.x, 0) / invaders.length;
+          const ecy = invaders.reduce((s, e) => s + e.y, 0) / invaders.length;
+          const groupForce = Math.min(0.22, 0.06 + defenders.length * 0.03);
+          for (const def of defenders) {
+            const dx = ecx - def.x, dy = ecy - def.y;
+            const d = Math.hypot(dx, dy);
+            if (d > 3 && d < zone.r * 1.5) { // only push within zone boundary
+              def.vx += (dx / d) * groupForce;
+              def.vy += (dy / d) * groupForce;
+            }
+            // Combat survival = evolution pressure
+            def._combatTicks = (def._combatTicks || 0) + 1;
+            if (def._combatTicks % 150 === 0 && def.accumulateEvolution) {
+              def.accumulateEvolution(0.08, 'zone_defense');
+            }
+          }
+        }
+
+        // ── COORDINATED RAID: enemy holds zone, we have mass nearby → attack together ──
+        // Requires minimum 2 agents within approach band — lone agents don't raid
+        const isEnemyZone = layout.controller && layout.controller !== 'CONTESTED' && layout.controller !== colony;
+        const isContested = layout.controller === 'CONTESTED';
+        if ((isEnemyZone || isContested) && defenders.length === 0) {
+          const nearbyRaiders = myAgents.filter(a => {
+            if (a.inCommons) return false;
+            const d = Math.hypot(a.x - zone.cx, a.y - zone.cy);
+            return d < zone.r * 4.5 && d > zone.r * 0.8;
+          });
+          if (nearbyRaiders.length >= 2) {
+            // Group has enough mass — coordinate the push
+            const rallyStrength = Math.min(0.28, 0.08 + nearbyRaiders.length * 0.04);
+            for (const raider of nearbyRaiders) {
+              const dx = zone.cx - raider.x, dy = zone.cy - raider.y;
+              const d = Math.hypot(dx, dy);
+              if (d > 1) {
+                raider.vx += (dx / d) * rallyStrength;
+                raider.vy += (dy / d) * rallyStrength;
+              }
+            }
+          }
         }
       }
     }

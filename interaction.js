@@ -54,20 +54,27 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
         const neighborTrustBefore = neighbor.trustCharge;
 
         // ── CONFLICT TRIGGER ─────────────────────────────────────────────
-        // Multiple entry points — ideology is one spark, but not the only one.
-        // Resolution never requires belief change, but divergence can cause friction.
         const agentGrieving     = agent.griefState === 'GRIEVING' || agent.griefState === 'CRISIS';
         const mutualLowTrust    = agent.trustCharge < 0.40 && neighbor.trustCharge < 0.40;
-        const sharpDivergence   = beliefDiff > 0.55; // strong pull in opposite directions
+        const sharpDivergence   = beliefDiff > 0.55;
         const sustainedFriction = (agent._conflictWith === neighbor.id);
 
-        const conflictCondition = agentGrieving || mutualLowTrust || sharpDivergence || sustainedFriction;
+        // Cross-colony encounter — different colonies in the same zone = immediate contest
+        const agentColony    = agent.colony    || 'A';
+        const neighborColony = neighbor.colony || 'A';
+        const crossColony    = agentColony !== neighborColony;
+        const sharedZone     = agent._commonsZone && neighbor._commonsZone &&
+                               agent._commonsZone.name === neighbor._commonsZone.name;
+        const zoneContest    = crossColony && sharedZone;
+
+        const conflictCondition = agentGrieving || mutualLowTrust || sharpDivergence || sustainedFriction || zoneContest;
 
         if (conflictCondition && !agent._conflictWith) {
-          // Plant the conflict seed — this relationship now has a live grievance
-          agent._conflictWith  = neighbor.id;
-          agent._conflictTicks = 0;
-          agent._conflictLevel = 1;
+          agent._conflictWith        = neighbor.id;
+          agent._conflictTicks       = 0;
+          // Cross-colony zone contest starts at LOCAL (2), not DOMESTIC (1) — this is war over turf
+          agent._conflictLevel       = zoneContest ? 2 : 1;
+          agent._crossColonyConflict = crossColony;
         }
 
         // ── ACTIVE CONFLICT: DECISION ENGINE ─────────────────────────────
@@ -147,8 +154,14 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
     let withdrawW  = energy* 0.40 + faith * 0.30 + calm   * 0.30;
     let escalateW  = grief * 0.50 + (1 - trust) * 0.30 + (1 - faith) * 0.20;
 
-    // As conflict deepens, all options become harder except escalate
-    // — the sunk-cost trap: you've come too far to yield
+    // Cross-colony conflict: yielding territory is much harder — this is existential
+    if (agent._crossColonyConflict) {
+      yieldW    *= 0.3;   // rarely yield ground to a different colony
+      withdrawW *= 0.5;   // retreat is costly — you're ceding the zone
+      escalateW *= 1.6;   // fight harder for shared resources
+    }
+
+    // As conflict deepens, all options become harder except escalate (sunk-cost trap)
     const sunk = Math.min(0.4, (level - 1) * 0.12);
     yieldW     = Math.max(0, yieldW     - sunk);
     negotiateW = Math.max(0, negotiateW - sunk * 0.7);
@@ -221,18 +234,31 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
         agent._conflictTicks += 8;
         agent._conflictLevel  = Math.min(4, agent._conflictLevel + 1);
 
-        // Mirror the conflict on the neighbor — they're now in it too
+        // Mirror the conflict on the neighbor
         if (!neighbor._conflictWith) {
-          neighbor._conflictWith  = agent.id;
-          neighbor._conflictTicks = agent._conflictTicks;
-          neighbor._conflictLevel = agent._conflictLevel;
+          neighbor._conflictWith        = agent.id;
+          neighbor._conflictTicks       = agent._conflictTicks;
+          neighbor._conflictLevel       = agent._conflictLevel;
+          neighbor._crossColonyConflict = agent._crossColonyConflict;
         }
 
-        // Log escalations — this is the event Ghost wants to watch
+        // ── FRICTION → EVOLUTION: combat is a teacher ──
+        // Surviving escalation produces adaptation — this is the friction loop Ghost described.
+        // Cross-colony combat produces more growth (higher stakes = more pressure to adapt).
+        if (agent._crossColonyConflict) {
+          // Both sides learn from real conflict — winners and losers alike
+          if (agent.accumulateEvolution)    agent.accumulateEvolution(0.06, 'cross_colony_combat');
+          if (neighbor.accumulateEvolution) neighbor.accumulateEvolution(0.04, 'cross_colony_combat');
+        } else {
+          // Within-colony friction still produces some growth
+          if (agent.accumulateEvolution) agent.accumulateEvolution(0.02, 'intra_colony_friction');
+        }
+
         if (window.logLine) {
           const label = ['','DOMESTIC','LOCAL','CIVIL','REVOLUTIONARY'][agent._conflictLevel] || 'WAR';
+          const tag   = agent._crossColonyConflict ? '⚔' : '〜';
           window.logLine(
-            `⚔ ${label} — #${agent.id}→#${neighbor.id} | grief ${agent.griefLevel.toFixed(2)} trust ${agent.trustCharge.toFixed(2)}`,
+            `${tag} ${label} — #${agent.id}[${agent.colony||'A'}]→#${neighbor.id}[${neighbor.colony||'A'}] | grief ${agent.griefLevel.toFixed(2)} trust ${agent.trustCharge.toFixed(2)}`,
             'crisis'
           );
         }
