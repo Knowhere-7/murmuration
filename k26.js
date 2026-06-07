@@ -19,12 +19,6 @@ window.MurmurationModules.K26 = class K26 {
     this.extractor = new window.MurmurationModules.EmergenceExtractor();
     this.isRunning = false;
     this.animationId = null;
-
-    // Phase 2 (redesigned): Living bonds — persistent connections that sever on grief
-    // Map key: "minId-maxId", value: { a: agentId, b: agentId, formedAt: tick, severed: false }
-    this._bonds = new Map();
-    // Set of agent IDs whose bonds have been permanently severed
-    this._severedAgents = new Set();
   }
 
   init(agentCount = 50) {
@@ -65,7 +59,7 @@ window.MurmurationModules.K26 = class K26 {
 
   step() {
     // Orchestrate
-    const interactions = this.interactionEngine.computeInteractions(this.world);
+    this.interactionEngine.computeInteractions(this.world);
     this.world.advanceStep();
     this.evolutionEngine.evolve(this.world);
 
@@ -74,9 +68,6 @@ window.MurmurationModules.K26 = class K26 {
 
     // Wealth tick — surplus accumulation, class assignment, employment, revolution
     if (this.wealthEngine) this.wealthEngine.tick();
-
-    // Phase 2: Living bonds — form, maintain, and sever connections
-    this._updateBonds();
   }
 
   extract() {
@@ -116,48 +107,222 @@ window.MurmurationModules.K26 = class K26 {
     if (!this.world) return;
     const W = this.world.width, H = this.world.height;
 
-    // Layer 0: Dynamic ambient background — responds to swarm emotional state
-    // Uses solid gradient (not alpha over black) for visible center glow
-    const amb = this.world._ambientState;
-    if (amb && amb.intensity > 0.005) {
-      const cx = W * 0.5, cy = H * 0.5;
-      const maxR = Math.max(W, H) * 0.72;
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-      // Scale RGB by intensity — at full intensity, center reaches the target color
-      const i = amb.intensity;
-      const ri = Math.round(amb.r * i), gi = Math.round(amb.g * i), bi = Math.round(amb.b * i);
-      grad.addColorStop(0,   `rgb(${ri}, ${gi}, ${bi})`);
-      grad.addColorStop(0.5, `rgb(${ri >> 1}, ${gi >> 1}, ${bi >> 1})`);
-      grad.addColorStop(1,   'rgb(0, 0, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    } else {
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, W, H);
-    }
-
-    // Layer 0.5: Nebula clouds — gaseous formations drifting in the void
-    this._drawNebulaClouds(ctx, W, H);
-
-    // Layer 1.5: Ethereal connections — spirit realm lines between nearby agents
-    this._drawEtherealConnections(ctx);
-
-    // Layer 1.7: Cluster auras — bluish-white glow around large groupings
-    this._drawClusterAuras(ctx);
+    // Layer 1: vanta void + state-reactive nebula (see VISUAL-BIBLE.md)
+    this.drawBackground(ctx, W, H);
 
     // Layer 2: resource zones UNDER agents (so agents stay crisp)
     if (this.economy) this.economy.draw(ctx);
 
-    // Layer 3: agents on top
+    // Layer 3: connection strings — persistent neural web (additive light)
+    this.drawConnections(ctx);
+
+    // Layer 4: agents on top
     for (const agent of this.world.agents) {
       agent.draw(ctx);
     }
 
-    // Layer 4: class indicators (wealth rings, crowns)
+    // Layer 5: class indicators (wealth rings, crowns)
     if (this.wealthEngine) this.wealthEngine.draw(ctx);
 
-    // Layer 5: env overlay + sentinel label
+    // Layer 6: env overlay + sentinel label
     this.world.drawOverlay(ctx);
+  }
+
+  /**
+   * Swarm mood, smoothed — 0 = stress, ~0.5 = normal, 1 = blissful.
+   * Drives the reactive nebula. High trust/faith/consensus lift it; grief + disturbance drag it.
+   */
+  computeMood() {
+    const live = this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel);
+    const n = live.length || 1;
+    let trust = 0, faith = 0, grief = 0;
+    for (const a of live) { trust += a.trustCharge; faith += a.faith; grief += a.griefLevel; }
+    trust /= n; faith /= n; grief /= n;
+    const m = this.world.getEmergenceMetrics ? this.world.getEmergenceMetrics() : { consensus: 0 };
+    const consensus   = m.consensus || 0;
+    const disturbance = (this.world.env && this.world.env.disturbance) || 0;
+    let sat = trust * 0.35 + faith * 0.25 + consensus * 0.25 + 0.15 - grief * 0.5 - disturbance * 0.35;
+    sat = Math.max(0, Math.min(1, sat));
+    // breathe toward the target instead of snapping each frame
+    this._mood = (this._mood == null) ? sat : this._mood + (sat - this._mood) * 0.04;
+    return this._mood;
+  }
+
+  /**
+   * Vanta-black void with a state-reactive nebula (see VISUAL-BIBLE.md).
+   * Stress → amber/orange · normal → green · bliss → deep blue. Center colored, fading to black.
+   */
+  drawBackground(ctx, W, H) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    const sat = this.computeMood();
+    const hue = sat < 0.5 ? 35 + (sat / 0.5) * 85
+                          : 120 + ((sat - 0.5) / 0.5) * 100;
+
+    // Nebula follows mass — centroid of live agents drifts the glow toward where life is
+    const live = this.world ? this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel) : [];
+    let targetCx = W * 0.5, targetCy = H * 0.5;
+    if (live.length > 0) {
+      let sx = 0, sy = 0;
+      for (const a of live) { sx += a.x; sy += a.y; }
+      targetCx = sx / live.length;
+      targetCy = sy / live.length;
+    }
+    // Smooth drift — atmosphere responds slowly, not instantly
+    this._nebCx = this._nebCx == null ? targetCx : this._nebCx + (targetCx - this._nebCx) * 0.018;
+    this._nebCy = this._nebCy == null ? targetCy : this._nebCy + (targetCy - this._nebCy) * 0.018;
+    const cx = this._nebCx, cy = this._nebCy;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Edge gradient — void at center, color at perimeter; center tracks the mass
+    const edgeR = Math.max(W, H) * 0.88;
+    const g0 = ctx.createRadialGradient(cx, cy, edgeR * 0.12, cx, cy, edgeR);
+    g0.addColorStop(0,    'rgba(0,0,0,0)');
+    g0.addColorStop(0.50, `hsla(${hue}, 55%, 20%, 0.14)`);
+    g0.addColorStop(0.78, `hsla(${hue}, 68%, 32%, 0.32)`);
+    g0.addColorStop(1,    `hsla(${hue}, 76%, 40%, 0.50)`);
+    ctx.fillStyle = g0;
+    ctx.fillRect(0, 0, W, H);
+
+    // Mass glow — softer second gradient centered on the cluster, follows even tighter
+    if (live.length > 10) {
+      const density = Math.min(1, live.length / 150);
+      const massR   = Math.min(W, H) * (0.28 + density * 0.18);
+      const gm = ctx.createRadialGradient(cx, cy, 0, cx, cy, massR);
+      gm.addColorStop(0,   `hsla(${hue}, 70%, 28%, ${0.06 + density * 0.08})`);
+      gm.addColorStop(0.6, `hsla(${hue}, 60%, 20%, ${0.03 + density * 0.04})`);
+      gm.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx.fillStyle = gm;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * Connection strings — the neural web. PERSISTENT: a bond stays fully visible until it is
+   * SEVERED (the two agents move out of range). Bright neural cyan; only the last stretch warms
+   * toward amber as it nears the break — a tendon going taut. Drawn ONCE per pair (n.id > a.id),
+   * additive. See VISUAL-BIBLE.md §4.
+   */
+  drawConnections(ctx) {
+    const MAXLEN = 220;                                      // sever distance — spider silk, quarter-screen reach before snap
+    const ok = a => a && !a.seppukuDone && !a.isSentinel && a.griefState !== 'DISHONORED';
+    const now = Date.now() * 0.0003;                         // slow global drift clock
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';            // spiritual layer — not burning through agents
+    ctx.lineCap = 'round';
+    for (const a of this.world.agents) {
+      if (!ok(a)) continue;
+      const nb = this.world.getNeighbors(a, MAXLEN);
+      for (const n of nb) {
+        if (n.id <= a.id || !ok(n)) continue;
+        const dist   = Math.hypot(n.x - a.x, n.y - a.y);
+        const strain = dist / MAXLEN;                        // 0 touching → 1 about to sever
+        const taut   = 1 - strain;
+        const bond   = Math.min(a.trustCharge, n.trustCharge);
+
+        // Royal purple at rest → orange → red → white-grey at the moment of snap
+        let hue, sat, light;
+        // Neon royal purple → neon orange → neon red → white-grey at snap
+        let sh, ss, sl;
+        if (strain < 0.55) {
+          sh = 270; ss = 92; sl = 58 + strain * 8;            // neon purple
+        } else if (strain < 0.82) {
+          const u = (strain - 0.55) / 0.27;
+          sh = 270 - u * 232;                                  // purple → orange (270→38)
+          ss = 92 + u * 8;                                     // stays neon
+          sl = 62 + u * 8;                                     // neon orange ~70%
+        } else if (strain < 0.94) {
+          const u = (strain - 0.82) / 0.12;
+          sh = 38 - u * 38;                                    // orange → red
+          ss = 100;
+          sl = 70 - u * 15;                                    // neon red ~55%
+        } else {
+          // Grey hair — the last moment before it snaps
+          const u = (strain - 0.94) / 0.06;
+          sh = 0; ss = Math.max(0, 100 - u * 100);            // drains to white
+          sl = 55 + u * 40;                                    // brightens to silver-white
+        }
+
+        // Bezier bow — computed first, used by both normal and gold paths
+        const mx    = (a.x + n.x) * 0.5;
+        const my    = (a.y + n.y) * 0.5;
+        const bnx   = -(n.y - a.y) / dist;                  // perpendicular unit vector
+        const bny   =  (n.x - a.x) / dist;
+        const phase = (a.id * 1.3 + n.id * 0.7);            // unique phase per pair
+        const bow   = Math.sin(now + phase) * dist * 0.06;  // gentle, proportional bow
+        const cpx   = mx + bnx * bow;
+        const cpy   = my + bny * bow;
+
+        // ── CONFLICT SIGNAL — overrides strain gradient when agents are in active conflict ──
+        // Level 1 domestic: amber pulse · Level 2 local: red · Level 3+ civil/revolutionary: white-hot
+        const conflicted    = a._conflictWith === n.id || n._conflictWith === a.id;
+        const conflictLevel = conflicted ? Math.max(a._conflictLevel || 0, n._conflictLevel || 0) : 0;
+
+        // ── EVOLUTION SIGNAL — electric blue when evolution ready ──
+        const evoReady = !conflicted && (a._evolutionReady || n._evolutionReady);
+
+        let lineW, strokeCol;
+        if (conflicted && conflictLevel > 0) {
+          const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.008 + a.id * 0.9); // faster pulse = tension
+          if (conflictLevel === 1) {
+            // Domestic — amber, barely visible, just below the surface
+            lineW        = 0.5 + bond * 0.6 + pulse * 0.3;
+            const cAlpha = (0.30 + bond * 0.25) * (0.5 + taut * 0.5) * (0.6 + pulse * 0.4);
+            strokeCol    = `hsla(28, 85%, ${50 + pulse * 12}%, ${cAlpha})`;
+            ctx.lineWidth   = lineW * 3;
+            ctx.strokeStyle = `hsla(28, 80%, 45%, ${cAlpha * 0.12})`;
+            ctx.beginPath(); ctx.moveTo(a.x, a.y);
+            ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
+          } else if (conflictLevel === 2) {
+            // Local — red, more visible, spreading
+            lineW        = 0.6 + bond * 0.7 + pulse * 0.4;
+            const cAlpha = (0.35 + bond * 0.30) * (0.5 + taut * 0.5) * (0.7 + pulse * 0.3);
+            strokeCol    = `hsla(5, 90%, ${48 + pulse * 10}%, ${cAlpha})`;
+            ctx.lineWidth   = lineW * 4;
+            ctx.strokeStyle = `hsla(5, 85%, 42%, ${cAlpha * 0.15})`;
+            ctx.beginPath(); ctx.moveTo(a.x, a.y);
+            ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
+          } else {
+            // Civil / Revolutionary — white-hot, unmistakable
+            lineW        = 0.8 + bond * 0.8 + pulse * 0.5;
+            const cAlpha = (0.45 + bond * 0.35) * (0.6 + taut * 0.4) * (0.8 + pulse * 0.2);
+            const light  = conflictLevel >= 4 ? 88 : 70 + conflictLevel * 5;
+            strokeCol    = `hsla(0, ${100 - conflictLevel * 8}%, ${light}%, ${cAlpha})`;
+            ctx.lineWidth   = lineW * 5;
+            ctx.strokeStyle = `hsla(0, 80%, 55%, ${cAlpha * 0.20})`;
+            ctx.beginPath(); ctx.moveTo(a.x, a.y);
+            ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
+          }
+        } else if (evoReady) {
+          // Electric blue — evolution signal; ghostly, meshes with the violet/quantum palette
+          const pulse  = 0.5 + 0.5 * Math.sin(Date.now() * 0.0018 + a.id * 0.5);
+          lineW        = 0.35 + bond * 0.55 + pulse * 0.25;
+          const gAlpha = (0.20 + bond * 0.20) * (0.45 + taut * 0.55) * (0.6 + pulse * 0.4);
+          strokeCol    = `hsla(218, 95%, ${52 + pulse * 12}%, ${gAlpha})`;
+          ctx.lineWidth   = lineW * 5;
+          ctx.strokeStyle = `hsla(218, 90%, 55%, ${gAlpha * 0.09})`;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y);
+          ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
+        } else {
+          lineW         = 0.28 + bond * 0.60 * (0.45 + taut * 0.55);
+          const alpha   = (0.20 + bond * 0.35) * (0.40 + taut * 0.60);
+          strokeCol     = `hsla(${sh}, ${ss}%, ${sl}%, ${alpha})`;
+        }
+
+        ctx.lineWidth   = lineW;
+        ctx.strokeStyle = strokeCol;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.quadraticCurveTo(cpx, cpy, n.x, n.y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   updateUI(emergence) {
@@ -195,364 +360,6 @@ window.MurmurationModules.K26 = class K26 {
         );
       }
     }
-  }
-
-  /**
-   * Phase 4: Nebula clouds — massive gaseous formations like deep space.
-   * Three tiers: large anchor clouds, medium filaments, small dense knots.
-   * Covers roughly half the canvas with random organic distribution.
-   */
-  _drawNebulaClouds(ctx, W, H) {
-    if (!this._nebulaClouds) {
-      const seed = (x) => {
-        let s = x + 0.5;
-        s = Math.sin(s * 127.1 + s * 311.7) * 43758.5453;
-        return s - Math.floor(s);
-      };
-
-      this._nebulaClouds = [];
-      let idx = 0;
-
-      // Tier 1: 4 massive anchor clouds — the big formations
-      for (let i = 0; i < 4; i++) {
-        const subCount = 4 + Math.floor(seed(idx + 80) * 3); // 4-6 sub-blobs
-        const subs = [];
-        for (let s = 0; s < subCount; s++) {
-          subs.push({
-            dx: seed(idx + s * 7 + 100) * 180 - 90,
-            dy: seed(idx + s * 7 + 101) * 180 - 90,
-            rMul: 0.5 + seed(idx + s * 7 + 102) * 0.7
-          });
-        }
-        this._nebulaClouds.push({
-          baseX: W * (-0.05 + seed(idx) * 1.1),     // allow slight overflow off edges
-          baseY: H * (-0.05 + seed(idx + 1) * 1.1),
-          radius: 200 + seed(idx + 2) * 300,         // 200–500px — massive
-          hueShift: seed(idx + 3) * 80 - 40,
-          driftPhaseX: seed(idx + 4) * Math.PI * 2,
-          driftPhaseY: seed(idx + 5) * Math.PI * 2,
-          driftRadius: 20 + seed(idx + 6) * 40,
-          driftSpeed: 0.00015 + seed(idx + 7) * 0.00025,
-          baseAlpha: 0.10 + seed(idx + 8) * 0.10,    // 0.10–0.20
-          subCount, subOffsets: subs
-        });
-        idx += 20;
-      }
-
-      // Tier 2: 8 medium filament clouds — elongated wisps connecting the anchors
-      for (let i = 0; i < 8; i++) {
-        const subCount = 3 + Math.floor(seed(idx + 80) * 3); // 3-5 sub-blobs
-        const subs = [];
-        // Filaments stretch in one direction — elongated sub-blob placement
-        const stretchAngle = seed(idx + 90) * Math.PI;
-        for (let s = 0; s < subCount; s++) {
-          const along = (s / subCount - 0.5) * 2; // -1 to 1 along the filament
-          subs.push({
-            dx: Math.cos(stretchAngle) * along * 120 + (seed(idx + s * 7 + 100) * 50 - 25),
-            dy: Math.sin(stretchAngle) * along * 120 + (seed(idx + s * 7 + 101) * 50 - 25),
-            rMul: 0.4 + seed(idx + s * 7 + 102) * 0.5
-          });
-        }
-        this._nebulaClouds.push({
-          baseX: W * (-0.05 + seed(idx) * 1.1),
-          baseY: H * (-0.05 + seed(idx + 1) * 1.1),
-          radius: 100 + seed(idx + 2) * 180,         // 100–280px
-          hueShift: seed(idx + 3) * 100 - 50,
-          driftPhaseX: seed(idx + 4) * Math.PI * 2,
-          driftPhaseY: seed(idx + 5) * Math.PI * 2,
-          driftRadius: 10 + seed(idx + 6) * 30,
-          driftSpeed: 0.0002 + seed(idx + 7) * 0.0004,
-          baseAlpha: 0.07 + seed(idx + 8) * 0.09,    // 0.07–0.16
-          subCount, subOffsets: subs
-        });
-        idx += 20;
-      }
-
-      // Tier 3: 12 small dense knots — bright concentrated patches
-      for (let i = 0; i < 12; i++) {
-        const subCount = 2 + Math.floor(seed(idx + 80) * 2); // 2-3 tight blobs
-        const subs = [];
-        for (let s = 0; s < subCount; s++) {
-          subs.push({
-            dx: seed(idx + s * 7 + 100) * 50 - 25,
-            dy: seed(idx + s * 7 + 101) * 50 - 25,
-            rMul: 0.6 + seed(idx + s * 7 + 102) * 0.5
-          });
-        }
-        this._nebulaClouds.push({
-          baseX: W * (seed(idx) * 1.0),
-          baseY: H * (seed(idx + 1) * 1.0),
-          radius: 40 + seed(idx + 2) * 100,          // 40–140px — small but punchy
-          hueShift: seed(idx + 3) * 120 - 60,        // wider color variation
-          driftPhaseX: seed(idx + 4) * Math.PI * 2,
-          driftPhaseY: seed(idx + 5) * Math.PI * 2,
-          driftRadius: 8 + seed(idx + 6) * 20,
-          driftSpeed: 0.0003 + seed(idx + 7) * 0.0005,
-          baseAlpha: 0.12 + seed(idx + 8) * 0.14,    // 0.12–0.26 — brightest tier
-          subCount, subOffsets: subs
-        });
-        idx += 20;
-      }
-    }
-
-    const now = Date.now();
-    const amb = this.world ? this.world._ambientState : null;
-
-    // Base nebula palette — rich purple-blue, responds to swarm emotion
-    let baseR = 75, baseG = 30, baseB = 140;
-    if (amb && amb.intensity > 0.01) {
-      const blend = Math.min(0.65, amb.intensity * 1.5);
-      baseR = baseR + (amb.r * 0.7 - baseR) * blend;
-      baseG = baseG + (amb.g * 0.5 - baseG) * blend;
-      baseB = baseB + (amb.b * 0.8 - baseB) * blend;
-    }
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-
-    for (const cloud of this._nebulaClouds) {
-      const x = cloud.baseX + Math.sin(now * cloud.driftSpeed + cloud.driftPhaseX) * cloud.driftRadius;
-      const y = cloud.baseY + Math.cos(now * cloud.driftSpeed * 0.7 + cloud.driftPhaseY) * cloud.driftRadius;
-
-      const breathe = 0.75 + 0.25 * Math.sin(now * cloud.driftSpeed * 1.5 + cloud.driftPhaseX * 2);
-      const alpha = cloud.baseAlpha * breathe;
-
-      const shift = cloud.hueShift / 60;
-      const cr = Math.round(Math.max(0, Math.min(255, baseR + shift * 40)));
-      const cg = Math.round(Math.max(0, Math.min(255, baseG + shift * 15)));
-      const cb = Math.round(Math.max(0, Math.min(255, baseB - shift * 25)));
-
-      for (let s = 0; s < cloud.subCount; s++) {
-        const sub = cloud.subOffsets[s];
-        const sx = x + sub.dx;
-        const sy = y + sub.dy;
-        const sr = cloud.radius * sub.rMul;
-
-        const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr);
-        grad.addColorStop(0,    `rgba(${cr}, ${cg}, ${cb}, ${alpha})`);
-        grad.addColorStop(0.2,  `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.9})`);
-        grad.addColorStop(0.45, `rgba(${cr}, ${cg}, ${cb}, ${alpha * 0.5})`);
-        grad.addColorStop(0.7,  `rgba(${cr >> 1}, ${cg >> 1}, ${cb >> 1}, ${alpha * 0.18})`);
-        grad.addColorStop(1,    `rgba(0, 0, 0, 0)`);
-
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    ctx.restore();
-  }
-
-  /**
-   * Phase 2 (redesigned): Update living bonds each tick.
-   * - Form bonds when agents are within interaction radius
-   * - Bonds persist regardless of distance (up to max tether)
-   * - ALL bonds for an agent sever permanently when it enters grief crisis/exit states
-   */
-  _updateBonds() {
-    if (!this.world) return;
-    const agents = this.world.agents;
-    const formRadius = 55;   // same as interaction radius — bond forms on first contact
-    const maxTether = 250;   // bonds stretch but snap if agents drift too far apart
-
-    // Phase A: Sever — check for newly grief-stricken agents
-    for (const a of agents) {
-      if (this._severedAgents.has(a.id)) continue;
-      if (a.griefState === 'CRISIS' || a.seppukuDone ||
-          a.griefState === 'DISHONORED' || a.isSentinel) {
-        // Sever ALL bonds involving this agent
-        this._severedAgents.add(a.id);
-        for (const [key, bond] of this._bonds) {
-          if (bond.a === a.id || bond.b === a.id) {
-            bond.severed = true;
-            bond.severedAt = this.world.time;
-          }
-        }
-      }
-    }
-
-    // Phase B: Form new bonds between nearby active agents
-    const active = agents.filter(a =>
-      !a.seppukuDone && !a.isSentinel && !this._severedAgents.has(a.id)
-    );
-    for (let i = 0; i < active.length; i++) {
-      const a = active[i];
-      for (let j = i + 1; j < active.length; j++) {
-        const b = active[j];
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > formRadius) continue;
-
-        const key = a.id < b.id ? `${a.id}-${b.id}` : `${b.id}-${a.id}`;
-        if (this._bonds.has(key)) continue; // already bonded
-
-        this._bonds.set(key, {
-          a: a.id < b.id ? a.id : b.id,
-          b: a.id < b.id ? b.id : a.id,
-          formedAt: this.world.time,
-          severed: false,
-          severedAt: 0
-        });
-      }
-    }
-
-    // Phase C: Snap overstretched bonds (distance > maxTether)
-    const agentMap = new Map();
-    for (const a of agents) agentMap.set(a.id, a);
-
-    for (const [key, bond] of this._bonds) {
-      if (bond.severed) continue;
-      const aa = agentMap.get(bond.a);
-      const bb = agentMap.get(bond.b);
-      if (!aa || !bb) { bond.severed = true; continue; }
-      const dx = bb.x - aa.x, dy = bb.y - aa.y;
-      if (dx * dx + dy * dy > maxTether * maxTether) {
-        bond.severed = true;
-        bond.severedAt = this.world.time;
-      }
-    }
-
-    // Phase D: Garbage collect old severed bonds (fade-out complete after ~120 ticks)
-    for (const [key, bond] of this._bonds) {
-      if (bond.severed && this.world.time - bond.severedAt > 150) {
-        this._bonds.delete(key);
-      }
-    }
-  }
-
-  /**
-   * Phase 3: Cluster auras — barely visible bluish-white glow around large groupings.
-   * Uses additive blending so overlapping agent glows merge naturally.
-   */
-  _drawClusterAuras(ctx) {
-    if (!this.world) return;
-    const agents = this.world.agents;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter'; // additive blend — overlapping glows stack
-
-    for (const a of agents) {
-      if (a.seppukuDone || a.isSentinel) continue;
-      const cluster = a.clusterSize || 0;
-      if (cluster < 4) continue; // only aura for groups of 5+
-
-      // Scale intensity and radius with cluster density
-      const density = Math.min(1, (cluster - 4) / 10); // ramps 4→14 neighbors
-      const radius = 30 + density * 50; // 30px to 80px
-      const alpha = density * 0.025; // very faint — additive stacking does the work
-
-      const grad = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, radius);
-      grad.addColorStop(0,   `rgba(180, 200, 255, ${alpha})`);   // bluish-white center
-      grad.addColorStop(0.5, `rgba(140, 170, 240, ${alpha * 0.5})`);
-      grad.addColorStop(1,   'rgba(100, 140, 220, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(a.x, a.y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
-  }
-
-  /**
-   * Phase 2 (redesigned): Draw living bond lines between agents.
-   * Persistent connections rendered as fluid bezier curves.
-   * Color encodes stress: healthy=cyan, stressed=amber, grief=red.
-   * Severed bonds fade out with a dying flicker.
-   */
-  _drawEtherealConnections(ctx) {
-    if (!this.world) return;
-    if (this._bonds.size === 0) return;
-
-    const agents = this.world.agents;
-    const agentMap = new Map();
-    for (const a of agents) agentMap.set(a.id, a);
-
-    const time = this.world.time;
-    const now = Date.now(); // for smooth visual oscillation independent of sim tick
-
-    ctx.save();
-
-    for (const [key, bond] of this._bonds) {
-      const aa = agentMap.get(bond.a);
-      const bb = agentMap.get(bond.b);
-      if (!aa || !bb) continue;
-
-      const dx = bb.x - aa.x, dy = bb.y - aa.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 1) continue;
-
-      // ── Stress metric: average grief of the two connected agents ──
-      const avgGrief = (aa.griefLevel + bb.griefLevel) / 2;
-      const avgTrust = (aa.trustCharge + bb.trustCharge) / 2;
-      // stress runs 0 (peaceful) → 1 (crisis)
-      const stress = Math.min(1, avgGrief * 1.5 + (1 - avgTrust) * 0.3);
-
-      // ── Color: cyan (healthy) → amber (stressed) → red (grief) ──
-      let r, g, b;
-      if (stress < 0.4) {
-        // Cyan to amber transition
-        const t = stress / 0.4;
-        r = Math.round(60 + t * 195);    // 60 → 255
-        g = Math.round(220 - t * 55);    // 220 → 165
-        b = Math.round(230 - t * 230);   // 230 → 0
-      } else {
-        // Amber to red transition
-        const t = (stress - 0.4) / 0.6;
-        r = 255;
-        g = Math.round(165 - t * 125);   // 165 → 40
-        b = Math.round(t * 15);          // 0 → 15
-      }
-
-      // ── Alpha and width ──
-      let alpha, lineW;
-
-      if (bond.severed) {
-        // Dying bond — flicker and fade
-        const age = time - bond.severedAt;
-        const fade = Math.max(0, 1 - age / 120); // 120-tick fade
-        const flicker = 0.5 + 0.5 * Math.sin(age * 0.8); // rapid flicker
-        alpha = fade * flicker * 0.35;
-        lineW = 1.0 * fade;
-        // Override color to deep red for severed bonds
-        r = 200; g = 30; b = 30;
-      } else {
-        // Living bond — bolder than the old version, slight distance fade
-        const stretch = dist / 250; // 0 at touching, 1 at max tether
-        alpha = 0.18 + (1 - stretch) * 0.22; // 0.18 to 0.40
-        lineW = 1.5 + (1 - stretch) * 1.0;   // 1.5 to 2.5
-      }
-
-      if (alpha < 0.01) continue;
-
-      // ── Bezier control point — organic breathing curve ──
-      // Midpoint + perpendicular offset that oscillates over time
-      // Each bond has a unique phase based on its key hash
-      const mx = (aa.x + bb.x) / 2;
-      const my = (aa.y + bb.y) / 2;
-
-      // Perpendicular direction
-      const nx = -dy / dist;
-      const ny = dx / dist;
-
-      // Unique oscillation per bond — uses agent IDs for stable phase offset
-      const phase = (bond.a * 7 + bond.b * 13) % 100 / 100 * Math.PI * 2;
-      const breathe = Math.sin(now / 1800 + phase) * (8 + dist * 0.06);
-
-      const cpx = mx + nx * breathe;
-      const cpy = my + ny * breathe;
-
-      // ── Draw ──
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      ctx.lineWidth = lineW;
-      ctx.beginPath();
-      ctx.moveTo(aa.x, aa.y);
-      ctx.quadraticCurveTo(cpx, cpy, bb.x, bb.y);
-      ctx.stroke();
-    }
-
-    ctx.restore();
   }
 };
 

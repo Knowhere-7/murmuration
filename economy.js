@@ -72,6 +72,9 @@ window.MurmurationModules.Economy = class Economy {
     // ── Stats ──
     this.totalHarvested = 0;
 
+    // ── Evolution crystallization ──
+    this._crystallizationBoost = 0; // set by Force Evolution, consumed by next reproduction cycle
+
     // ── Migration / wind — slowly rotating directional bias ──
     // Creates the swooping, flowing movement that defines a murmuration
     this._windAngle = Math.random() * Math.PI * 2;
@@ -84,14 +87,26 @@ window.MurmurationModules.Economy = class Economy {
     this.zones = [];
     const w = this.world.width;
     const h = this.world.height;
-    for (let i = 0; i < count; i++) {
-      const margin = 60;
+
+    // 5 sacred zones — fixed cross pattern, each with a name and role
+    const layout = [
+      { px: 0.50, py: 0.46, name: 'HEARTH',   richness: 1.0,  radius: 110 }, // center
+      { px: 0.17, py: 0.20, name: 'SHELTER',  richness: 0.75, radius: 90  }, // top-left
+      { px: 0.86, py: 0.20, name: 'MARKET',   richness: 0.85, radius: 95  }, // top-right
+      { px: 0.17, py: 0.78, name: 'DISTRICT', richness: 0.80, radius: 90  }, // bottom-left
+      { px: 0.86, py: 0.78, name: 'COMMONS',  richness: 0.90, radius: 100 }, // bottom-right
+    ];
+
+    for (const z of layout) {
       this.zones.push({
-        x: margin + Math.random() * (w - margin * 2),
-        y: margin + Math.random() * (h - margin * 2),
-        radius: 90 + Math.random() * 60,
-        richness: 0.6 + Math.random() * 0.4,
-        depleted: 0
+        px: z.px,          // normalized [0,1] — never stale regardless of resize
+        py: z.py,
+        x: z.px * w,      // pixel coords — updated by recomputeZonePositions()
+        y: z.py * h,
+        radius: z.radius,
+        richness: z.richness,
+        depleted: 0,
+        name: z.name
       });
     }
   }
@@ -99,6 +114,15 @@ window.MurmurationModules.Economy = class Economy {
   // ── PHASE CYCLE ─────────────────────────────────────────────
 
   static PHASE_ORDER = ['GOLDEN', 'DISASTER', 'SCARCITY', 'REBUILD'];
+
+  // Call whenever world.width/height changes (sizeCanvas, restoreCivilization)
+  recomputeZonePositions() {
+    const w = this.world.width, h = this.world.height;
+    for (const z of this.zones) {
+      z.x = z.px * w;
+      z.y = z.py * h;
+    }
+  }
 
   get phaseMultipliers() {
     switch (this.phase) {
@@ -135,6 +159,12 @@ window.MurmurationModules.Economy = class Economy {
       for (const zone of this.zones) {
         zone.depleted = Math.max(0, zone.depleted - 0.3);
       }
+      // Agents who survived the DISASTER earn an evolution event —
+      // they adapted to collapse and came out the other side
+      const survivors = this.world.agents.filter(
+        a => !a.seppukuDone && !a.isSentinel && a.griefState !== 'DISHONORED'
+      );
+      for (const a of survivors) a.accumulateEvolution(0.3, 'disaster_survival');
     }
 
     if (this.phase === 'GOLDEN') {
@@ -198,6 +228,17 @@ window.MurmurationModules.Economy = class Economy {
       // Initialize energy + generation if missing
       if (agent.energy == null) agent.energy = 0.8 + Math.random() * 0.2;
       if (agent.generation == null) agent.generation = 0;
+
+      // ── SUSTAINED TRUST — maintained relationships are learned behavior ──
+      if (agent.trustCharge >= 0.75) {
+        agent._highTrustTicks = (agent._highTrustTicks || 0) + 1;
+        if (agent._highTrustTicks === 300) {
+          agent.accumulateEvolution(0.2, 'sustained_trust');
+          agent._highTrustTicks = 0; // reset — must re-earn the next increment
+        }
+      } else {
+        agent._highTrustTicks = 0;
+      }
 
       // ── DRAIN ──
       const drain = this.baseDrain * mult.drain * scarcityMod;
@@ -548,15 +589,31 @@ window.MurmurationModules.Economy = class Economy {
     child.energy = 0.5; // born with half energy — parents fed them
     child.generation = Math.max(parent1.generation || 0, parent2.generation || 0) + 1;
 
-    // ── EVOLUTION INHERITANCE — the whole point ──
-    // Children inherit the better of their parents' evolution, plus a boost.
-    // Each generation starts slightly ahead. THIS is progress.
+    // ── EVOLUTION INHERITANCE — carry what was actually earned ──
+    const boost = this._crystallizationBoost || 0;
+    const inheritWeight = 0.4 + boost * 0.4; // 0.4 baseline → up to 0.8 when crystallized
+
+    // Evolution: composite of what parents actually accumulated
     const parentEvo1 = parent1.evolution || 0;
     const parentEvo2 = parent2.evolution || 0;
-    child.evolution = Math.max(parentEvo1, parentEvo2) + 0.1;
+    const parentAcc1 = parent1._evolutionAccumulator || 0;
+    const parentAcc2 = parent2._evolutionAccumulator || 0;
+    child.evolution = Math.max(parentEvo1, parentEvo2)
+                    + (parentAcc1 + parentAcc2) * 0.05; // lived experience bleeds forward
 
-    // Faith is partially inherited — you learn what your parents believed
-    child.faith = ((parent1.faith || 0.1) + (parent2.faith || 0.1)) / 2 * 0.7;
+    // Wisdom: partial inherited resilience — born knowing some of what parents survived
+    child.wisdomScore = ((parent1.wisdomScore || 0) + (parent2.wisdomScore || 0)) / 2
+                      * inheritWeight * 0.6;
+
+    // Faith: inherited belief framework, stronger when crystallized
+    child.faith = ((parent1.faith || 0.1) + (parent2.faith || 0.1)) / 2
+                * (0.7 + boost * 0.2);
+
+    // Trust baseline: weighted toward what parents earned, not reset to random
+    const earnedTrust = (parent1.trustCharge + parent2.trustCharge) / 2;
+    childPersonality.trustBaseline = childPersonality.trustBaseline * (1 - inheritWeight * 0.5)
+                                   + earnedTrust * (inheritWeight * 0.5);
+    child.trustCharge = childPersonality.trustBaseline;
 
     // Parents sacrifice energy — the cost of creating life
     parent1.energy -= this.birthCost * 0.5;
@@ -583,6 +640,56 @@ window.MurmurationModules.Economy = class Economy {
     }
   }
 
+  // ── EVOLUTION CRYSTALLIZATION ───────────────────────────────
+
+  /**
+   * IMPLEMENT — user has inspected the gold network and approved.
+   * Locks the current emergent behavioral state into the gene pool.
+   * Next reproductive cycle children inherit with amplified weight.
+   * Clears all _evolutionReady flags — the moment is encoded, strings return to normal.
+   */
+  crystallize(boost = 0.5) {
+    this._crystallizationBoost = Math.max(0, Math.min(1, boost));
+    const ready = this.world.agents.filter(a => a._evolutionReady);
+    for (const a of ready) {
+      // Lock accumulated knowledge into actual evolution score
+      a.evolution = Math.min(5.0, (a.evolution || 0) + a._evolutionAccumulator * 0.3);
+      a._evolutionReady      = false;
+      a._evolutionAccumulator = 0;
+      a._evolutionPulseTimer  = 0;
+    }
+    if (window.logLine) {
+      window.logLine(
+        `⚗ CRYSTALLIZED — ${ready.length} agents encoded (boost ${(boost*100).toFixed(0)}%) — knowledge locked into gene pool`,
+        'emerge'
+      );
+    }
+    // Boost decays after one full reproductive cycle
+    const decay = () => { this._crystallizationBoost = 0; };
+    clearTimeout(this._crystallizationDecayTimer);
+    this._crystallizationDecayTimer = setTimeout(decay, 8000);
+  }
+
+  /**
+   * TRASH — user inspected the gold network and rejected it.
+   * This behavioral emergence doesn't deserve to persist.
+   * Clears ready flags without encoding anything.
+   */
+  trashEvolution() {
+    const ready = this.world.agents.filter(a => a._evolutionReady);
+    for (const a of ready) {
+      a._evolutionReady       = false;
+      a._evolutionAccumulator = 0;
+      a._evolutionPulseTimer  = 0;
+    }
+    if (window.logLine) {
+      window.logLine(
+        `🗑 TRASHED — ${ready.length} agents reset — behavioral pattern rejected`,
+        'tick'
+      );
+    }
+  }
+
   // ── DRAWING ─────────────────────────────────────────────────
 
   draw(ctx) {
@@ -597,15 +704,15 @@ window.MurmurationModules.Economy = class Economy {
         zone.x, zone.y, zone.radius
       );
 
-      if (this.phase === 'DISASTER') {
-        grad.addColorStop(0, `rgba(255, 50, 30, ${alpha})`);
-        grad.addColorStop(1, 'rgba(255, 50, 30, 0)');
-      } else if (this.phase === 'SCARCITY') {
-        grad.addColorStop(0, `rgba(255, 160, 0, ${alpha})`);
-        grad.addColorStop(1, 'rgba(255, 160, 0, 0)');
-      } else {
-        grad.addColorStop(0, `rgba(0, 255, 120, ${alpha})`);
-        grad.addColorStop(1, 'rgba(0, 255, 120, 0)');
+      if (this.phase === 'DISASTER') {            // Rust Blood
+        grad.addColorStop(0, `rgba(160, 45, 40, ${alpha})`);
+        grad.addColorStop(1, 'rgba(160, 45, 40, 0)');
+      } else if (this.phase === 'SCARCITY') {     // Peninsula Sand
+        grad.addColorStop(0, `rgba(170, 150, 95, ${alpha})`);
+        grad.addColorStop(1, 'rgba(170, 150, 95, 0)');
+      } else {                                    // Undergrowth (healthy)
+        grad.addColorStop(0, `rgba(70, 110, 60, ${alpha})`);
+        grad.addColorStop(1, 'rgba(70, 110, 60, 0)');
       }
 
       ctx.fillStyle = grad;
@@ -637,20 +744,20 @@ window.MurmurationModules.Economy = class Economy {
       ctx.stroke();
     }
 
-    // ── Emergent God — soft ambient glow when collective faith is high ──
+    // ── Emergent God — soft ambient Aged Paper wash when collective faith is high ──
     if (this._godPresent && this._godStrength > 0.05) {
       const gAlpha = this._godStrength * 0.04;
-      ctx.fillStyle = `rgba(255, 220, 100, ${gAlpha})`;
+      ctx.fillStyle = `rgba(237, 230, 214, ${gAlpha})`;
       ctx.fillRect(0, 0, this.world.width, this.world.height);
     }
 
     // Phase indicator
     ctx.save();
     ctx.font = '11px monospace';
-    ctx.fillStyle = this.phase === 'GOLDEN'   ? '#00ff77' :
-                    this.phase === 'DISASTER' ? '#ff3322' :
-                    this.phase === 'SCARCITY' ? '#ff8800' :
-                                                '#00ccff';
+    ctx.fillStyle = this.phase === 'GOLDEN'   ? '#7bb86a' :  // Undergrowth
+                    this.phase === 'DISASTER' ? '#c8484a' :  // Alarm Rust
+                    this.phase === 'SCARCITY' ? '#c2b280' :  // Peninsula Sand
+                                                '#5fa6b8';   // Steel
     if (this.phase !== 'GOLDEN') {
       const phasePct = Math.floor((this.phaseTimer / (this.phaseTicks[this.phase] || 900)) * 100);
       ctx.fillText(`${this.phase} ${phasePct}%`, 10, this.world.height - 10);

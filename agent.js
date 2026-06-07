@@ -26,7 +26,7 @@ window.MurmurationModules.Agent = class Agent {
     this.beliefState = {};
     this.vx = 0;
     this.vy = 0;
-    this.radius = 6;
+    this.radius = 2.5;
 
     // ST-1 Trust Battery
     this.trustCharge = personality.trustBaseline || 0.5;
@@ -47,6 +47,18 @@ window.MurmurationModules.Agent = class Agent {
     // This is what makes different agents naturally go different ways
     this.wanderAngle = Math.random() * Math.PI * 2;
     this.wanderRate  = (Math.random() - 0.5) * 0.04; // how fast the heading rotates (unique per agent)
+
+    // Conflict state — four-option decision system (yield/negotiate/withdraw/escalate)
+    this._conflictWith   = null;  // agent ID of current conflict partner
+    this._conflictTicks  = 0;     // ticks spent in this conflict
+    this._conflictLevel  = 0;     // 0=none 1=domestic 2=local 3=civil 4=revolutionary
+    this._lastDecision   = null;  // 'yield'|'negotiate'|'withdraw'|'escalate'
+
+    // Evolution accumulation — earned through adversity, not assigned
+    this._evolutionAccumulator = 0; // running tally of earned experience events
+    this._evolutionReady       = false; // true when enough is accumulated for user to inspect/implement
+    this._evolutionPulseTimer  = 0;    // drives the radiate animation on gold strings
+    this._highTrustTicks       = 0;    // consecutive ticks above the trust threshold
   }
 
   // ─── ST-1 ────────────────────────────────────────────────────────────────
@@ -81,6 +93,8 @@ window.MurmurationModules.Agent = class Agent {
         // Recovered — earn wisdom from the loss
         this.griefState  = 'ACTIVE';
         this.wisdomScore = Math.min(1, this.wisdomScore + 0.1);
+        // Grief survived and integrated = the deepest learning event
+        this.accumulateEvolution(0.5, 'grief_recovery');
       }
     }
   }
@@ -210,6 +224,23 @@ window.MurmurationModules.Agent = class Agent {
     return action;
   }
 
+  // ─── Evolution accumulation ──────────────────────────────────────────────
+
+  /**
+   * Called when a genuine behavioral learning event occurs.
+   * Reasons: 'grief_recovery' | 'disaster_survival' | 'sustained_trust'
+   * When accumulator crosses the threshold, agent enters _evolutionReady state —
+   * strings go gold, user decides: implement (Force Evolution) or trash.
+   */
+  accumulateEvolution(delta, reason) {
+    if (this.seppukuDone || this.isSentinel) return;
+    this._evolutionAccumulator = Math.min(2.0, (this._evolutionAccumulator || 0) + delta);
+    if (!this._evolutionReady && this._evolutionAccumulator >= 0.7) {
+      this._evolutionReady      = true;
+      this._evolutionPulseTimer = 999999; // holds until user acts
+    }
+  }
+
   // ─── Movement ────────────────────────────────────────────────────────────
 
   move(width, height) {
@@ -250,7 +281,7 @@ window.MurmurationModules.Agent = class Agent {
     // GRIEF SENTINEL — pulsing amber, dark core, unmistakable
     if (this.isSentinel) {
       const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 400);
-      ctx.fillStyle = `rgba(255, 120, 0, ${0.35 + pulse * 0.45})`;
+      ctx.fillStyle = `rgba(220, 120, 20, ${0.35 + pulse * 0.45})`; // Ember
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 4, 0, Math.PI * 2);
       ctx.fill();
@@ -262,9 +293,9 @@ window.MurmurationModules.Agent = class Agent {
       return;
     }
 
-    // SEPPUKU COMPLETE — honored ghost, faded white
+    // SEPPUKU COMPLETE — honored ghost, Aged Paper
     if (this.seppukuDone) {
-      ctx.fillStyle = 'rgba(220, 220, 255, 0.25)';
+      ctx.fillStyle = 'rgba(237, 230, 214, 0.22)';
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius * 0.7, 0, Math.PI * 2);
       ctx.fill();
@@ -282,80 +313,95 @@ window.MurmurationModules.Agent = class Agent {
       return;
     }
 
-    // ACTIVE / GRIEVING / CRISIS — standard render with grief overlay
+    // ACTIVE / GRIEVING / CRISIS — violet/pink palette, agents are the show
     const belief = this.beliefState.current || 0;
     const energy = this.energy != null ? this.energy : 1;
-    const energyLight = 25 + energy * 25; // 25-50% lightness — dims as energy drops
+    const beliefHue   = 272 + belief * 52;          // 220 blue-violet → 272 violet → 324 neon pink
 
-    // Cluster density glow — larger groups glow brighter and wider
-    // Solo agents are dim; a flock of 10+ radiates visible warmth
+    // Spectral accents — high-evolution drifts toward magenta, high-faith warms toward gold
+    const evo         = Math.min(1, (this.evolution || 0) / 3);  // saturates at evo=3
+    const faithLevel  = this.faith || 0;
+    const evoShift    = evo > 0.3 ? (evo - 0.3) / 0.7 * 35 : 0;          // +35 hue toward magenta
+    const faithWarm   = faithLevel > 0.5 ? (faithLevel - 0.5) * 2 : 0;   // faith warms the body
+
+    const hue         = beliefHue + evoShift + (this.swarmTint || 0);
+    const energyLight = 42 + energy * 20 + faithWarm * 6;         // faith agents burn slightly brighter
+
+    // Cluster density glow — the bigger the group, the brighter and wider the bloom.
+    // Additive, so overlapping glows in a dense flock stack into real radiance.
     const cluster = this.clusterSize || 0;
-    if (cluster > 2) {
-      const intensity = Math.min(1, (cluster - 2) / 12); // ramps from 3 neighbors to 14
-      const glowRadius = this.radius + 6 + intensity * 14; // 12px to 26px outer glow
-      const glowHue = 120 + belief * 60 + intensity * 40;  // shifts warmer (toward amber) in big groups
-      const glowAlpha = 0.08 + intensity * 0.18;            // 0.08 to 0.26 — subtle to visible
+    if (cluster > 1) {
+      const intensity  = Math.min(1, (cluster - 1) / 10);    // starts at a pair, full by ~11
+      const glowRadius = this.radius + 5 + intensity * 18;   // scaled to smaller agent
+      const glowAlpha  = 0.06 + intensity * 0.18;            // slightly stronger to compensate for smaller body
       const grad = ctx.createRadialGradient(
         this.x, this.y, this.radius * 0.5,
         this.x, this.y, glowRadius
       );
-      grad.addColorStop(0, `hsla(${glowHue}, 80%, 55%, ${glowAlpha})`);
-      grad.addColorStop(1, `hsla(${glowHue}, 80%, 45%, 0)`);
+      // Dense clusters burst toward neon pink — the civilization blazing
+      const bloomHue = hue + intensity * 40;        // violet → pink as crowd grows
+      grad.addColorStop(0, `hsla(${bloomHue}, ${90 - intensity * 20}%, ${55 + intensity * 20}%, ${glowAlpha})`);
+      grad.addColorStop(1, `hsla(${bloomHue}, 90%, 50%, 0)`);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(this.x, this.y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
 
-    ctx.fillStyle = `hsl(${120 + belief * 60}, 70%, ${energyLight}%)`;
+    // Body — tight contained shadow, dimmer body so core contrast reads clearly
+    ctx.shadowBlur  = this.radius * 1.2;           // tighter — less ambient spill into the void
+    ctx.shadowColor = `hsl(${hue}, 85%, 55%)`;
+    ctx.fillStyle   = `hsl(${hue}, 75%, ${energyLight}%)`;  // body is the color, not the brightness
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
 
-    // Energy bar — tiny bar below agent, only shows when energy < 0.7
-    if (energy < 0.7) {
-      const barW = this.radius * 2;
-      const barH = 1.5;
-      const barX = this.x - this.radius;
-      const barY = this.y + this.radius + 3;
-      ctx.fillStyle = 'rgba(40,40,40,0.6)';
-      ctx.fillRect(barX, barY, barW, barH);
-      const eColor = energy > 0.4 ? '#ffcc00' : energy > 0.15 ? '#ff6600' : '#ff2200';
-      ctx.fillStyle = eColor;
-      ctx.fillRect(barX, barY, barW * energy, barH);
-    }
+    // Quantum core — pure near-white hot pinpoint; this is the brightest thing on screen
+    // Two passes: outer soft corona then sharp white nucleus
+    ctx.fillStyle = `hsla(${hue}, 30%, 88%, 0.55)`;  // corona — slightly colored
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(255, 255, 255, 0.92)`;      // nucleus — pure white, no hue
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius * 0.28, 0, Math.PI * 2);
+    ctx.fill();
 
-    // ST-1 trust ring — cyan, opacity = trustCharge
-    if (this.trustCharge > 0.15) {
-      ctx.strokeStyle = `rgba(0, 255, 200, ${this.trustCharge * 0.8})`;
-      ctx.lineWidth   = 1.5;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // ST-3 faith glow — soft gold inner light, visible when faith > 0.3
+    // ST-3 faith glow — soft gold halo
     if (this.faith > 0.3) {
-      const fAlpha = (this.faith - 0.3) * 0.6; // 0 at 0.3, ~0.42 at 1.0
+      const fAlpha = (this.faith - 0.3) * 0.7;
       ctx.fillStyle = `rgba(255, 215, 80, ${fAlpha * 0.35})`;
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius + 1.5, 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, this.radius + 1.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // ST-2 grief ring — amber (GRIEVING) or pulsing orange (CRISIS)
+    // ST-1 trust ring — violet, tight to the smaller body
+    if (this.trustCharge > 0.15) {
+      ctx.strokeStyle = `hsla(${hue + 20}, 90%, 70%, ${this.trustCharge * 0.75})`;
+      ctx.lineWidth   = 0.8;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // ST-2 grief ring — amber (GRIEVING) → pulsing red (CRISIS)
     if (this.griefState === 'CRISIS') {
       const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 280);
-      ctx.strokeStyle = `rgba(255, 60, 0, ${0.5 + pulse * 0.5})`;
-      ctx.lineWidth   = 2;
+      ctx.strokeStyle = `rgba(255, 70, 50, ${0.5 + pulse * 0.5})`;
+      ctx.lineWidth   = 1.2;
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius + 7, 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, this.radius + 4.5, 0, Math.PI * 2);
       ctx.stroke();
     } else if (this.griefState === 'GRIEVING') {
-      ctx.strokeStyle = `rgba(255, 165, 0, ${this.griefLevel * 0.7})`;
-      ctx.lineWidth   = 1;
+      ctx.strokeStyle = `rgba(255, 150, 0, ${this.griefLevel * 0.7})`;
+      ctx.lineWidth   = 0.8;
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI * 2);
+      ctx.arc(this.x, this.y, this.radius + 3.5, 0, Math.PI * 2);
       ctx.stroke();
     }
 

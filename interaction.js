@@ -1,102 +1,242 @@
 /**
  * Interaction Engine for Murmuration
- * Agent-to-agent belief propagation, opinion formation.
- * Pure rule-based computation.
+ * Agent-to-agent belief propagation, opinion formation, and conflict.
  *
- * ST-1 Trust Battery:
- *   Propagation weight = agent.trustCharge (live, earned)
- *   Opposition drains both parties. Successful influence charges influencer.
- *   Isolation drains slowly. Alignment handled in evolution.js (once/tick).
+ * CONFLICT SYSTEM — four balanced options, trait-weighted:
+ *   yield      — faith + calm + wisdom (choosing peace)
+ *   negotiate  — evolution + trust + wisdom (earned resolution)
+ *   withdraw   — energy + faith + calm (can afford to leave)
+ *   escalate   — grief + low-trust + low-faith (nowhere else to go)
  *
- * ST-2 Grief Variable:
- *   When a neighbor's trustCharge hits floor → grief ripples outward
- *   scaled by how trusted that agent was. Loss of a high-trust partner
- *   hits harder. Social healing: new trust bonds reduce grief.
+ *   No dominant strategy. The option that costs least for THIS agent
+ *   at THIS moment is what they choose. Outcome reveals character.
+ *
+ * CONFLICT TRIGGERS (not ideology — real situational pressure):
+ *   - Agent in GRIEVING or CRISIS state encounters a neighbor
+ *   - Both agents are below trust threshold (collective erosion)
+ *   - Sustained close proximity with accumulating friction ticks
+ *
+ * ESCALATION LEVELS:
+ *   0 = none  1 = domestic  2 = local  3 = civil  4 = revolutionary
+ *   Each consecutive escalate decision without resolution advances the level.
  */
 
 window.MurmurationModules = window.MurmurationModules || {};
 
 window.MurmurationModules.InteractionEngine = class InteractionEngine {
+
   computeInteractions(world) {
     const interactions = [];
 
     for (let i = 0; i < world.agents.length; i++) {
       const agent = world.agents[i];
-
-      // Seppuku-complete agents are memory — they don't interact
-      if (agent.seppukuDone) continue;
-      // Sentinel observes but does not propagate
-      if (agent.isSentinel) continue;
-      // Dishonored agents don't propagate either
+      if (agent.seppukuDone)                 continue;
+      if (agent.isSentinel)                  continue;
       if (agent.griefState === 'DISHONORED') continue;
 
       const neighbors = world.getNeighbors(agent)
         .filter(n => !n.seppukuDone && n.griefState !== 'DISHONORED');
 
-      // Isolated agents: drain trust + accumulate grief slowly
-      // Tuned for 60fps — per-frame values
+      // ── ISOLATION ────────────────────────────────────────────────────────
       if (neighbors.length === 0) {
         agent.updateTrust(-0.0004);
         agent.updateGrief(+0.0005);
         continue;
       }
 
-      // Influence strength = trust battery × reactivity × class weight
-      // Elite beliefs propagate stronger — wealth IS influence
       const classWeight = agent.influenceWeight || 1.0;
-      const influence = agent.trustCharge * agent.personality.reactivity * 0.35 * classWeight;
+      const influence   = agent.trustCharge * agent.personality.reactivity * 0.35 * classWeight;
 
       for (const neighbor of neighbors) {
         const agentBelief    = agent.beliefState.current    || 0;
         const neighborBelief = neighbor.beliefState.current || 0;
-        const beliefDiff = Math.abs(agentBelief - neighborBelief);
-
-        // Track previous trust to detect depletion events (grief trigger)
+        const beliefDiff     = Math.abs(agentBelief - neighborBelief);
         const neighborTrustBefore = neighbor.trustCharge;
 
-        if (beliefDiff > 0.5) {
-          // ── OPPOSITION — strong divergence ────────────────────────────
-          // Tuned for 60fps — per-frame, per-neighbor
-          agent.updateTrust(-0.0005);
-          neighbor.updateTrust(-0.0003);
+        // ── CONFLICT TRIGGER ─────────────────────────────────────────────
+        // Multiple entry points — ideology is one spark, but not the only one.
+        // Resolution never requires belief change, but divergence can cause friction.
+        const agentGrieving     = agent.griefState === 'GRIEVING' || agent.griefState === 'CRISIS';
+        const mutualLowTrust    = agent.trustCharge < 0.40 && neighbor.trustCharge < 0.40;
+        const sharpDivergence   = beliefDiff > 0.55; // strong pull in opposite directions
+        const sustainedFriction = (agent._conflictWith === neighbor.id);
 
-          // Sustained conflict accumulates grief
-          agent.updateGrief(+0.0003);
+        const conflictCondition = agentGrieving || mutualLowTrust || sharpDivergence || sustainedFriction;
+
+        if (conflictCondition && !agent._conflictWith) {
+          // Plant the conflict seed — this relationship now has a live grievance
+          agent._conflictWith  = neighbor.id;
+          agent._conflictTicks = 0;
+          agent._conflictLevel = 1;
+        }
+
+        // ── ACTIVE CONFLICT: DECISION ENGINE ─────────────────────────────
+        if (agent._conflictWith === neighbor.id) {
+          agent._conflictTicks++;
+
+          // Decision runs every 45 ticks per agent — staggered by id to avoid lock-step
+          if (world.time % 45 === agent.id % 45) {
+            const decision = this._chooseConflictAction(agent);
+            this._applyDecision(agent, neighbor, decision, world);
+            interactions.push({
+              from: agent.id, to: neighbor.id,
+              type: `conflict_${decision}`,
+              level: agent._conflictLevel
+            });
+          }
 
         } else if (beliefDiff > 0.2) {
-          // ── INFLUENCE — pull neighbor toward agent's belief ────────────
-          const direction   = agentBelief > neighborBelief ? 1 : -1;
+          // ── INFLUENCE — belief drift toward agent ─────────────────────
+          const direction    = agentBelief > neighborBelief ? 1 : -1;
           const propStrength = influence * (1 - beliefDiff);
           const prevBelief   = neighborBelief;
           const raw = prevBelief + propStrength * direction;
           neighbor.beliefState.current = Math.max(-1, Math.min(1, raw));
 
-          // Successful influence charges influencer + heals grief slightly
           if (Math.abs(neighbor.beliefState.current - prevBelief) > 0.001) {
             agent.updateTrust(+0.0002);
-            agent.updateGrief(-0.0003); // social bond forming = slow healing
+            agent.updateGrief(-0.0003);
           }
 
           interactions.push({
-            from: agent.id,
-            to: neighbor.id,
-            type: 'belief_prop',
-            strength: propStrength
+            from: agent.id, to: neighbor.id,
+            type: 'belief_prop', strength: propStrength
           });
         }
-        // Alignment (diff ≤ 0.2): handled in evolution.js — no per-neighbor charge here
 
-        // ── ST-2: Grief trigger — detect neighbor trust depletion ────────
-        // If a neighbor just hit the floor (was trusted, now depleted)
-        // grief ripples outward scaled by how trusted they were
+        // ── ST-2: Grief trigger — neighbor trust depletion ───────────────
         if (neighborTrustBefore > 0.3 && neighbor.trustCharge <= 0.05) {
-          const lossWeight = neighborTrustBefore * 0.03;
-          agent.updateGrief(+lossWeight);
+          agent.updateGrief(+(neighborTrustBefore * 0.03));
+        }
+      }
+
+      // If conflict partner has left neighbor range, cool the conflict slowly
+      if (agent._conflictWith) {
+        const stillNear = neighbors.some(n => n.id === agent._conflictWith);
+        if (!stillNear) {
+          agent._conflictTicks = Math.max(0, agent._conflictTicks - 2);
+          if (agent._conflictTicks === 0) {
+            agent._conflictWith  = null;
+            agent._conflictLevel = 0;
+          }
         }
       }
     }
 
     world.interactionLog = world.interactionLog.concat(interactions.slice(-50));
     return interactions;
+  }
+
+  // ── DECISION WEIGHTS ─────────────────────────────────────────────────────
+  // Four options, all balanced — the cheapest one for THIS agent wins.
+  // Weights are trait-derived, not random. Character determines outcome.
+
+  _chooseConflictAction(agent) {
+    const grief   = agent.griefLevel   || 0;
+    const trust   = agent.trustCharge  || 0.5;
+    const faith   = agent.faith        || 0.1;
+    const evo     = agent.evolution    || 0;
+    const wisdom  = agent.wisdomScore  || 0;
+    const energy  = agent.energy       != null ? agent.energy : 0.5;
+    const calm    = 1 - grief;
+    const level   = agent._conflictLevel || 1;
+
+    // Each weight = how CHEAP this option is for this agent right now
+    let yieldW     = faith * 0.45 + calm * 0.30 + wisdom * 0.25;
+    let negotiateW = evo   * 0.40 + trust * 0.40 + wisdom * 0.20;
+    let withdrawW  = energy* 0.40 + faith * 0.30 + calm   * 0.30;
+    let escalateW  = grief * 0.50 + (1 - trust) * 0.30 + (1 - faith) * 0.20;
+
+    // As conflict deepens, all options become harder except escalate
+    // — the sunk-cost trap: you've come too far to yield
+    const sunk = Math.min(0.4, (level - 1) * 0.12);
+    yieldW     = Math.max(0, yieldW     - sunk);
+    negotiateW = Math.max(0, negotiateW - sunk * 0.7);
+    withdrawW  = Math.max(0, withdrawW  - sunk * 0.5);
+    escalateW  = Math.min(1, escalateW  + sunk * 0.3);
+
+    const total = (yieldW + negotiateW + withdrawW + escalateW) || 1;
+    const r = Math.random() * total;
+
+    let acc = 0;
+    if ((acc += yieldW)     >= r) return 'yield';
+    if ((acc += negotiateW) >= r) return 'negotiate';
+    if ((acc += withdrawW)  >= r) return 'withdraw';
+    return 'escalate';
+  }
+
+  // ── APPLY DECISION ───────────────────────────────────────────────────────
+
+  _applyDecision(agent, neighbor, decision, world) {
+    agent._lastDecision = decision;
+
+    switch (decision) {
+
+      case 'yield':
+        // Letting go is a choice — costs grief, earns small trust
+        agent.updateGrief(-0.025);
+        agent.updateTrust(+0.008);
+        neighbor.updateTrust(+0.004);
+        agent._conflictWith  = null;
+        agent._conflictTicks = 0;
+        agent._conflictLevel = 0;
+        break;
+
+      case 'negotiate':
+        // Costs both sides — but the conflict cools and both learn something
+        agent.updateTrust(-0.006);
+        neighbor.updateTrust(-0.006);
+        agent._conflictTicks = Math.max(0, agent._conflictTicks - 25);
+        agent._conflictLevel = Math.max(1, agent._conflictLevel - 1);
+        // Resolved conflict = real evolution event — you handled something hard
+        if (agent._conflictTicks === 0) {
+          agent.accumulateEvolution(0.15, 'conflict_resolved');
+          neighbor.accumulateEvolution(0.08, 'conflict_resolved');
+          agent._conflictWith  = null;
+          agent._conflictLevel = 0;
+        }
+        break;
+
+      case 'withdraw':
+        // Leave — costs trust, spends energy, but the conflict ends for you
+        const dx = agent.x - neighbor.x;
+        const dy = agent.y - neighbor.y;
+        const d  = Math.hypot(dx, dy) || 1;
+        agent.vx += (dx / d) * 1.8;
+        agent.vy += (dy / d) * 1.8;
+        agent.updateTrust(-0.012);
+        if (agent.energy != null) agent.energy = Math.max(0, agent.energy - 0.04);
+        agent._conflictWith  = null;
+        agent._conflictTicks = 0;
+        agent._conflictLevel = 0;
+        break;
+
+      case 'escalate':
+        // Both pay. The one who escalates pays more — this is a choice with a cost.
+        agent.updateTrust(-0.018);
+        agent.updateGrief(+0.025);
+        neighbor.updateTrust(-0.012);
+        neighbor.updateGrief(+0.015);
+
+        agent._conflictTicks += 8;
+        agent._conflictLevel  = Math.min(4, agent._conflictLevel + 1);
+
+        // Mirror the conflict on the neighbor — they're now in it too
+        if (!neighbor._conflictWith) {
+          neighbor._conflictWith  = agent.id;
+          neighbor._conflictTicks = agent._conflictTicks;
+          neighbor._conflictLevel = agent._conflictLevel;
+        }
+
+        // Log escalations — this is the event Ghost wants to watch
+        if (window.logLine) {
+          const label = ['','DOMESTIC','LOCAL','CIVIL','REVOLUTIONARY'][agent._conflictLevel] || 'WAR';
+          window.logLine(
+            `⚔ ${label} — #${agent.id}→#${neighbor.id} | grief ${agent.griefLevel.toFixed(2)} trust ${agent.trustCharge.toFixed(2)}`,
+            'crisis'
+          );
+        }
+        break;
+    }
   }
 };
