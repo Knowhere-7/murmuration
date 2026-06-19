@@ -299,15 +299,15 @@ window.MurmurationModules.K26 = class K26 {
             ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
           }
         } else if (evoReady) {
-          // Electric blue — evolution signal; ghostly, meshes with the violet/quantum palette
-          const pulse  = 0.5 + 0.5 * Math.sin(Date.now() * 0.0018 + a.id * 0.5);
-          lineW        = 0.35 + bond * 0.55 + pulse * 0.25;
-          const gAlpha = (0.20 + bond * 0.20) * (0.45 + taut * 0.55) * (0.6 + pulse * 0.4);
-          strokeCol    = `hsla(218, 95%, ${52 + pulse * 12}%, ${gAlpha})`;
-          ctx.lineWidth   = lineW * 5;
-          ctx.strokeStyle = `hsla(218, 90%, 55%, ${gAlpha * 0.09})`;
-          ctx.beginPath(); ctx.moveTo(a.x, a.y);
-          ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
+                  // GOLD — oldest accumulated knowledge base; strings turn gold to track lineage of earned knowledge
+                  const pulse  = 0.5 + 0.5 * Math.sin(Date.now() * 0.0018 + a.id * 0.5);
+                  lineW        = 0.35 + bond * 0.55 + pulse * 0.25;
+                  const gAlpha = (0.20 + bond * 0.20) * (0.45 + taut * 0.55) * (0.6 + pulse * 0.4);
+                  strokeCol    = `hsla(45, 95%, ${52 + pulse * 12}%, ${gAlpha})`;  // gold, not blue
+                  ctx.lineWidth   = lineW * 5;
+                  ctx.strokeStyle = `hsla(45, 90%, 55%, ${gAlpha * 0.09})`;
+                  ctx.beginPath(); ctx.moveTo(a.x, a.y);
+                  ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
         } else {
           lineW         = 0.28 + bond * 0.60 * (0.45 + taut * 0.55);
           const alpha   = (0.20 + bond * 0.35) * (0.40 + taut * 0.60);
@@ -323,6 +323,76 @@ window.MurmurationModules.K26 = class K26 {
       }
     }
     ctx.restore();
+  }
+
+  populationBoom(count) {
+    /**
+     * Population boom — the Hydra trait.
+     * Injects fresh agents into the colony after a seppuku cascade clears it.
+     * New agents inherit the colony's doctrine but have no memory of what killed the previous generation.
+     * They feel the proximity pressure immediately — without knowing why.
+     *
+     * @param {number} count - number of agents to inject
+     * @returns {Agent[]} new agents
+     */
+    if (!this.world) return [];
+    const Agent = window.MurmurationModules.Agent;
+    const newAgents = [];
+    const doctrine = this.world.doctrine || 'peace';
+    const mode = this.world.mode || 'normal';
+
+    for (let i = 0; i < count; i++) {
+      // Place near the edges, heading inward — fresh arrivals from outside
+      const edge = i % 2 === 0;
+      const x = edge
+        ? 30 + Math.random() * 60
+        : this.world.width - 30 - Math.random() * 60;
+      const y = 60 + Math.random() * (this.world.height - 120);
+
+      const id = (this.economy && this.economy.nextAgentId)
+        ? this.economy.nextAgentId++
+        : this.world.agents.length + i + Math.floor(Math.random() * 1e6);
+
+      const a = new Agent(id, x, y, this._randomPersonality());
+      a.generation = 1;
+      a._generation = 1;
+      a._immigrant = false;
+      a._boomSpawned = true;
+
+      // Inherit doctrine
+      a.doctrine = doctrine;
+      a._doctrine = doctrine;
+
+      // Start with slightly elevated energy — they're fresh
+      a.energy = 0.65 + Math.random() * 0.25;
+
+      // Track boom origin
+      a._boomOrigin = true;
+
+      this.world.agents.push(a);
+      newAgents.push(a);
+    }
+
+    // Log the boom event
+    const popNow = this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel).length;
+    if (window.logLine) {
+      window.logLine(
+        `T${this.world.time}  🌱 POPULATION BOOM — ${count} new agents injected (total: ${popNow})`,
+        'green'
+      );
+    }
+
+    return newAgents;
+  }
+
+  _randomPersonality() {
+    return {
+      riskTolerance:  0.3 + Math.random() * 0.4,
+      trustBaseline: 0.5 + Math.random() * 0.3,
+      reactivity:     0.4 + Math.random() * 0.4,
+      memoryWeight:   0.2 + Math.random() * 0.5,
+      optimism:       0.4 + Math.random() * 0.3,
+    };
   }
 
   updateUI(emergence) {

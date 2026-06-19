@@ -230,7 +230,8 @@ window.MurmurationModules.Agent = class Agent {
    * Called when a genuine behavioral learning event occurs.
    * Reasons: 'grief_recovery' | 'disaster_survival' | 'sustained_trust'
    * When accumulator crosses the threshold, agent enters _evolutionReady state —
-   * strings go gold, user decides: implement (Force Evolution) or trash.
+   * strings turn gold — oldest accumulated knowledge base becomes visible.
+   * User decides: implement (Force Evolution) or trash.
    */
   accumulateEvolution(delta, reason) {
     if (this.seppukuDone || this.isSentinel) return;
