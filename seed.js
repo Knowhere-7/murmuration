@@ -16,6 +16,9 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
       world.setEnv('disturbance', str);
       world.agents.forEach(a => {
         if (a.seppukuDone) return;
+        a._detonationEffect = 'earthquake';
+        a._detonationTimer = 90;
+        a._detonationStr = str;
         // Drain trust proportional to quake strength
         a.updateTrust(-str * 0.4);
         // Inject grief — the ground is shaking
@@ -38,6 +41,9 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
       world.setEnv('anomaly', str);
       world.agents.forEach(a => {
         if (a.seppukuDone) return;
+        a._detonationEffect = 'paranoia';
+        a._detonationTimer = 90;
+        a._detonationStr = str;
         // Crank reactivity WAY up — they overreact to everything
         a.personality.reactivity = Math.min(3.0, a.personality.reactivity * (1 + str * 1.5));
         // Trust nosedives — everyone looks like a threat
@@ -55,6 +61,9 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
       // Immediate: silent pressure — agents don't know yet
       world.agents.forEach(a => {
         if (a.seppukuDone) return;
+        a._detonationEffect = 'cascade';
+        a._detonationTimer = 90;
+        a._detonationStr = str;
         a.updateGrief(str * 0.1);
       });
       // Delayed detonation — grief bomb after 1.5 seconds
@@ -81,12 +90,19 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
       const str = signals.EcholocationFrequency;
       world.setEnv('timestepRes', str);
       world.timestepRes = str;
+      if (str > 0) {
+        world.agents.forEach(a => {
+          if (a.seppukuDone) return;
+          a._detonationEffect = 'timewarp';
+          a._detonationTimer = 90;
+          a._detonationStr = str;
+        });
+      }
       // At high speed, trust erodes — relationships can't keep up
       if (str > 0.5) {
         world.agents.forEach(a => {
           if (a.seppukuDone) return;
           a.updateTrust(-str * 0.15);
-          // Reactivity increases with time pressure
           a.personality.reactivity = Math.min(2.5, a.personality.reactivity * (1 + str * 0.3));
         });
       }
@@ -98,11 +114,23 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
       const str = signals.MantisShrimp16Bands;
       world.setEnv('spawnFilter', str);
       if (str > 0.3) {
+        const existingCount = world.agents.length;
         const newCount = Math.floor(str * 15);
         world.initAgents(newCount);
+        // Mark newcomers with flood effect
+        for (let i = existingCount; i < world.agents.length; i++) {
+          world.agents[i]._detonationEffect = 'flood';
+          world.agents[i]._detonationTimer = 90;
+          world.agents[i]._detonationStr = str;
+        }
         // Existing agents react to strangers — trust hit
-        world.agents.forEach(a => {
+        world.agents.forEach((a, idx) => {
           if (a.seppukuDone) return;
+          if (idx < existingCount) {
+            a._detonationEffect = 'paranoia';
+            a._detonationTimer = 60;
+            a._detonationStr = str * 0.4;
+          }
           a.updateTrust(-str * 0.1);
           a.updateGrief(str * 0.08);
         });

@@ -1,5 +1,7 @@
 # Murmuration
 
+### A living X-ray of collective intelligence — with a steering wheel attached.
+
 **Swarm intelligence engine. Zero dependencies. One file.**
 
 Murmuration simulates autonomous agents that form beliefs, build trust, grieve losses, and produce emergent collective signals — all from pure rule-based interactions modeled on biological survival mechanisms. No AI models. No API calls. No frameworks. Open an HTML file, the swarm runs.

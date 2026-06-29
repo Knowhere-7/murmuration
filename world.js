@@ -17,7 +17,10 @@ window.MurmurationModules.World = class World {
       anomaly:      0, // ElectroreceptionAnomaly
       pressure:     0, // LateralLinePressure
       timestepRes:  1, // EcholocationFrequency
-      spawnFilter:  0  // MantisShrimp16Bands
+      spawnFilter:  0, // MantisShrimp16Bands
+      // Cosmetic-only field strengths driven live by sliders (read by k26.draw).
+      // These never mutate trust/grief/belief — DETONATE is what commits damage.
+      preview: { disturbance: 0, anomaly: 0, pressure: 0, spawnPressure: 0, scarcity: 0, tax: 0 }
     };
     this.interactionLog = [];
     this.time = 0;
@@ -53,6 +56,10 @@ window.MurmurationModules.World = class World {
       { xf: 0.20, yf: 0.78, rf: 0.09, name: 'ROOT CELLAR', supply: 1.0, maxOccupants: 5,  controller: null, occupantCount: 0, wisdomTicks: 0 },
       { xf: 0.80, yf: 0.78, rf: 0.09, name: 'EMBER RING',  supply: 1.0, maxOccupants: 5,  controller: null, occupantCount: 0, wisdomTicks: 0 },
     ];
+
+    // ── V2 optional engine references (set externally, null = v1 behavior) ──
+    this.terrain = null;
+    this.seasons = null;
 
     this.initAgents(agentCount);
   }
@@ -644,6 +651,10 @@ window.MurmurationModules.World = class World {
       }
     }
 
+    // ── V2 ENGINE TICKS — environmental pressure layers ──
+    if (this.terrain) this.terrain.tick();
+    if (this.seasons) this.seasons.tick();
+
     this.time++;
   }
 
@@ -651,11 +662,17 @@ window.MurmurationModules.World = class World {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, this.width, this.height);
 
+    // V2: terrain drawn first (under everything, low opacity)
+    if (this.terrain) this.terrain.draw(ctx);
+
     for (const agent of this.agents) {
       agent.draw(ctx);
     }
 
     this.drawOverlay(ctx);
+
+    // V2: seasons drawn last (ambient overlay on top)
+    if (this.seasons) this.seasons.draw(ctx);
   }
 
   /** Env overlay + sentinel label — called separately when K26 controls draw order */

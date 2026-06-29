@@ -1,0 +1,6 @@
+# Local Netlify folder
+.netlify
+
+# Saved swarm-state exports (runtime data dumps, not source)
+*-swarm.json
+clauds-missing-swarm.json

@@ -47,6 +47,24 @@ window.MurmurationModules.K26 = class K26 {
       this.warningLog = new window.MurmurationModules.WarningLog();
     }
 
+    // V2: Terrain Engine — the world isn't flat anymore
+    if (window.MurmurationModules.TerrainEngine) {
+      this.terrainEngine = new window.MurmurationModules.TerrainEngine(this.world, {
+        preset: 'continental'
+      });
+      this.world.terrain = this.terrainEngine;
+      if (this.economy) this.economy.terrain = this.terrainEngine;
+    }
+
+    // V2: Seasons Engine — time has rhythm
+    if (window.MurmurationModules.SeasonsEngine && this.economy) {
+      this.seasonsEngine = new window.MurmurationModules.SeasonsEngine(
+        this.world, this.economy, { seasonLength: 1800 }
+      );
+      this.world.seasons = this.seasonsEngine;
+      this.economy.seasons = this.seasonsEngine;
+    }
+
     this.draw();
   }
 
@@ -110,6 +128,9 @@ window.MurmurationModules.K26 = class K26 {
     // Layer 1: vanta void + state-reactive nebula (see VISUAL-BIBLE.md)
     this.drawBackground(ctx, W, H);
 
+    // Layer 1.5: V2 terrain underlay (low opacity biome map)
+    if (this.terrainEngine) this.terrainEngine.draw(ctx);
+
     // Layer 2: resource zones UNDER agents (so agents stay crisp)
     if (this.economy) this.economy.draw(ctx);
 
@@ -117,8 +138,30 @@ window.MurmurationModules.K26 = class K26 {
     this.drawConnections(ctx);
 
     // Layer 4: agents on top
+    // Slider preview field — cosmetic-only modulation while user drags Break-the-Swarm sliders.
+    // Jitter (disturbance), alpha flicker (anomaly), inward drift (pressure). No state mutation.
+    const pv = (this.world.env && this.world.env.preview) || null;
+    const jitter   = pv ? pv.disturbance   : 0;
+    const flicker  = pv ? pv.anomaly       : 0;
+    const drift    = pv ? pv.pressure      : 0;
+    const cx = W * 0.5, cy = H * 0.5;
     for (const agent of this.world.agents) {
+      if (!pv || (jitter === 0 && flicker === 0 && drift === 0)) {
+        agent.draw(ctx);
+        continue;
+      }
+      ctx.save();
+      if (drift > 0) {
+        ctx.translate((cx - agent.x) * drift * 0.06, (cy - agent.y) * drift * 0.06);
+      }
+      if (jitter > 0) {
+        ctx.translate((Math.random() - 0.5) * jitter * 6, (Math.random() - 0.5) * jitter * 6);
+      }
+      if (flicker > 0 && Math.random() < flicker * 0.5) {
+        ctx.globalAlpha = 0.35 + Math.random() * 0.55;
+      }
       agent.draw(ctx);
+      ctx.restore();
     }
 
     // Layer 5: class indicators (wealth rings, crowns)
@@ -126,6 +169,85 @@ window.MurmurationModules.K26 = class K26 {
 
     // Layer 6: env overlay + sentinel label
     this.world.drawOverlay(ctx);
+
+    // Layer 7: V2 season ambient overlay + indicator
+    if (this.seasonsEngine) this.seasonsEngine.draw(ctx);
+
+    // NOTE: screen-edge slider vignettes removed by design — all effect
+    // signaling now lives ON the agents themselves (detonation visuals).
+  }
+
+  /**
+   * Slider preview feedback — cosmetic edge overlays scaled to env.preview values.
+   * Each slider has a unique signature so the user feels what they're charging.
+   *   disturbance   → rust-blood radial pulse from center
+   *   anomaly       → red strobing edge vignette
+   *   pressure      → slow dark inward vignette (building dread)
+   *   spawnPressure → pulsing green edge ring (incoming)
+   *   scarcity      → warm-orange edge vignette (>0.3 threshold, baseline is 0.5)
+   *   tax           → gold inner glow
+   */
+  drawSliderFeedback(ctx, W, H) {
+    const pv = this.world && this.world.env && this.world.env.preview;
+    if (!pv) return;
+    const t = (this.world.time || 0) * 0.06;
+
+    if (pv.disturbance > 0) {
+      const s = pv.disturbance;
+      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.6);
+      grad.addColorStop(0,   `rgba(160,45,40,${0.14 * s * (0.7 + 0.3 * Math.sin(t * 3))})`);
+      grad.addColorStop(0.6, `rgba(160,45,40,${0.05 * s})`);
+      grad.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (pv.anomaly > 0) {
+      const s = pv.anomaly;
+      const strobe = 0.5 + 0.5 * Math.sin(t * 9);
+      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.3, W * 0.5, H * 0.5, Math.max(W, H) * 0.75);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, `rgba(255,40,30,${0.24 * s * strobe})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (pv.pressure > 0) {
+      const s = pv.pressure;
+      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.2, W * 0.5, H * 0.5, Math.max(W, H) * 0.7);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, `rgba(0,0,0,${0.5 * s})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (pv.spawnPressure > 0) {
+      const s = pv.spawnPressure;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 2.5);
+      ctx.save();
+      ctx.lineWidth   = 6 * s;
+      ctx.strokeStyle = `rgba(80,255,180,${0.22 * s * pulse})`;
+      ctx.strokeRect(2, 2, W - 4, H - 4);
+      ctx.restore();
+    }
+
+    if (pv.scarcity > 0.3) {
+      const s = (pv.scarcity - 0.3) / 0.7;
+      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.35, W * 0.5, H * 0.5, Math.max(W, H) * 0.65);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, `rgba(255,140,30,${0.18 * s})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (pv.tax > 0) {
+      const s = pv.tax;
+      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.5);
+      grad.addColorStop(0, `rgba(255,215,0,${0.06 * s})`);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
   }
 
   /**

@@ -43,6 +43,10 @@ window.MurmurationModules.Economy = class Economy {
     this.trustThreshold = opts.trustThreshold || 0.15;    // min trust to count as ally
     this.scarcityLevel  = opts.scarcityLevel  || 0.5;     // slider: 0=easy, 1=harsh
 
+    // ── V2 optional engine references (set externally, null = v1 behavior) ──
+    this.terrain = null;
+    this.seasons = null;
+
     // ── Reproduction ──
     this.birthCooldown  = opts.birthCooldown  || 600;     // min ticks between births (~10sec)
     this.birthEnergy    = opts.birthEnergy    || 0.75;    // parent must have this much energy
@@ -206,7 +210,9 @@ window.MurmurationModules.Economy = class Economy {
 
     // Zone regeneration
     for (const zone of this.zones) {
-      zone.depleted = Math.max(0, zone.depleted - 0.0005 * mult.zoneShrink);
+      let regenRate = 0.0005 * mult.zoneShrink;
+      if (this.seasons) regenRate *= this.seasons.mods.zonRegen;
+      zone.depleted = Math.max(0, zone.depleted - regenRate);
     }
 
     // Wind rotation — slow drift creates sweeping flock motion
@@ -241,7 +247,9 @@ window.MurmurationModules.Economy = class Economy {
       }
 
       // ── DRAIN ──
-      const drain = this.baseDrain * mult.drain * scarcityMod;
+      let drainMod = 1.0;
+      if (this.seasons) drainMod *= this.seasons.mods.drain;
+      const drain = this.baseDrain * mult.drain * scarcityMod * drainMod;
       agent.energy -= drain;
 
       // ── HARVEST ──
@@ -254,6 +262,10 @@ window.MurmurationModules.Economy = class Economy {
           const proximity = 1 - (dist / (zone.radius + this.harvestRadius));
           const effective = zone.richness * (1 - zone.depleted) * proximity;
           let gain = this.soloHarvest * effective * mult.harvest;
+
+          // V2: terrain and season harvest multipliers (compound with economy phase)
+          if (this.terrain) gain *= this.terrain.getHarvestMultiplier(agent.x, agent.y);
+          if (this.seasons) gain *= this.seasons.mods.harvest;
 
           // Cooperation bonus
           const allies = this.world.getNeighbors(agent, this.coopRadius)
@@ -537,7 +549,10 @@ window.MurmurationModules.Economy = class Economy {
 
   tickReproduction(alive) {
     const tick = this.world.time;
-    if (tick - this._lastBirthTick < this.birthCooldown) return;
+    // V2: seasons modify birth cooldown (winter = almost no births)
+    let cooldown = this.birthCooldown;
+    if (this.seasons) cooldown = Math.round(cooldown / this.seasons.mods.reproduction);
+    if (tick - this._lastBirthTick < cooldown) return;
 
     // Carrying capacity — no births if at max
     const currentPop = alive.length;

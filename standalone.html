@@ -9,11 +9,16 @@
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#06080a;--surface:#0c0f13;--border:#1a1f26;--border-hi:#2a3040;--text:#c8cdd5;--text-dim:#5a6270;--accent:#00ff99;--accent-dim:#00ff9940;--red:#ff3344;--amber:#ff8800;--cyan:#00ccff}
 body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code','Fira Code',monospace;overflow-x:hidden}
+
+/* Grain texture */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.025;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:200px 200px}
+
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
 
 /* Header */
-.header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border)}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);position:relative}
+.header::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 0%,rgba(0,255,153,0.04) 0%,transparent 70%)}
 .header h1{font-size:1.1em;letter-spacing:3px;color:var(--accent);font-weight:600}
 .header .tag{font-size:.6em;color:var(--text-dim);letter-spacing:1px;padding:3px 8px;border:1px solid var(--border);border-radius:3px}
 
@@ -23,18 +28,31 @@ a:hover{text-decoration:underline}
 .sidebar{width:300px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
 
 /* Canvas */
-.canvas-wrap{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center}
+.canvas-wrap{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+/* Scanlines */
+.canvas-wrap::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.03) 3px,rgba(0,0,0,0.03) 4px)}
+/* Vignette */
+.canvas-wrap::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse at 50% 50%,transparent 40%,rgba(0,0,0,0.4) 100%);animation:flicker 8s ease-in-out infinite}
+@keyframes flicker{0%,100%{opacity:1}50%{opacity:.97}}
 .canvas-wrap canvas{display:block;width:100%;height:100%}
-.canvas-overlay{position:absolute;top:12px;left:16px;pointer-events:none}
-.canvas-overlay .co-label{font-size:.65em;color:var(--accent);opacity:.6;letter-spacing:2px}
-.canvas-overlay .co-val{font-size:1.8em;color:var(--accent);font-weight:700;line-height:1.1}
+.canvas-overlay{position:absolute;top:12px;left:16px;pointer-events:none;background:rgba(6,8,10,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--border-hi);border-radius:4px;padding:12px 16px}
+.canvas-overlay .co-label{font-size:.65em;color:var(--accent);opacity:.6;letter-spacing:2px;text-transform:uppercase}
+.canvas-overlay .co-val{font-size:2.4em;color:var(--accent);font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
 .canvas-overlay .co-sub{font-size:.6em;color:var(--text-dim);margin-top:2px}
+.canvas-overlay .co-phase{font-size:.6em;margin-top:4px;letter-spacing:1px;text-transform:uppercase;font-weight:600}
+.canvas-overlay .co-phase.golden{color:var(--accent)}
+.canvas-overlay .co-phase.disaster{color:var(--red)}
+.canvas-overlay .co-phase.neutral{color:var(--text-dim)}
 
 /* Bottom bar */
 .bottom-bar{height:32px;display:flex;align-items:center;gap:12px;padding:0 16px;border-top:1px solid var(--border);background:var(--surface);font-size:.65em;color:var(--text-dim)}
+.bottom-bar .seg{padding:0 12px;border-right:1px solid var(--border)}
+.bottom-bar .seg:last-child{border-right:none;border-left:1px solid var(--border);margin-left:-12px;padding-left:24px}
 .bottom-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim)}
-.bottom-bar .dot.active{background:var(--accent);box-shadow:0 0 6px var(--accent-dim)}
+.bottom-bar .dot.active{background:var(--accent);box-shadow:0 0 6px var(--accent-dim);animation:pulse-dot 1s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:.7}}
 .bottom-bar .status{flex:1}
+.bottom-bar .time-val,.bottom-bar .agent-val{font-variant-numeric:tabular-nums;color:var(--text)}
 
 /* Sidebar sections */
 .sb-section{padding:14px 16px;border-bottom:1px solid var(--border)}
@@ -56,30 +74,45 @@ a:hover{text-decoration:underline}
 
 /* Seed sliders */
 .seed-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.seed-tag{font-size:.55em;padding:1px 5px;border-radius:2px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-dim);min-width:28px;text-align:center}
+.seed-tag{font-size:.65em;padding:2px 6px;border-radius:2px;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,255,153,0.3);min-width:32px;text-align:center;font-weight:600}
 .seed-name{font-size:.7em;color:var(--text-dim);flex:1;min-width:60px}
-.seed-row input[type=range]{flex:2;accent-color:var(--accent);height:4px}
+.seed-row input[type=range]{flex:2;accent-color:var(--accent);height:4px;cursor:pointer}
+.seed-row input[type=range]::-webkit-slider-runnable-track{background:var(--bg);height:4px;border-radius:2px}
+.seed-row input[type=range]::-webkit-slider-thumb{background:var(--accent);border:none;border-radius:50%;width:12px;height:12px;margin-top:-4px;cursor:pointer}
 .seed-val{font-size:.7em;color:var(--accent);width:32px;text-align:right;font-variant-numeric:tabular-nums}
 .btn-inject{width:100%;padding:7px;font-family:inherit;font-size:.72em;cursor:pointer;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:3px;letter-spacing:1px;transition:all .15s;margin-top:6px}
 .btn-inject:hover{background:var(--accent-dim)}
-.btn-inject.flash{background:var(--accent);color:#000;font-weight:700}
+.btn-inject.flash{background:var(--accent);color:#000;font-weight:700;box-shadow:0 0 20px var(--accent-dim),inset 0 0 20px rgba(0,255,153,0.2)}
 
 /* Emergence metrics */
 .metric{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:.72em}
 .metric .mk{color:var(--text-dim)}
 .metric .mv{color:var(--text);font-variant-numeric:tabular-nums}
+/* Colored dot prefix on metric values */
+.metric .mv::before{content:'●';font-size:.5em;margin-right:5px;vertical-align:middle}
 .metric .mv.hi{color:var(--accent)}
+.metric .mv.hi::before{color:var(--accent)}
 .metric .mv.lo{color:var(--red)}
+.metric .mv.lo::before{color:var(--red)}
 .metric .mv.warn{color:var(--amber)}
+.metric .mv.warn::before{color:var(--amber)}
+.metric .mv.neutral{color:var(--text)}
+.metric .mv.neutral::before{color:var(--text-dim)}
 .metric-sep{border-top:1px solid var(--border);margin:6px 0}
 
 /* Trust/Grief bars */
 .bar-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:.65em}
 .bar-label{color:var(--text-dim);width:50px}
-.bar-track{flex:1;height:4px;background:var(--bg);border-radius:2px;overflow:hidden}
-.bar-fill{height:100%;border-radius:2px;transition:width .3s}
+.bar-track{flex:1;height:4px;background:var(--bg);border-radius:2px;overflow:visible;position:relative}
+/* Tick marks at threshold */
+.bar-track::before{content:'';position:absolute;top:50%;transform:translateY(-50%);width:1px;height:8px;background:var(--border-hi);border-radius:1px}
+.bar-track.trust-threshold::before{left:70%}
+.bar-track.grief-threshold::before{left:50%}
+.bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
 .bar-fill.trust{background:var(--cyan)}
+.bar-fill.trust.glow{box-shadow:0 0 8px var(--cyan),0 0 16px rgba(0,204,255,0.4)}
 .bar-fill.grief{background:var(--amber)}
+.bar-fill.grief.glow{box-shadow:0 0 8px var(--amber),0 0 16px rgba(255,136,0,0.4)}
 .bar-val{color:var(--text-dim);width:32px;text-align:right;font-variant-numeric:tabular-nums}
 
 /* Log */
@@ -89,6 +122,23 @@ a:hover{text-decoration:underline}
 .log-wrap .l-emerge{color:var(--accent)}
 .log-wrap .l-sys{color:var(--text-dim)}
 .log-wrap .l-tick{color:#1a3a2a}
+/* Each log entry gets a colored left border and timestamp */
+.log-wrap span{display:block;padding:1px 0 1px 8px;border-left:2px solid transparent;margin-left:-8px;animation:fade-in-log .3s ease}
+@keyframes fade-in-log{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:translateY(0)}}
+.log-wrap .l-seed{border-left-color:var(--cyan)}
+.log-wrap .l-evolve{border-left-color:var(--amber)}
+.log-wrap .l-emerge{border-left-color:var(--accent)}
+.log-wrap .l-sys{border-left-color:var(--text-dim)}
+.log-wrap .l-tick{border-left-color:#1a3a2a}
+/* Timestamp prefix */
+.log-wrap span::before{content:attr(data-t);color:var(--text-dim);opacity:.4;margin-right:4px;font-size:.9em}
+/* Blinking cursor at end of last line */
+.log-wrap::after{content:'█';color:var(--accent);opacity:.6;animation:blink-cursor 1s step-end infinite;display:inline-block;width:0;overflow:hidden;white-space:nowrap}
+@keyframes blink-cursor{0%,100%{opacity:.6}50%{opacity:0}}
+/* Scrollbar styling */
+.log-wrap::-webkit-scrollbar{width:4px}
+.log-wrap::-webkit-scrollbar-track{background:var(--bg)}
+.log-wrap::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
 
 /* Action buttons */
 .action-row{display:flex;gap:6px;padding:10px 16px;border-top:1px solid var(--border);background:var(--surface)}
@@ -100,6 +150,13 @@ a:hover{text-decoration:underline}
 .main{flex-direction:column}
 .sidebar{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--border)}
 }
+
+/* Global scrollbar */
+*{scrollbar-width:thin;scrollbar-color:var(--border-hi) var(--bg)}
+*::-webkit-scrollbar{width:4px;height:4px}
+*::-webkit-scrollbar-track{background:var(--bg)}
+*::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
+*::-webkit-scrollbar-thumb:hover{background:var(--text-dim)}
 </style>
 </head>
 <body>
@@ -117,13 +174,14 @@ a:hover{text-decoration:underline}
         <div class="co-label">PREDICTION</div>
         <div class="co-val" id="overlay-pred">0.000</div>
         <div class="co-sub" id="overlay-conf">confidence 0.00 | <span id="overlay-cluster">diffuse</span></div>
+        <div class="co-phase neutral" id="overlay-phase">NEUTRAL</div>
       </div>
     </div>
     <div class="bottom-bar">
       <div class="dot" id="status-dot"></div>
-      <div class="status" id="status-text">Ready</div>
-      <div id="time-display">T0</div>
-      <div id="agent-display">0 agents</div>
+      <div class="status seg" id="status-text">Ready</div>
+      <div class="seg" id="time-display">T0</div>
+      <div class="seg" id="agent-display">0 agents</div>
     </div>
   </div>
 
@@ -190,14 +248,14 @@ a:hover{text-decoration:underline}
         <div class="metric-sep"></div>
         <div class="bar-row">
           <span class="bar-label">Trust</span>
-          <div class="bar-track"><div class="bar-fill trust" id="bar-trust" style="width:0%"></div></div>
+          <div class="bar-track trust-threshold"><div class="bar-fill trust" id="bar-trust" style="width:0%"></div></div>
           <span class="bar-val" id="m-trust">--</span>
         </div>
         <div class="metric"><span class="mk">Leaders / Depleted</span><span class="mv" id="m-trust-dist">--</span></div>
         <div class="metric-sep"></div>
         <div class="bar-row">
           <span class="bar-label">Grief</span>
-          <div class="bar-track"><div class="bar-fill grief" id="bar-grief" style="width:0%"></div></div>
+          <div class="bar-track grief-threshold"><div class="bar-fill grief" id="bar-grief" style="width:0%"></div></div>
           <span class="bar-val" id="m-grief">--</span>
         </div>
         <div class="metric"><span class="mk">Grieving / Crisis</span><span class="mv" id="m-grief-dist">--</span></div>
@@ -712,6 +770,7 @@ function logLine(msg, type = 'sys') {
   const el = document.getElementById('log');
   const span = document.createElement('span');
   span.className = `l-${type}`;
+  span.setAttribute('data-t', 'T' + (sim && sim.world ? String(sim.world.time).padStart(4, '0') : '0000'));
   span.textContent = msg + '\n';
   el.appendChild(span);
   el.scrollTop = el.scrollHeight;
@@ -735,12 +794,16 @@ function updateUI(em) {
   document.getElementById('m-stab').textContent = (em.stability || 0).toFixed(3);
 
   const trust = (em.avgTrust || 0);
-  document.getElementById('bar-trust').style.width = (trust * 100) + '%';
+  const trustBar = document.getElementById('bar-trust');
+  trustBar.style.width = (trust * 100) + '%';
+  trustBar.className = 'bar-fill trust' + (trust > 0.7 ? ' glow' : '');
   document.getElementById('m-trust').textContent = trust.toFixed(2);
   document.getElementById('m-trust-dist').textContent = `${em.highTrustCount || 0} / ${em.lowTrustCount || 0}`;
 
   const grief = (em.avgGrief || 0);
-  document.getElementById('bar-grief').style.width = (grief * 100) + '%';
+  const griefBar = document.getElementById('bar-grief');
+  griefBar.style.width = (grief * 100) + '%';
+  griefBar.className = 'bar-fill grief' + (grief > 0.5 ? ' glow' : '');
   document.getElementById('m-grief').textContent = grief.toFixed(2);
   document.getElementById('m-grief-dist').textContent = `${em.grievingCount || 0} / ${em.crisisCount || 0}`;
   document.getElementById('m-honor').textContent = `${em.seppukuCount || 0} / ${em.dishonoredCount || 0}`;
@@ -750,8 +813,21 @@ function updateUI(em) {
   document.getElementById('m-wisdom').textContent = em.wisdomCount || 0;
 
   if (sim && sim.world) {
-    document.getElementById('time-display').textContent = 'T' + sim.world.time;
-    document.getElementById('agent-display').textContent = sim.world.agents.filter(a => !a.seppukuDone && !a.isSentinel).length + ' active';
+    const tEl = document.getElementById('time-display');
+    tEl.textContent = 'T' + sim.world.time;
+    tEl.className = 'time-val';
+    const aEl = document.getElementById('agent-display');
+    aEl.textContent = sim.world.agents.filter(a => !a.seppukuDone && !a.isSentinel).length + ' active';
+    aEl.className = 'agent-val';
+
+    // Update phase indicator
+    const phaseEl = document.getElementById('overlay-phase');
+    if (phaseEl && em.avgBelief !== undefined) {
+      const avgBelief = em.avgBelief;
+      if (avgBelief > 0.3) { phaseEl.textContent = 'GOLDEN'; phaseEl.className = 'co-phase golden'; }
+      else if (avgBelief < -0.3) { phaseEl.textContent = 'DISASTER'; phaseEl.className = 'co-phase disaster'; }
+      else { phaseEl.textContent = 'NEUTRAL'; phaseEl.className = 'co-phase neutral'; }
+    }
   }
 
   if (sim && sim.world && sim.world.time % 30 === 0) {
@@ -785,13 +861,17 @@ function resetSim() {
   document.getElementById('overlay-pred').textContent = '0.000';
   document.getElementById('overlay-conf').textContent = 'confidence 0.00 | ';
   document.getElementById('overlay-cluster').textContent = 'diffuse';
+  document.getElementById('overlay-phase').textContent = 'NEUTRAL';
+  document.getElementById('overlay-phase').className = 'co-phase neutral';
   document.getElementById('log').innerHTML = '// Murmuration reset\n';
   ['m-pred','m-conf','m-cluster','m-cascade','m-stab','m-trust','m-trust-dist','m-grief','m-grief-dist','m-honor','m-sentinel','m-wisdom'].forEach(id => {
     document.getElementById(id).textContent = '--';
     document.getElementById(id).className = 'mv';
   });
   document.getElementById('bar-trust').style.width = '0%';
+  document.getElementById('bar-trust').className = 'bar-fill trust';
   document.getElementById('bar-grief').style.width = '0%';
+  document.getElementById('bar-grief').className = 'bar-fill grief';
 }
 
 function seedUpdate(input) {
@@ -853,7 +933,24 @@ function loadFromHash() {
 }
 
 window.addEventListener('resize', () => { if (sim && sim.isRunning) resizeCanvas(); });
-window.addEventListener('load', () => { resizeCanvas(); loadFromHash(); });
+window.addEventListener('load', () => {
+  resizeCanvas();
+  loadFromHash();
+  // Inject phase indicator element into canvas overlay
+  const overlay = document.querySelector('.canvas-overlay');
+  if (overlay) {
+    const phaseEl = document.createElement('div');
+    phaseEl.className = 'co-phase neutral';
+    phaseEl.id = 'overlay-phase';
+    phaseEl.textContent = 'NEUTRAL';
+    overlay.appendChild(phaseEl);
+  }
+  // Inject threshold tick classes on bar tracks
+  const trustTrack = document.querySelector('#bar-trust');
+  if (trustTrack) trustTrack.parentElement.classList.add('trust-threshold');
+  const griefTrack = document.querySelector('#bar-grief');
+  if (griefTrack) griefTrack.parentElement.classList.add('grief-threshold');
+});
 </script>
 </body>
 </html>

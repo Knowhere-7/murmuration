@@ -59,6 +59,11 @@ window.MurmurationModules.Agent = class Agent {
     this._evolutionReady       = false; // true when enough is accumulated for user to inspect/implement
     this._evolutionPulseTimer  = 0;    // drives the radiate animation on gold strings
     this._highTrustTicks       = 0;    // consecutive ticks above the trust threshold
+
+    // Detonation visual effects — set by SeedInjector, decay each frame
+    this._detonationEffect = null;   // 'earthquake'|'paranoia'|'cascade'|'timewarp'|'flood'
+    this._detonationTimer  = 0;      // frames remaining
+    this._detonationStr    = 0;      // intensity 0-1
   }
 
   // ─── ST-1 ────────────────────────────────────────────────────────────────
@@ -436,6 +441,157 @@ window.MurmurationModules.Agent = class Agent {
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // ── DETONATION VISUAL EFFECTS ──
+    if (this._detonationTimer > 0) {
+      const t = this._detonationTimer;
+      const str = this._detonationStr;
+      const progress = 1 - (t / 90); // 0→1 over ~90 frames (~1.5s)
+
+      if (this._detonationEffect === 'earthquake') {
+        // RED shockwave ring expanding outward — the ground is shaking
+        const ringR = this.radius + 3 + progress * 25 * str;
+        const alpha = (1 - progress) * 0.7 * str;
+        ctx.strokeStyle = `rgba(255, 40, 20, ${alpha})`;
+        ctx.lineWidth = 2 - progress * 1.5;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        // inner flash
+        if (progress < 0.3) {
+          ctx.fillStyle = `rgba(255, 80, 30, ${(0.3 - progress) * str})`;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      else if (this._detonationEffect === 'paranoia') {
+        // CYAN ELECTRIC STORM — multiple lightning bolts firing outward,
+        // they're seeing threats in every direction at once.
+        const alpha = (1 - progress) * str;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        // 4 jagged lightning bolts radiating in random directions, re-rolled each frame
+        const bolts = 4;
+        const reach = this.radius + 8 + 14 * str;
+        for (let b = 0; b < bolts; b++) {
+          const ang = (b / bolts) * Math.PI * 2 + Math.random() * 1.2;
+          const len = reach * (0.6 + Math.random() * 0.4);
+          // jagged path: 3 segments stepping outward with lateral jitter
+          const segs = 3;
+          ctx.strokeStyle = `rgba(120, 240, 255, ${alpha * 0.9})`;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y);
+          let px = this.x, py = this.y;
+          for (let s = 1; s <= segs; s++) {
+            const f = s / segs;
+            const perp = (Math.random() - 0.5) * 6 * str;
+            px = this.x + Math.cos(ang) * len * f + Math.cos(ang + 1.57) * perp;
+            py = this.y + Math.sin(ang) * len * f + Math.sin(ang + 1.57) * perp;
+            ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        // pulsing electric halo — flickers hard so it reads as panic
+        const flick = 0.55 + 0.45 * Math.sin(t * 1.7) * (Math.random() > 0.3 ? 1 : 0.3);
+        ctx.strokeStyle = `rgba(0, 230, 255, ${alpha * 0.7 * flick})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 4 + Math.random() * 3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // bright white-cyan core flash at the moment of detonation
+        if (progress < 0.35) {
+          ctx.fillStyle = `rgba(200, 255, 255, ${(0.35 - progress) * 2.5 * str})`;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      else if (this._detonationEffect === 'cascade') {
+        // ORANGE pressure pulse — builds then explodes
+        if (progress < 0.5) {
+          // pressure building — tight vibrating ring
+          const squeeze = 1 + Math.sin(t * 0.8) * 0.3 * str;
+          const alpha = progress * 2 * 0.6 * str;
+          ctx.strokeStyle = `rgba(255, 160, 0, ${alpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius * squeeze + 1.5, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          // BOOM — expanding blast ring
+          const blastProgress = (progress - 0.5) * 2;
+          const blastR = this.radius + 5 + blastProgress * 20 * str;
+          const alpha = (1 - blastProgress) * 0.8 * str;
+          ctx.strokeStyle = `rgba(255, 120, 0, ${alpha})`;
+          ctx.lineWidth = 2.5 - blastProgress * 2;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, blastR, 0, Math.PI * 2);
+          ctx.stroke();
+          // secondary ring
+          if (blastProgress > 0.2) {
+            const r2 = this.radius + 3 + (blastProgress - 0.2) * 15 * str;
+            ctx.strokeStyle = `rgba(255, 200, 50, ${(1 - blastProgress) * 0.4 * str})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r2, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+      }
+
+      else if (this._detonationEffect === 'timewarp') {
+        // PURPLE afterimage trail — time is bending
+        const alpha = (1 - progress) * 0.5 * str;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 1; i <= 3; i++) {
+          const trailX = this.x - this.vx * i * 3;
+          const trailY = this.y - this.vy * i * 3;
+          const trailA = alpha * (1 - i * 0.25);
+          ctx.fillStyle = `rgba(180, 80, 255, ${trailA})`;
+          ctx.beginPath();
+          ctx.arc(trailX, trailY, this.radius * (1 - i * 0.15), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // time distortion halo
+        ctx.strokeStyle = `rgba(200, 100, 255, ${alpha * 0.4})`;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 4 + Math.sin(t * 0.3) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      else if (this._detonationEffect === 'flood') {
+        // GREEN spawn flash — outsiders arriving
+        const alpha = (1 - progress) * 0.7 * str;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const flashR = this.radius + 2 + progress * 8;
+        ctx.fillStyle = `rgba(40, 255, 120, ${alpha * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, flashR, 0, Math.PI * 2);
+        ctx.fill();
+        // newcomer mark — bright core
+        if (progress < 0.4) {
+          ctx.fillStyle = `rgba(100, 255, 180, ${(0.4 - progress) * 2 * str})`;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      this._detonationTimer--;
     }
 
     // ST-2 grief ring — amber (GRIEVING) → pulsing red (CRISIS)

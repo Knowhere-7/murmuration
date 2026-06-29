@@ -41,6 +41,11 @@ window.MurmurationModules.MurmurationSim = class MurmurationSim {
     this.evolutionEngine   = new window.MurmurationModules.EvolutionEngine();
     this.extractor         = new window.MurmurationModules.EmergenceExtractor();
 
+    // V2 options
+    this.v2 = opts.v2 || false;
+    this.terrainPreset = opts.terrainPreset || 'continental';
+    this.seasonLength  = opts.seasonLength  || 1800;
+
     this.isRunning   = false;
     this.animationId = null;
     this.timeStep    = 1; // default — overridden by EcholocationFrequency
@@ -64,9 +69,30 @@ window.MurmurationModules.MurmurationSim = class MurmurationSim {
     const w = this.canvas.width;
     const h = this.canvas.height;
     this.world = new window.MurmurationModules.World(w, h, this.agentCount);
+
+    // V2: bootstrap terrain and seasons if enabled
+    if (this.v2 && window.MurmurationModules.TerrainEngine) {
+      const terrain = new window.MurmurationModules.TerrainEngine(this.world, {
+        preset: this.terrainPreset
+      });
+      this.world.terrain = terrain;
+      if (window.logLine) window.logLine('// V2: Terrain Engine loaded — ' + this.terrainPreset, 'sys');
+    }
+
+    if (this.v2 && window.MurmurationModules.SeasonsEngine) {
+      const seasons = new window.MurmurationModules.SeasonsEngine(
+        this.world,
+        this.world._economy || null,
+        { seasonLength: this.seasonLength }
+      );
+      this.world.seasons = seasons;
+      if (window.logLine) window.logLine('// V2: Seasons Engine loaded — ' + this.seasonLength + ' ticks/season', 'sys');
+    }
+
     this._draw();
     if (window.logLine) {
-      window.logLine(`// World initialized — ${this.agentCount} agents — waiting for RUN`, 'sys');
+      const v2Label = this.v2 ? ' [V2 Environmental Complexity]' : '';
+      window.logLine(`// World initialized — ${this.agentCount} agents${v2Label} — waiting for RUN`, 'sys');
     }
     return this;
   }

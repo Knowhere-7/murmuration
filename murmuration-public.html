@@ -927,6 +927,8 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 <script src="k26.js"></script>
 <script src="economy.js"></script>
 <script src="wealth.js"></script>
+<script src="terrain.js"></script>
+<script src="seasons.js"></script>
 <script src="warninglog.js"></script>
 <script src="murmuration.js"></script>
 
@@ -1149,6 +1151,14 @@ window.addEventListener('resize', () => {
       if (k26.economy && k26.economy.recomputeZonePositions) {
         k26.economy.recomputeZonePositions();
       }
+      // Terrain must regenerate for new canvas dimensions
+      if (k26.terrainEngine) {
+        k26.terrainEngine.resize(c.width, c.height);
+      }
+      // Seasons overlay tracks world dimensions
+      if (k26.seasonsEngine && k26.seasonsEngine._dirty != null) {
+        k26.seasonsEngine._dirty = true;
+      }
     }
     repositionZoneGauges();
   }, 80);
@@ -1169,7 +1179,9 @@ function repositionZoneGauges() {
 
 window.addEventListener('load', () => {
   sizeCanvas();
-  runSim();
+  if (!tryAutoRestore()) {
+    runSim();
+  }
 
   // Fade the hero overlay after 5 seconds
   setTimeout(() => {
@@ -1195,6 +1207,17 @@ function runSim() {
   // Hook UI updates BEFORE starting — the loop fires synchronously on start()
   const origUI = k26.updateUI.bind(k26);
   k26.updateUI = function(e) { origUI(e); updatePresentation(e); };
+
+  // Sync terrain to final canvas size after layout settles
+  requestAnimationFrame(() => {
+    sizeCanvas();
+    const c = document.getElementById('canvas');
+    if (k26 && k26.world) {
+      k26.world.width = c.width;
+      k26.world.height = c.height;
+      if (k26.terrainEngine) k26.terrainEngine.resize(c.width, c.height);
+    }
+  });
 
   k26.start();
 
@@ -1918,7 +1941,9 @@ function saveCivilization() {
       _prevDrawdown: a._prevDrawdown || 0
     })),
     economy: k26.economy ? k26.economy.serialize() : null,
-    wealth: k26.wealthEngine ? k26.wealthEngine.serialize() : null
+    wealth: k26.wealthEngine ? k26.wealthEngine.serialize() : null,
+    terrain: k26.terrainEngine ? k26.terrainEngine.serialize() : null,
+    seasons: k26.seasonsEngine ? k26.seasonsEngine.serialize() : null
   };
 
   const json = JSON.stringify(snapshot, null, 2);
@@ -2001,6 +2026,9 @@ function restoreCivilization(snapshot) {
     if (sa.evolution != null) agent.evolution = sa.evolution;
     if (sa.wealth != null) agent.wealth = sa.wealth;
     if (sa.socialClass) agent.socialClass = sa.socialClass;
+    agent._winterSurvivor = sa._winterSurvivor || false;
+    agent._springRewarded = sa._springRewarded || false;
+    agent._currentTerrain = sa._currentTerrain || null;
     return agent;
   });
 
@@ -2028,6 +2056,28 @@ function restoreCivilization(snapshot) {
 
   if (window.MurmurationModules.WarningLog) {
     k26.warningLog = new window.MurmurationModules.WarningLog();
+  }
+
+  // Restore V2: terrain
+  if (window.MurmurationModules.TerrainEngine) {
+    if (snapshot.terrain) {
+      k26.terrainEngine = window.MurmurationModules.TerrainEngine.restore(k26.world, snapshot.terrain);
+    } else {
+      k26.terrainEngine = new window.MurmurationModules.TerrainEngine(k26.world, { preset: 'continental' });
+    }
+    k26.world.terrain = k26.terrainEngine;
+    if (k26.economy) k26.economy.terrain = k26.terrainEngine;
+  }
+
+  // Restore V2: seasons
+  if (window.MurmurationModules.SeasonsEngine && k26.economy) {
+    if (snapshot.seasons) {
+      k26.seasonsEngine = window.MurmurationModules.SeasonsEngine.restore(k26.world, k26.economy, snapshot.seasons);
+    } else {
+      k26.seasonsEngine = new window.MurmurationModules.SeasonsEngine(k26.world, k26.economy);
+    }
+    k26.world.seasons = k26.seasonsEngine;
+    k26.economy.seasons = k26.seasonsEngine;
   }
 
   // Reconnect sentinel
@@ -2061,6 +2111,93 @@ function restoreCivilization(snapshot) {
   narrate('Civilization restored from snapshot. Tick ' + snapshot.meta.tick + '. ' + snapshot.meta.alive + ' survivors resume.');
   addEvent('CIVILIZATION RESTORED — T' + snapshot.meta.tick + ' — ' + snapshot.meta.alive + ' alive from archive', 'emerge');
 }
+
+// ═══════════ AUTOSAVE — localStorage persistence ═══════════
+
+const AUTOSAVE_KEY = 'murmuration-autosave';
+const AUTOSAVE_INTERVAL = 30000;
+let _autosaveTimer = null;
+
+function autosaveSnapshot() {
+  if (!k26 || !k26.world || !k26.isRunning) return;
+  try {
+    const world = k26.world;
+    const snapshot = {
+      meta: {
+        savedAt: new Date().toISOString(),
+        tick: world.time,
+        alive: world.agents.filter(a => !a.seppukuDone).length,
+        dead: world.agents.filter(a => a.seppukuDone).length,
+        total: world.agents.length,
+        width: world.width,
+        height: world.height
+      },
+      env: { ...world.env },
+      collectiveMemory: world.collectiveMemory ? [...world.collectiveMemory] : [],
+      sentinel: world.sentinel ? world.sentinel.id : null,
+      agents: world.agents.map(a => ({
+        id: a.id, x: a.x, y: a.y, vx: a.vx, vy: a.vy, radius: a.radius,
+        personality: { ...a.personality },
+        beliefState: { ...a.beliefState },
+        trustCharge: a.trustCharge,
+        griefLevel: a.griefLevel,
+        griefState: a.griefState,
+        graceTimer: a.graceTimer,
+        wisdomScore: a.wisdomScore,
+        isSentinel: a.isSentinel,
+        seppukuDone: a.seppukuDone,
+        energy: a.energy != null ? a.energy : null,
+        generation: a.generation || 0,
+        faith: a.faith || 0,
+        evolution: a.evolution || 0,
+        wealth: a.wealth != null ? a.wealth : null,
+        socialClass: a.socialClass || null,
+        memory: a.memory ? a.memory.slice(-10) : [],
+        _prevDrawdown: a._prevDrawdown || 0,
+        _winterSurvivor: a._winterSurvivor || false,
+        _springRewarded: a._springRewarded || false,
+        _currentTerrain: a._currentTerrain || null
+      })),
+      economy: k26.economy ? k26.economy.serialize() : null,
+      wealth: k26.wealthEngine ? k26.wealthEngine.serialize() : null,
+      terrain: k26.terrainEngine ? k26.terrainEngine.serialize() : null,
+      seasons: k26.seasonsEngine ? k26.seasonsEngine.serialize() : null
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
+  } catch (e) { /* localStorage full or serialization error */ }
+}
+
+function startAutosave() {
+  stopAutosave();
+  _autosaveTimer = setInterval(autosaveSnapshot, AUTOSAVE_INTERVAL);
+}
+
+function stopAutosave() {
+  if (_autosaveTimer) { clearInterval(_autosaveTimer); _autosaveTimer = null; }
+}
+
+function tryAutoRestore() {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return false;
+    const snapshot = JSON.parse(raw);
+    if (!snapshot || !snapshot.agents || snapshot.agents.length === 0) return false;
+    const age = Date.now() - new Date(snapshot.meta.savedAt).getTime();
+    if (age > 86400000) { localStorage.removeItem(AUTOSAVE_KEY); return false; }
+    restoreCivilization(snapshot);
+    startAutosave();
+    narrate('Session restored from autosave — T' + snapshot.meta.tick + ', ' + snapshot.meta.alive + ' alive. The swarm remembers.');
+    return true;
+  } catch (e) { return false; }
+}
+
+const _origRunSim = runSim;
+runSim = function() { _origRunSim(); startAutosave(); };
+
+const _origStopSim = stopSim;
+stopSim = function() { autosaveSnapshot(); stopAutosave(); _origStopSim(); };
+
+window.addEventListener('beforeunload', autosaveSnapshot);
 </script>
 
 <script>
