@@ -934,7 +934,7 @@ window.MurmurationModules.Economy = class Economy {
     const progress = this._circuit[colony].progress;
     // Already activated (visited in this cycle) OR is the current target: full harvest
     if (zoneIdx < progress) return 1.0;
-    if (zoneIdx === progress) return 0.6; // at the target node: partial (incentive to reach it)
+    if (zoneIdx === progress) return 0.8; // at the target node: partial harvest, incentive to reach it
     return 0.05; // not yet reached in the circuit
   }
 
@@ -1075,6 +1075,7 @@ window.MurmurationModules.Economy = class Economy {
     }
   }
 };
+
 
 
 

@@ -248,11 +248,6 @@ window.MurmurationModules.WildSystem = class WildSystem {
       const d = Math.hypot(wildX - z.px * w.width, wildY - z.py * w.height);
       if (d < (z.radius || 60) + 80) {
         nearZone = true;
-        // Accelerate zone control toward the killer's colony
-        if (z.controller !== killerColony) {
-          z._dominionPressure = z._dominionPressure || {};
-          z._dominionPressure[killerColony] = ((z._dominionPressure[killerColony] || 0) + 0.12);
-        }
         // Clear the contest flag
         z._wildContested = false;
       }
@@ -349,5 +344,6 @@ window.MurmurationModules.WildSystem = class WildSystem {
     return sys;
   }
 };
+
 
 
