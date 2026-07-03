@@ -12,16 +12,27 @@ window.MurmurationModules.World = class World {
     this.width  = width;
     this.height = height;
     this.agents = [];
-    this.env = {
+    // ── PER-COLONY ENVIRONMENT — each colony evolves on its own path. Every
+    // 'Break the Swarm' trait, plus the new positive/threat levers, is scoped
+    // to A or B independently instead of hitting both at once. ──
+    this.envA = {
       disturbance:  0, // PitViperDivergence
       anomaly:      0, // ElectroreceptionAnomaly
       pressure:     0, // LateralLinePressure
-      timestepRes:  1, // EcholocationFrequency
+      timestepRes:  0, // EcholocationFrequency — cognitive sharpness, NOT sim speed
       spawnFilter:  0, // MantisShrimp16Bands
-      // Cosmetic-only field strengths driven live by sliders (read by k26.draw).
-      // These never mutate trust/grief/belief — DETONATE is what commits damage.
-      preview: { disturbance: 0, anomaly: 0, pressure: 0, spawnPressure: 0, scarcity: 0, tax: 0 }
+      abundance:    0, // Symbiotic Abundance — the positive lever
+      predatorPressure: 0
     };
+    this.envB = {
+      disturbance: 0, anomaly: 0, pressure: 0, timestepRes: 0,
+      spawnFilter: 0, abundance: 0, predatorPressure: 0
+    };
+    // Legacy alias so any code still reading world.env sees colony A's values.
+    this.env = this.envA;
+    // Global time control — ticks processed per rendered frame. 1 = real-time,
+    // 20 = fast-forward evolution. Independent of any per-colony trait.
+    this.simSpeed = 1;
     this.interactionLog = [];
     this.time = 0;
 
@@ -49,19 +60,110 @@ window.MurmurationModules.World = class World {
     // depletes under occupation and regenerates when empty. Holding a zone
     // provides trust recovery; depleted zones punish occupants until they leave.
     // controller: null | 'A' | 'B' | 'CONTESTED'
+    // 10 landing zones — the 5-zone pattern (2 top wide, 1 center, 2 bottom
+    // wide), mirrored per colony side so each colony gets its own full set.
     this.commonsLayout = [
-      { xf: 0.50, yf: 0.48, rf: 0.16, name: 'AGORA',       supply: 1.0, maxOccupants: 10, controller: null, occupantCount: 0, wisdomTicks: 0 },
-      { xf: 0.18, yf: 0.22, rf: 0.09, name: 'NORTH WELL',  supply: 1.0, maxOccupants: 5,  controller: null, occupantCount: 0, wisdomTicks: 0 },
-      { xf: 0.82, yf: 0.22, rf: 0.09, name: 'WATCHTOWER',  supply: 1.0, maxOccupants: 5,  controller: null, occupantCount: 0, wisdomTicks: 0 },
-      { xf: 0.20, yf: 0.78, rf: 0.09, name: 'ROOT CELLAR', supply: 1.0, maxOccupants: 5,  controller: null, occupantCount: 0, wisdomTicks: 0 },
-      { xf: 0.80, yf: 0.78, rf: 0.09, name: 'EMBER RING',  supply: 1.0, maxOccupants: 5,  controller: null, occupantCount: 0, wisdomTicks: 0 },
+      // Colony A / Knowhere side
+      { xf: 0.12, yf: 0.20, rf: 0.058, name: 'WELL · KN I',   supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.38, yf: 0.20, rf: 0.058, name: 'WELL · KN II',  supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.25, yf: 0.50, rf: 0.072, name: 'HEARTH · KN',   supply: 1.0, maxOccupants: 8, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.12, yf: 0.80, rf: 0.058, name: 'WELL · KN III', supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.38, yf: 0.80, rf: 0.058, name: 'WELL · KN IV',  supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      // Colony B / Mainland side (mirrored)
+      { xf: 0.62, yf: 0.20, rf: 0.058, name: 'WELL · ML I',   supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.88, yf: 0.20, rf: 0.058, name: 'WELL · ML II',  supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.75, yf: 0.50, rf: 0.072, name: 'HEARTH · ML',   supply: 1.0, maxOccupants: 8, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.62, yf: 0.80, rf: 0.058, name: 'WELL · ML III', supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
+      { xf: 0.88, yf: 0.80, rf: 0.058, name: 'WELL · ML IV',  supply: 1.0, maxOccupants: 5, controller: null, occupantCount: 0, wisdomTicks: 0 },
     ];
 
-    // ── V2 optional engine references (set externally, null = v1 behavior) ──
-    this.terrain = null;
-    this.seasons = null;
+    // ── THE WALL — a vertical barrier splitting the map into two territories.
+    // Two gates the user opens/closes. Closed = colonies stay separate.
+    // Open = agents (and conflict) bleed across. Movement collision only —
+    // bonds and sightlines still cross, so tension builds along the seam.
+    this.wall = {
+      thickness: 12,
+      gates: [
+        { yf: 0.28, hf: 0.075, open: false, name: 'NORTH GATE' },
+        { yf: 0.72, hf: 0.075, open: false, name: 'SOUTH GATE' }
+      ]
+    };
+
+    // Environmental control knobs (wired to sliders) — per-colony now.
+    this.terrainPullA = 1.0;   // how strongly the topography channels colony A's movement
+    this.terrainPullB = 1.0;   // same, for colony B — independent evolutionary path
 
     this.initAgents(agentCount);
+  }
+
+  /** Toggle a gate open/closed. Returns the new open state. */
+  toggleGate(index) {
+    const g = this.wall.gates[index];
+    if (!g) return null;
+    g.open = !g.open;
+    if (window.logLine) {
+      window.logLine(`${g.open ? '\u25B6 OPENED' : '\u25A0 CLOSED'} \u2014 ${g.name}`, g.open ? 'evolve' : 'warn');
+    }
+    return g.open;
+  }
+
+  /** Keep an agent on whichever side of the wall it was on, unless it is
+   *  passing through an OPEN gate. Called after movement each tick. */
+  applyWallCollision(a) {
+    const wx = this.width / 2, half = this.wall.thickness / 2;
+    // Inside an open gate's vertical window? Free passage.
+    for (const g of this.wall.gates) {
+      if (g.open && Math.abs(a.y - g.yf * this.height) < g.hf * this.height) return;
+    }
+    const prev = (a._wx != null) ? a._wx : a.x;
+    if (prev <= wx) {
+      if (a.x > wx - half) { a.x = wx - half; if (a.vx > 0) a.vx = -a.vx * 0.5; }
+    } else {
+      if (a.x < wx + half) { a.x = wx + half; if (a.vx < 0) a.vx = -a.vx * 0.5; }
+    }
+  }
+
+  /** Neon barrier + gate markers. Called by K26 between connections and agents. */
+  drawWall(ctx) {
+    const W = this.width, H = this.height, wx = W / 2, half = this.wall.thickness / 2;
+    ctx.save();
+    ctx.lineCap = 'round';
+
+    // Solid spans = full height minus the open-gate windows
+    const openIv = this.wall.gates.filter(g => g.open)
+      .map(g => [(g.yf - g.hf) * H, (g.yf + g.hf) * H]).sort((p, q) => p[0] - q[0]);
+    const spans = []; let cur = 0;
+    for (const iv of openIv) { if (iv[0] > cur) spans.push([cur, iv[0]]); cur = Math.max(cur, iv[1]); }
+    if (cur < H) spans.push([cur, H]);
+
+    for (const [ya, yb] of spans) {
+      ctx.strokeStyle = 'rgba(60,200,230,0.10)'; ctx.lineWidth = half * 4;
+      ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
+      ctx.strokeStyle = 'rgba(120,235,255,0.45)'; ctx.lineWidth = half * 2;
+      ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
+      ctx.strokeStyle = 'rgba(240,255,255,0.85)'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
+    }
+
+    // Gate markers — green posts when open, red danger fill when closed
+    for (const g of this.wall.gates) {
+      const yc = g.yf * H, gh = g.hf * H;
+      const col = g.open ? '90,255,170' : '255,95,80';
+      ctx.strokeStyle = `rgba(${col},0.9)`; ctx.lineWidth = 2;
+      for (const py of [yc - gh, yc + gh]) {
+        ctx.beginPath(); ctx.moveTo(wx - half * 3.2, py); ctx.lineTo(wx + half * 3.2, py); ctx.stroke();
+      }
+      if (!g.open) {
+        ctx.setLineDash([5, 6]); ctx.strokeStyle = `rgba(${col},0.55)`; ctx.lineWidth = half * 1.5;
+        ctx.beginPath(); ctx.moveTo(wx, yc - gh); ctx.lineTo(wx, yc + gh); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.font = '7px monospace';
+      ctx.fillStyle = `rgba(${col},0.7)`;
+      ctx.textAlign = 'center';
+      ctx.fillText(g.open ? 'OPEN' : 'SHUT', wx, yc - gh - 5);
+    }
+    ctx.restore();
   }
 
   /** Compute all commons zones from current canvas dimensions.
@@ -83,16 +185,102 @@ window.MurmurationModules.World = class World {
 
   initAgents(count) {
     const Agent = window.MurmurationModules.Agent;
+    const wx = this.width / 2, half = this.wall.thickness / 2, margin = 40;
+    const halfCount = Math.floor(count / 2);
     for (let i = 0; i < count; i++) {
-      const x = Math.random() * this.width;
-      const y = Math.random() * this.height;
+      // First half → colony A (left of the wall), second half → colony B (right)
+      const colony = i < halfCount ? 'A' : 'B';
+      let x;
+      if (colony === 'A') {
+        x = margin + Math.random() * (wx - half - margin * 2);
+      } else {
+        const lo = wx + half + margin;
+        x = lo + Math.random() * (this.width - lo - margin);
+      }
+      const y = margin + Math.random() * (this.height - margin * 2);
       const personality = {
         riskTolerance: Math.random(),
         trustBaseline: 0.3 + Math.random() * 0.4,
         reactivity:    0.5 + Math.random() * 0.5,
         memoryWeight:  0.6 + Math.random() * 0.3
       };
-      this.agents.push(new Agent(i, x, y, personality));
+      const a = new Agent(i, x, y, personality);
+      a.colony = colony;
+      // A rides the violet base hue; B is shifted to teal so the two reads apart
+      a.swarmTint = colony === 'B' ? -96 : 0;
+      this.agents.push(a);
+    }
+  }
+
+  /** Hit reaction — a flash + expanding ring when an agent is struck by
+   *  world pain (chaos signals) or combat (conflict escalation, war games).
+   *  Transient: fades over HIT_MS, drawn as an overlay above the agents. */
+  markHit(agent, color) {
+    if (!agent) return;
+    agent._hitT = performance.now();
+    agent._hitColor = color || '255,70,90';
+  }
+
+  drawHits(ctx) {
+    const HIT_MS = 460;
+    const now = performance.now();
+    for (const a of this.agents) {
+      if (!a._hitT || a.seppukuDone) continue;
+      const e = (now - a._hitT) / HIT_MS;
+      if (e < 0 || e > 1) continue;
+      const r = (a.radius || 3) + 4 + e * 16, al = (1 - e) * 0.85;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(' + a._hitColor + ',' + al.toFixed(3) + ')';
+      ctx.lineWidth = 2 * (1 - e) + 0.4;
+      ctx.beginPath(); ctx.arc(a.x, a.y, r, 0, Math.PI * 2); ctx.stroke();
+      if (e < 0.5) {
+        ctx.fillStyle = 'rgba(' + a._hitColor + ',' + ((0.5 - e) * 1.4).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(a.x, a.y, (a.radius || 3) * 1.35, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Reinforce a single colony mid-simulation (used by the Mantis Shrimp
+   * "flood the gates" trait, scoped to whichever colony triggered it).
+   * New agents spawn on that colony's own side of the wall.
+   */
+  spawnColonyReinforcements(count, colony) {
+    const Agent = window.MurmurationModules.Agent;
+    // Carrying cap — Population Boom can reinforce, but never blow a single
+    // colony past a sane ceiling. Without this, repeated DETONATE clicks push
+    // one colony to hundreds of agents and tank performance for everyone.
+    const PER_COLONY_CAP = 60;
+    const currentColonyCount = this.agents.filter(a => a.colony === colony && !a.seppukuDone).length;
+    const room = PER_COLONY_CAP - currentColonyCount;
+    if (room <= 0) {
+      if (window.logLine) window.logLine('Colony ' + colony + ' is at capacity (' + PER_COLONY_CAP + ') — reinforcements turned away.', 'sys');
+      return;
+    }
+    count = Math.min(count, room);
+    const startId = this.agents.length;
+    const wx = this.width / 2, half = this.wall.thickness / 2, margin = 40;
+    for (let i = 0; i < count; i++) {
+      let x;
+      if (colony === 'A') {
+        x = margin + Math.random() * (wx - half - margin * 2);
+      } else {
+        const lo = wx + half + margin;
+        x = lo + Math.random() * (this.width - lo - margin);
+      }
+      const y = margin + Math.random() * (this.height - margin * 2);
+      const personality = {
+        riskTolerance: Math.random(),
+        trustBaseline: 0.1 + Math.random() * 0.2, // newcomers start low-trust — they're strangers
+        reactivity:    0.5 + Math.random() * 0.5,
+        memoryWeight:  0.6 + Math.random() * 0.3
+      };
+      const a = new Agent(startId + i, x, y, personality);
+      a.colony = colony;
+      a.swarmTint = colony === 'B' ? -96 : 0;
+      this.agents.push(a);
     }
   }
 
@@ -166,14 +354,40 @@ window.MurmurationModules.World = class World {
     }
   }
 
-  setEnv(key, value) {
-    if (this.env.hasOwnProperty(key)) this.env[key] = value;
+  /** Returns the live env trait object for a colony ('A'|'B'|'U'). Unaligned
+   *  agents default to A's environment (they don't have their own path). */
+  envFor(colony) {
+    return colony === 'B' ? this.envB : this.envA;
+  }
+
+  setEnv(key, value, colony = 'A') {
+    const e = this.envFor(colony);
+    if (e.hasOwnProperty(key)) e[key] = value;
+  }
+
+  /** True if a straight line between two agents would have to cross the wall
+   *  outside any open gate window. Used to block sensing/bonding/cohesion
+   *  across a CLOSED wall — closed means closed to sight, not just footsteps.
+   *  An open gate is the only place cross-colony perception is allowed, and
+   *  only for agents actually near that gate's y-band. */
+  _wallBlocksSight(a, b) {
+    const wx = this.width / 2;
+    const sideA = a.x <= wx, sideB = b.x <= wx;
+    if (sideA === sideB) return false; // same side — wall irrelevant
+    const H = this.height;
+    for (const g of this.wall.gates) {
+      if (!g.open) continue;
+      const yc = g.yf * H, band = g.hf * H * 1.4; // slightly generous so a gate reads as a real opening
+      if (Math.abs(a.y - yc) < band && Math.abs(b.y - yc) < band) return false;
+    }
+    return true;
   }
 
   getNeighbors(agent, radius = 50) {
     return this.agents.filter(a =>
       a !== agent &&
-      Math.hypot(a.x - agent.x, a.y - agent.y) < radius
+      Math.hypot(a.x - agent.x, a.y - agent.y) < radius &&
+      !this._wallBlocksSight(agent, a)
     );
   }
 
@@ -205,12 +419,79 @@ window.MurmurationModules.World = class World {
     // Exclude seppuku-complete agents from belief/action — they are memory, not participants
     const active = this.agents.filter(a => !a.seppukuDone);
 
+    // ── TERRAIN — remember pre-move position (for wall collision) and apply a
+    // gentle downhill drift so agents pool in the valleys of the topo map.
+    // Terrain Pull is per-colony now — each side can channel differently. ──
+    const TF = window.TopoField;
+    // ── AMBIENT CURRENT — a slow, steady clockwise eddy so nothing ever goes
+    // fully still, even absent conflict/belief/terrain forces. While the gates
+    // are closed each colony spins its OWN independent current, on its own
+    // side, on its own clock — the two never sync. The moment any gate opens,
+    // the two eddies merge into one current spanning the whole board, so the
+    // flow itself can carry agents across the open seam.
+    const gatesOpen   = this.wall.gates.some(g => g.open);
+    const CURRENT_STRENGTH = 0.19;   // ~5x — a current strong enough to actually carry the drift
+    let swirlCxA, swirlCyA, swirlCxB, swirlCyB;
+    if (gatesOpen) {
+      const curPhase = this.time * 0.00035;              // slow overall drift so the eddy itself wanders
+      const cx = this.width / 2 + Math.cos(curPhase) * this.width * 0.12;
+      const cy = this.height / 2 + Math.sin(curPhase * 0.8) * this.height * 0.12;
+      swirlCxA = swirlCxB = cx;
+      swirlCyA = swirlCyB = cy;
+    } else {
+      const phaseA = this.time * 0.00041;                 // independent clocks — different speed
+      const phaseB = this.time * 0.00029 + 1.7;            // ...and phase offset, so they never sync
+      swirlCxA = this.width * 0.25 + Math.cos(phaseA) * this.width * 0.09;
+      swirlCyA = this.height * 0.5 + Math.sin(phaseA * 0.8) * this.height * 0.14;
+      swirlCxB = this.width * 0.75 + Math.cos(phaseB) * this.width * 0.09;
+      swirlCyB = this.height * 0.5 + Math.sin(phaseB * 0.8) * this.height * 0.14;
+    }
+    for (const a of active) {
+      a._wx = a.x;
+      if (a.isSentinel) continue;
+      const pull = a.colony === 'B' ? this.terrainPullB : this.terrainPullA;
+      if (TF && pull > 0) {
+        const g = TF.gradient(a.x, a.y, this.width, this.height);
+        a.vx -= g.gx * 1.6 * pull;
+        a.vy -= g.gy * 1.6 * pull;
+      }
+      // Tangential current — rotate the radius vector 90° for a clockwise flow
+      const swirlCx = a.colony === 'B' ? swirlCxB : swirlCxA;
+      const swirlCy = a.colony === 'B' ? swirlCyB : swirlCyA;
+      const cdx = a.x - swirlCx, cdy = a.y - swirlCy;
+      const cdist = Math.hypot(cdx, cdy) || 1;
+      a.vx += (-cdy / cdist) * CURRENT_STRENGTH;
+      a.vy += ( cdx / cdist) * CURRENT_STRENGTH;
+      // Wall moat — push off the barrier unless aimed at an open gate
+      const dxw = a.x - this.width / 2, adxw = Math.abs(dxw);
+      if (adxw < 72) {
+        const nearOpen = this.wall.gates.some(g => g.open && Math.abs(a.y - g.yf * this.height) < g.hf * this.height * 1.5);
+        if (!nearOpen) a.vx += (dxw >= 0 ? 1 : -1) * ((72 - adxw) / 72) * 0.10;
+      }
+      // Homeward pull — a stray agent caught on the wrong side of the wall
+      // (left behind after a mass crossing while a gate was open) always feels
+      // a gentle tug back toward its own colony's side. It can't force its way
+      // through a closed wall, but it'll queue up at the seam wanting to go
+      // home, and dart back the moment a gate reopens — so the map self-heals
+      // instead of staying lopsided forever.
+      const wallX = this.width / 2;
+      const stray = (a.colony === 'B') ? (a.x < wallX) : (a.x > wallX);
+      if (stray) {
+        a.vx += (a.colony === 'B' ? 1 : -1) * 0.06;
+      }
+    }
+
     for (const agent of active) {
       if (agent.isSentinel) continue; // sentinel doesn't vote or update belief
       const neighbors      = this.getNeighbors(agent)
         .filter(n => !n.seppukuDone); // don't receive signal from completed agents
       const neighborBeliefs = neighbors.map(n => ({ strength: n.beliefState.current || 0 }));
-      agent.updateBelief(neighborBeliefs, this.env.anomaly + this.env.disturbance);
+      // Per-colony signal — Echolocation Frequency now sharpens how intensely
+      // a colony FEELS its own anomaly/disturbance, instead of secretly being
+      // a global speed control (that's Simulation Speed now).
+      const e = this.envFor(agent.colony);
+      const envSignal = (e.anomaly + e.disturbance) * (0.6 + e.timestepRes * 0.8);
+      agent.updateBelief(neighborBeliefs, envSignal);
       const action = agent.getAction(neighbors);
       this.interactionLog.push({
         time: this.time, agent: agent.id, action, belief: agent.beliefState.current
@@ -422,12 +703,21 @@ window.MurmurationModules.World = class World {
         const toGcx = agent.x - gcx, toGcy = agent.y - gcy;
         const gcDist = Math.hypot(toGcx, toGcy);
         if (gcDist > 1) {
-          agent.vx += (toGcx / gcDist) * 0.015;
-          agent.vy += (toGcy / gcDist) * 0.015;
+          agent.vx += (toGcx / gcDist) * 0.004;
+          agent.vy += (toGcy / gcDist) * 0.004;
         }
       }
 
       agent.move(this.width, this.height);
+    }
+
+    // ── CTF — flag-carrier steering, tags, pickups, scoring. Runs before the
+    // wall collision pass so a raider aimed at a closed gate still gets clamped. ──
+    if (this.ctf) this.ctf.applyForces(active);
+
+    // ── WALL — hold each agent on its side unless it's inside an open gate ──
+    for (const a of active) {
+      if (!a.isSentinel) this.applyWallCollision(a);
     }
 
     // ── COMMONS ZONES — slow agents inside, rotate visitors through ──
@@ -651,10 +941,6 @@ window.MurmurationModules.World = class World {
       }
     }
 
-    // ── V2 ENGINE TICKS — environmental pressure layers ──
-    if (this.terrain) this.terrain.tick();
-    if (this.seasons) this.seasons.tick();
-
     this.time++;
   }
 
@@ -662,17 +948,11 @@ window.MurmurationModules.World = class World {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    // V2: terrain drawn first (under everything, low opacity)
-    if (this.terrain) this.terrain.draw(ctx);
-
     for (const agent of this.agents) {
       agent.draw(ctx);
     }
 
     this.drawOverlay(ctx);
-
-    // V2: seasons drawn last (ambient overlay on top)
-    if (this.seasons) this.seasons.draw(ctx);
   }
 
   /** Env overlay + sentinel label — called separately when K26 controls draw order */
@@ -686,13 +966,11 @@ window.MurmurationModules.World = class World {
       const supply = z.supply ?? 1.0;
       const ctrl   = z.controller; // null | 'A' | 'B' | 'CONTESTED'
 
-      // Pick zone color by controller
-      // Colony A = violet/pink (270°), Colony B = teal (180°), contested = amber, neutral = canopy green
-      let r, g, b;
-      if      (ctrl === 'A')         { r=140; g=60;  b=220; } // violet
-      else if (ctrl === 'B')         { r=20;  g=200; b=200; } // teal
-      else if (ctrl === 'CONTESTED') { r=220; g=140; b=20;  } // amber
-      else                           { r=70;  g=110; b=80;  } // neutral canopy
+      // Zone color — same warm orange as the wall gates, so the 8 landing
+      // zones read clearly against the terrain instead of blending into it.
+      // Controller is still legible via the border style below (solid when
+      // held, dashed amber-pulse when contested, faint dotted when neutral).
+      const r = 255, g = 95, b = 80;
 
       // Contested zones pulse
       const pulse = ctrl === 'CONTESTED'
@@ -754,9 +1032,11 @@ window.MurmurationModules.World = class World {
     }
     ctx.restore();
 
-    // Env overlay — disturbance bleeds Rust Blood at the corner (not clinical yellow)
-    ctx.fillStyle = `rgba(160,45,40,${this.env.disturbance * 0.12})`;
+    // Env overlay — each colony bleeds its own disturbance color in its home corner
+    ctx.fillStyle = `rgba(160,45,40,${this.envA.disturbance * 0.12})`;
     ctx.fillRect(0, 0, this.width * 0.1, this.height * 0.1);
+    ctx.fillStyle = `rgba(40,120,160,${this.envB.disturbance * 0.12})`;
+    ctx.fillRect(this.width * 0.9, 0, this.width * 0.1, this.height * 0.1);
 
     // Sentinel label — pin it so everyone knows
     if (this.sentinel) {

@@ -41,18 +41,20 @@ window.MurmurationModules.Economy = class Economy {
     this.harvestRadius  = opts.harvestRadius  || 80;      // reach around a zone
     this.coopRadius     = opts.coopRadius     || 60;      // ally detection range
     this.trustThreshold = opts.trustThreshold || 0.15;    // min trust to count as ally
-    this.scarcityLevel  = opts.scarcityLevel  || 0.5;     // slider: 0=easy, 1=harsh
-
-    // ── V2 optional engine references (set externally, null = v1 behavior) ──
-    this.terrain = null;
-    this.seasons = null;
+    this.scarcityLevel  = opts.scarcityLevel  || 0.5;     // legacy fallback (avg of A/B)
+    this.scarcityLevelA = opts.scarcityLevelA != null ? opts.scarcityLevelA : this.scarcityLevel;
+    this.scarcityLevelB = opts.scarcityLevelB != null ? opts.scarcityLevelB : this.scarcityLevel;
+    // Symbiotic Abundance — the positive counterpart to scarcity. Per colony.
+    // High = cooperation pays off harder, drain eases, evolution accrues faster.
+    this.abundanceA     = opts.abundanceA || 0;
+    this.abundanceB     = opts.abundanceB || 0;
 
     // ── Reproduction ──
     this.birthCooldown  = opts.birthCooldown  || 600;     // min ticks between births (~10sec)
     this.birthEnergy    = opts.birthEnergy    || 0.75;    // parent must have this much energy
     this.birthTrust     = opts.birthTrust     || 0.4;     // parent must be this trusted
     this.birthCost      = opts.birthCost      || 0.3;     // energy parent sacrifices
-    this.maxPopulation  = opts.maxPopulation  || 200;     // carrying capacity
+    this.maxPopulation  = opts.maxPopulation  || 120;     // carrying capacity (matches new 60/60 default start)
     this._lastBirthTick = 0;
     this.totalBirths    = 0;
     this.nextAgentId    = 1000; // IDs for newborns start high to avoid collisions
@@ -92,13 +94,21 @@ window.MurmurationModules.Economy = class Economy {
     const w = this.world.width;
     const h = this.world.height;
 
-    // 5 sacred zones — fixed cross pattern, each with a name and role
+    // 10 resource zones — the 5-zone pattern (2 top wide, 1 center, 2 bottom
+    // wide), mirrored per colony side so each colony gets its own full set.
     const layout = [
-      { px: 0.50, py: 0.46, name: 'HEARTH',   richness: 1.0,  radius: 110 }, // center
-      { px: 0.17, py: 0.20, name: 'SHELTER',  richness: 0.75, radius: 90  }, // top-left
-      { px: 0.86, py: 0.20, name: 'MARKET',   richness: 0.85, radius: 95  }, // top-right
-      { px: 0.17, py: 0.78, name: 'DISTRICT', richness: 0.80, radius: 90  }, // bottom-left
-      { px: 0.86, py: 0.78, name: 'COMMONS',  richness: 0.90, radius: 100 }, // bottom-right
+      // Colony A / Knowhere side
+      { px: 0.12, py: 0.20, name: 'WELL · KN I',   richness: 0.85, radius: 40 },
+      { px: 0.38, py: 0.20, name: 'WELL · KN II',  richness: 0.85, radius: 40 },
+      { px: 0.25, py: 0.50, name: 'HEARTH · KN',   richness: 1.00, radius: 50 },
+      { px: 0.12, py: 0.80, name: 'WELL · KN III', richness: 0.85, radius: 40 },
+      { px: 0.38, py: 0.80, name: 'WELL · KN IV',  richness: 0.85, radius: 40 },
+      // Colony B / Mainland side (mirrored)
+      { px: 0.62, py: 0.20, name: 'WELL · ML I',   richness: 0.85, radius: 40 },
+      { px: 0.88, py: 0.20, name: 'WELL · ML II',  richness: 0.85, radius: 40 },
+      { px: 0.75, py: 0.50, name: 'HEARTH · ML',   richness: 1.00, radius: 50 },
+      { px: 0.62, py: 0.80, name: 'WELL · ML III', richness: 0.85, radius: 40 },
+      { px: 0.88, py: 0.80, name: 'WELL · ML IV',  richness: 0.85, radius: 40 },
     ];
 
     for (const z of layout) {
@@ -198,7 +208,8 @@ window.MurmurationModules.Economy = class Economy {
 
   tick() {
     const mult = this.phaseMultipliers;
-    const scarcityMod = 1 + this.scarcityLevel * 0.4;
+    const scarcityModA = 1 + this.scarcityLevelA * 0.4;
+    const scarcityModB = 1 + this.scarcityLevelB * 0.4;
 
     // Phase timer — only non-GOLDEN phases count down back toward golden
     if (this.phase !== 'GOLDEN') {
@@ -210,9 +221,7 @@ window.MurmurationModules.Economy = class Economy {
 
     // Zone regeneration
     for (const zone of this.zones) {
-      let regenRate = 0.0005 * mult.zoneShrink;
-      if (this.seasons) regenRate *= this.seasons.mods.zonRegen;
-      zone.depleted = Math.max(0, zone.depleted - regenRate);
+      zone.depleted = Math.max(0, zone.depleted - 0.0005 * mult.zoneShrink);
     }
 
     // Wind rotation — slow drift creates sweeping flock motion
@@ -246,10 +255,11 @@ window.MurmurationModules.Economy = class Economy {
         agent._highTrustTicks = 0;
       }
 
-      // ── DRAIN ──
-      let drainMod = 1.0;
-      if (this.seasons) drainMod *= this.seasons.mods.drain;
-      const drain = this.baseDrain * mult.drain * scarcityMod * drainMod;
+      // ── DRAIN — Symbiotic Abundance eases the cost of living for a colony
+      // that's cultivated it; Scarcity is its harsher opposite. ──
+      const abundanceMod = 1 - (agent.colony === 'B' ? this.abundanceB : this.abundanceA) * 0.35;
+      const scarcityMod  = agent.colony === 'B' ? scarcityModB : scarcityModA;
+      const drain = this.baseDrain * mult.drain * scarcityMod * abundanceMod;
       agent.energy -= drain;
 
       // ── HARVEST ──
@@ -261,11 +271,10 @@ window.MurmurationModules.Economy = class Economy {
           atZone = true;
           const proximity = 1 - (dist / (zone.radius + this.harvestRadius));
           const effective = zone.richness * (1 - zone.depleted) * proximity;
-          let gain = this.soloHarvest * effective * mult.harvest;
-
-          // V2: terrain and season harvest multipliers (compound with economy phase)
-          if (this.terrain) gain *= this.terrain.getHarvestMultiplier(agent.x, agent.y);
-          if (this.seasons) gain *= this.seasons.mods.harvest;
+          let gain = this.soloHarvest * effective * mult.harvest
+                    * (agent._terrainHarvest != null ? agent._terrainHarvest : 1.0)
+                    * (agent._seasonHarvest  != null ? agent._seasonHarvest  : 1.0)
+                    * (agent._terrainSeasonMod != null ? agent._terrainSeasonMod : 1.0);
 
           // Cooperation bonus
           const allies = this.world.getNeighbors(agent, this.coopRadius)
@@ -275,9 +284,10 @@ window.MurmurationModules.Economy = class Economy {
 
           const allyCount = Math.min(allies.length, 6);
           if (allyCount > 0) {
-            gain *= 1 + this.coopBonus * Math.sqrt(allyCount);
-            agent.updateTrust(+0.0003 * allyCount);
-            agent.updateGrief(-0.0004 * allyCount);
+            const abundBoost = 1 + (agent.colony === 'B' ? this.abundanceB : this.abundanceA) * 0.6;
+            gain *= 1 + this.coopBonus * Math.sqrt(allyCount) * abundBoost;
+            agent.updateTrust(+0.0003 * allyCount * abundBoost);
+            agent.updateGrief(-0.0004 * allyCount * abundBoost);
           }
 
           harvested += gain;
@@ -549,10 +559,7 @@ window.MurmurationModules.Economy = class Economy {
 
   tickReproduction(alive) {
     const tick = this.world.time;
-    // V2: seasons modify birth cooldown (winter = almost no births)
-    let cooldown = this.birthCooldown;
-    if (this.seasons) cooldown = Math.round(cooldown / this.seasons.mods.reproduction);
-    if (tick - this._lastBirthTick < cooldown) return;
+    if (tick - this._lastBirthTick < this.birthCooldown) return;
 
     // Carrying capacity — no births if at max
     const currentPop = alive.length;
@@ -603,6 +610,11 @@ window.MurmurationModules.Economy = class Economy {
     const child = new Agent(childId, cx, cy, childPersonality);
     child.energy = 0.5; // born with half energy — parents fed them
     child.generation = Math.max(parent1.generation || 0, parent2.generation || 0) + 1;
+    // Colony inheritance — a newborn belongs to whichever colony bore it
+    // (both parents are always same-colony by construction, since coop/birth
+    // only fires between neighbors and the wall keeps colonies apart).
+    child.colony = parent1.colony || parent2.colony || 'A';
+    child.swarmTint = child.colony === 'B' ? -96 : 0;
 
     // ── EVOLUTION INHERITANCE — carry what was actually earned ──
     const boost = this._crystallizationBoost || 0;
@@ -799,6 +811,10 @@ window.MurmurationModules.Economy = class Economy {
       phaseTimer: this.phaseTimer,
       cycleCount: this.cycleCount,
       scarcityLevel: this.scarcityLevel,
+      scarcityLevelA: this.scarcityLevelA,
+      scarcityLevelB: this.scarcityLevelB,
+      abundanceA: this.abundanceA,
+      abundanceB: this.abundanceB,
       totalHarvested: this.totalHarvested,
       totalBirths: this.totalBirths,
       nextAgentId: this.nextAgentId,
@@ -814,11 +830,28 @@ window.MurmurationModules.Economy = class Economy {
     econ.phaseTimer = data.phaseTimer || 0;
     econ.cycleCount = data.cycleCount || 0;
     econ.scarcityLevel = data.scarcityLevel || 0.5;
+    econ.scarcityLevelA = data.scarcityLevelA != null ? data.scarcityLevelA : econ.scarcityLevel;
+    econ.scarcityLevelB = data.scarcityLevelB != null ? data.scarcityLevelB : econ.scarcityLevel;
+    econ.abundanceA = data.abundanceA || 0;
+    econ.abundanceB = data.abundanceB || 0;
     econ.totalHarvested = data.totalHarvested || 0;
     econ.totalBirths = data.totalBirths || 0;
     econ.nextAgentId = data.nextAgentId || 1000;
-    if (data.zones) econ.zones = data.zones.map(z => ({ ...z }));
+    // Reconcile against the CURRENT zone layout (already built fresh in the
+    // constructor above) rather than trusting the save wholesale — an old save
+    // may carry a stale zone map (different names/positions/count) from before
+    // a code change. Match by name and only carry over mutable resource state
+    // (depletion); position/radius/richness always come from the live layout.
+    if (data.zones) {
+      const savedByName = new Map(data.zones.map(z => [z.name, z]));
+      econ.zones = econ.zones.map(freshZone => {
+        const saved = savedByName.get(freshZone.name);
+        if (!saved) return freshZone;
+        return { ...freshZone, depleted: saved.depleted != null ? saved.depleted : freshZone.depleted };
+      });
+    }
     if (data.sacredGrounds) world.sacredGrounds = data.sacredGrounds.map(sg => ({ ...sg }));
     return econ;
   }
 };
+

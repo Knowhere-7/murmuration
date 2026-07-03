@@ -11,6 +11,8 @@ window.MurmurationModules.K26 = class K26 {
     this.canvas = document.getElementById(canvasId);
     this.world = null;
     this.economy = null;
+    this.terrainEngine = null;
+    this.seasonsEngine = null;
     this.wealthEngine = null;
     this.warningLog = null;
     this.seedInjector = new window.MurmurationModules.SeedInjector();
@@ -21,7 +23,7 @@ window.MurmurationModules.K26 = class K26 {
     this.animationId = null;
   }
 
-  init(agentCount = 50) {
+  init(agentCount = 130) {
     const width = this.canvas.width;
     const height = this.canvas.height;
     this.world = new window.MurmurationModules.World(width, height, agentCount);
@@ -42,27 +44,30 @@ window.MurmurationModules.K26 = class K26 {
       });
     }
 
+    // Apex predators — per-colony Predator Pressure hunting mechanic
+    if (window.MurmurationModules.PredatorSystem) {
+      this.predatorSystem = new window.MurmurationModules.PredatorSystem(this.world);
+    }
+
+    // Capture the Flag — war games, off by default
+    if (window.MurmurationModules.CTFSystem) {
+      this.ctf = new window.MurmurationModules.CTFSystem(this.world);
+      this.world.ctf = this.ctf;
+    }
+
     // Warning Log — cascade risk tracking
     if (window.MurmurationModules.WarningLog) {
       this.warningLog = new window.MurmurationModules.WarningLog();
     }
 
-    // V2: Terrain Engine — the world isn't flat anymore
+    // Terrain Engine — elevation-backed biome modifiers
     if (window.MurmurationModules.TerrainEngine) {
-      this.terrainEngine = new window.MurmurationModules.TerrainEngine(this.world, {
-        preset: 'continental'
-      });
-      this.world.terrain = this.terrainEngine;
-      if (this.economy) this.economy.terrain = this.terrainEngine;
+      this.terrainEngine = new window.MurmurationModules.TerrainEngine(this.world);
     }
 
-    // V2: Seasons Engine — time has rhythm
-    if (window.MurmurationModules.SeasonsEngine && this.economy) {
-      this.seasonsEngine = new window.MurmurationModules.SeasonsEngine(
-        this.world, this.economy, { seasonLength: 1800 }
-      );
-      this.world.seasons = this.seasonsEngine;
-      this.economy.seasons = this.seasonsEngine;
+    // Seasons Engine — SPRING/SUMMER/AUTUMN/WINTER cycle
+    if (window.MurmurationModules.SeasonsEngine) {
+      this.seasonsEngine = new window.MurmurationModules.SeasonsEngine(this.world, this.economy);
     }
 
     this.draw();
@@ -78,14 +83,22 @@ window.MurmurationModules.K26 = class K26 {
   step() {
     // Orchestrate
     this.interactionEngine.computeInteractions(this.world);
+    // Terrain — biome modifiers (speed, harvest cache, drain, stealth) from elevation field
+    if (this.terrainEngine) this.terrainEngine.tick();
     this.world.advanceStep();
     this.evolutionEngine.evolve(this.world);
+
+    // Seasons — reads _currentBiome, writes _seasonHarvest + _terrainSeasonMod for economy
+    if (this.seasonsEngine) this.seasonsEngine.tick();
 
     // Economy tick — energy drain, harvesting, cooperation bonuses, phase cycle
     if (this.economy) this.economy.tick();
 
     // Wealth tick — surplus accumulation, class assignment, employment, revolution
     if (this.wealthEngine) this.wealthEngine.tick();
+
+    // Apex predator tick — hunts stragglers, scoped to each colony's own pressure
+    if (this.predatorSystem) this.predatorSystem.tick();
   }
 
   extract() {
@@ -97,10 +110,9 @@ window.MurmurationModules.K26 = class K26 {
     const loop = () => {
       if (!this.isRunning) return;
       try {
-        // Time warp: echolocation slider controls steps per frame
-        // 0 = 1 step (normal), 1.0 = up to 8 steps per frame
-        const warpVal = this.world ? (this.world.env.timestepRes || 0) : 0;
-        const stepsPerFrame = Math.max(1, Math.round(1 + warpVal * 7));
+        // Simulation Speed — dedicated 1x–20x fast-forward control.
+        // Decoupled from Echolocation Frequency, which is now a real per-colony trait.
+        const stepsPerFrame = Math.max(1, Math.min(20, Math.round(this.world ? (this.world.simSpeed || 1) : 1)));
         for (let i = 0; i < stepsPerFrame; i++) {
           this.step();
         }
@@ -123,13 +135,33 @@ window.MurmurationModules.K26 = class K26 {
   draw() {
     const ctx = this.canvas.getContext('2d');
     if (!this.world) return;
+
+    // Keep the simulation world locked to the canvas — if the canvas resized
+    // (preview pane, window, DPR shift), rescale agent positions to fill it so
+    // the swarm never shrinks into a corner or a stale sub-rectangle.
+    if (this.canvas.width > 0 && this.canvas.height > 0 &&
+        (this.world.width !== this.canvas.width || this.world.height !== this.canvas.height)) {
+      const ow = this.world.width || this.canvas.width;
+      const oh = this.world.height || this.canvas.height;
+      const sx = this.canvas.width / ow;
+      const sy = this.canvas.height / oh;
+      for (const a of this.world.agents) {
+        if (typeof a.x === 'number') a.x *= sx;
+        if (typeof a.y === 'number') a.y *= sy;
+      }
+      this.world.width = this.canvas.width;
+      this.world.height = this.canvas.height;
+      if (this.economy && this.economy.recomputeZonePositions) this.economy.recomputeZonePositions();
+      if (this.world.onResize) this.world.onResize();
+    }
+
     const W = this.world.width, H = this.world.height;
 
     // Layer 1: vanta void + state-reactive nebula (see VISUAL-BIBLE.md)
     this.drawBackground(ctx, W, H);
 
-    // Layer 1.5: V2 terrain underlay (low opacity biome map)
-    if (this.terrainEngine) this.terrainEngine.draw(ctx);
+    // Layer 1.5: seasonal ambient tint (over topo, under zones)
+    if (this.seasonsEngine) this.seasonsEngine.draw(ctx);
 
     // Layer 2: resource zones UNDER agents (so agents stay crisp)
     if (this.economy) this.economy.draw(ctx);
@@ -137,117 +169,27 @@ window.MurmurationModules.K26 = class K26 {
     // Layer 3: connection strings — persistent neural web (additive light)
     this.drawConnections(ctx);
 
+    // Layer 3.5: the wall + gates — above bonds, below agents
+    if (this.world.drawWall) this.world.drawWall(ctx);
+
     // Layer 4: agents on top
-    // Slider preview field — cosmetic-only modulation while user drags Break-the-Swarm sliders.
-    // Jitter (disturbance), alpha flicker (anomaly), inward drift (pressure). No state mutation.
-    const pv = (this.world.env && this.world.env.preview) || null;
-    const jitter   = pv ? pv.disturbance   : 0;
-    const flicker  = pv ? pv.anomaly       : 0;
-    const drift    = pv ? pv.pressure      : 0;
-    const cx = W * 0.5, cy = H * 0.5;
     for (const agent of this.world.agents) {
-      if (!pv || (jitter === 0 && flicker === 0 && drift === 0)) {
-        agent.draw(ctx);
-        continue;
-      }
-      ctx.save();
-      if (drift > 0) {
-        ctx.translate((cx - agent.x) * drift * 0.06, (cy - agent.y) * drift * 0.06);
-      }
-      if (jitter > 0) {
-        ctx.translate((Math.random() - 0.5) * jitter * 6, (Math.random() - 0.5) * jitter * 6);
-      }
-      if (flicker > 0 && Math.random() < flicker * 0.5) {
-        ctx.globalAlpha = 0.35 + Math.random() * 0.55;
-      }
       agent.draw(ctx);
-      ctx.restore();
     }
+
+    // Layer 4.2: hit reactions — strike flashes for chaos signals and combat, above the agents
+    if (this.world) this.world.drawHits(ctx);
+
+    // Layer 4.5: apex predators + CTF flags — above agents so they always read
+    if (this.predatorSystem) this.predatorSystem.draw(ctx);
+    if (this.ctf) this.ctf.draw(ctx);
+    if (this.ctf) this.ctf.drawHonor(ctx);
 
     // Layer 5: class indicators (wealth rings, crowns)
     if (this.wealthEngine) this.wealthEngine.draw(ctx);
 
     // Layer 6: env overlay + sentinel label
     this.world.drawOverlay(ctx);
-
-    // Layer 7: V2 season ambient overlay + indicator
-    if (this.seasonsEngine) this.seasonsEngine.draw(ctx);
-
-    // NOTE: screen-edge slider vignettes removed by design — all effect
-    // signaling now lives ON the agents themselves (detonation visuals).
-  }
-
-  /**
-   * Slider preview feedback — cosmetic edge overlays scaled to env.preview values.
-   * Each slider has a unique signature so the user feels what they're charging.
-   *   disturbance   → rust-blood radial pulse from center
-   *   anomaly       → red strobing edge vignette
-   *   pressure      → slow dark inward vignette (building dread)
-   *   spawnPressure → pulsing green edge ring (incoming)
-   *   scarcity      → warm-orange edge vignette (>0.3 threshold, baseline is 0.5)
-   *   tax           → gold inner glow
-   */
-  drawSliderFeedback(ctx, W, H) {
-    const pv = this.world && this.world.env && this.world.env.preview;
-    if (!pv) return;
-    const t = (this.world.time || 0) * 0.06;
-
-    if (pv.disturbance > 0) {
-      const s = pv.disturbance;
-      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.6);
-      grad.addColorStop(0,   `rgba(160,45,40,${0.14 * s * (0.7 + 0.3 * Math.sin(t * 3))})`);
-      grad.addColorStop(0.6, `rgba(160,45,40,${0.05 * s})`);
-      grad.addColorStop(1,   'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    }
-
-    if (pv.anomaly > 0) {
-      const s = pv.anomaly;
-      const strobe = 0.5 + 0.5 * Math.sin(t * 9);
-      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.3, W * 0.5, H * 0.5, Math.max(W, H) * 0.75);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(1, `rgba(255,40,30,${0.24 * s * strobe})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    }
-
-    if (pv.pressure > 0) {
-      const s = pv.pressure;
-      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.2, W * 0.5, H * 0.5, Math.max(W, H) * 0.7);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(1, `rgba(0,0,0,${0.5 * s})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    }
-
-    if (pv.spawnPressure > 0) {
-      const s = pv.spawnPressure;
-      const pulse = 0.5 + 0.5 * Math.sin(t * 2.5);
-      ctx.save();
-      ctx.lineWidth   = 6 * s;
-      ctx.strokeStyle = `rgba(80,255,180,${0.22 * s * pulse})`;
-      ctx.strokeRect(2, 2, W - 4, H - 4);
-      ctx.restore();
-    }
-
-    if (pv.scarcity > 0.3) {
-      const s = (pv.scarcity - 0.3) / 0.7;
-      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.35, W * 0.5, H * 0.5, Math.max(W, H) * 0.65);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(1, `rgba(255,140,30,${0.18 * s})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    }
-
-    if (pv.tax > 0) {
-      const s = pv.tax;
-      const grad = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.5);
-      grad.addColorStop(0, `rgba(255,215,0,${0.06 * s})`);
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    }
   }
 
   /**
@@ -262,7 +204,7 @@ window.MurmurationModules.K26 = class K26 {
     trust /= n; faith /= n; grief /= n;
     const m = this.world.getEmergenceMetrics ? this.world.getEmergenceMetrics() : { consensus: 0 };
     const consensus   = m.consensus || 0;
-    const disturbance = (this.world.env && this.world.env.disturbance) || 0;
+    const disturbance = (this.world.env && (this.world.envA.disturbance + this.world.envB.disturbance) / 2) || 0;
     let sat = trust * 0.35 + faith * 0.25 + consensus * 0.25 + 0.15 - grief * 0.5 - disturbance * 0.35;
     sat = Math.max(0, Math.min(1, sat));
     // breathe toward the target instead of snapping each frame
@@ -277,6 +219,16 @@ window.MurmurationModules.K26 = class K26 {
   drawBackground(ctx, W, H) {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
+
+    // Neon topographic map — baked once, blitted behind everything.
+    // Self-heal: build it here if it was never wired or the canvas resized,
+    // wrapped so a topo failure can never abort the rest of the frame.
+    if ((!this.topoLayer || this.topoLayer.width !== W || this.topoLayer.height !== H)
+        && window.buildTopoMap && W > 0 && H > 0) {
+      try { this.topoLayer = window.buildTopoMap(W, H); }
+      catch (e) { console.warn('[topo build failed]', e); this.topoLayer = null; }
+    }
+    if (this.topoLayer) ctx.drawImage(this.topoLayer, 0, 0, W, H);
 
     const sat = this.computeMood();
     const hue = sat < 0.5 ? 35 + (sat / 0.5) * 85
@@ -352,22 +304,22 @@ window.MurmurationModules.K26 = class K26 {
         // Neon royal purple → neon orange → neon red → white-grey at snap
         let sh, ss, sl;
         if (strain < 0.55) {
-          sh = 270; ss = 92; sl = 58 + strain * 8;            // neon purple
+          sh = 270; ss = 95; sl = 68 + strain * 8;            // neon purple
         } else if (strain < 0.82) {
           const u = (strain - 0.55) / 0.27;
           sh = 270 - u * 232;                                  // purple → orange (270→38)
-          ss = 92 + u * 8;                                     // stays neon
-          sl = 62 + u * 8;                                     // neon orange ~70%
+          ss = 95 + u * 5;                                     // stays neon
+          sl = 72 + u * 8;                                     // neon orange ~80%
         } else if (strain < 0.94) {
           const u = (strain - 0.82) / 0.12;
           sh = 38 - u * 38;                                    // orange → red
           ss = 100;
-          sl = 70 - u * 15;                                    // neon red ~55%
+          sl = 76 - u * 15;                                    // neon red ~61%
         } else {
           // Grey hair — the last moment before it snaps
           const u = (strain - 0.94) / 0.06;
           sh = 0; ss = Math.max(0, 100 - u * 100);            // drains to white
-          sl = 55 + u * 40;                                    // brightens to silver-white
+          sl = 63 + u * 32;                                    // brightens to silver-white
         }
 
         // Bezier bow — computed first, used by both normal and gold paths
@@ -385,8 +337,9 @@ window.MurmurationModules.K26 = class K26 {
         const conflicted    = a._conflictWith === n.id || n._conflictWith === a.id;
         const conflictLevel = conflicted ? Math.max(a._conflictLevel || 0, n._conflictLevel || 0) : 0;
 
-        // ── EVOLUTION SIGNAL — electric blue when evolution ready ──
-        const evoReady = !conflicted && (a._evolutionReady || n._evolutionReady);
+        // ── EVOLUTION SIGNAL — disabled: bonds keep their strain multicolor
+        //    instead of flipping gold. (Lineage read may return elsewhere.) ──
+        const evoReady = false;
 
         let lineW, strokeCol;
         if (conflicted && conflictLevel > 0) {
@@ -431,8 +384,8 @@ window.MurmurationModules.K26 = class K26 {
                   ctx.beginPath(); ctx.moveTo(a.x, a.y);
                   ctx.quadraticCurveTo(cpx, cpy, n.x, n.y); ctx.stroke();
         } else {
-          lineW         = 0.28 + bond * 0.60 * (0.45 + taut * 0.55);
-          const alpha   = (0.20 + bond * 0.35) * (0.40 + taut * 0.60);
+          lineW         = 0.5 + bond * 0.75 * (0.5 + taut * 0.5);
+          const alpha   = (0.34 + bond * 0.42) * (0.55 + taut * 0.45);
           strokeCol     = `hsla(${sh}, ${ss}%, ${sl}%, ${alpha})`;
         }
 
@@ -557,3 +510,5 @@ window.MurmurationModules.K26 = class K26 {
 
 // Global for UI
 window.K26 = window.MurmurationModules.K26;
+
+

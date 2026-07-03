@@ -1,205 +1,73 @@
-# Murmuration
+# Handoff: Murmuration — Swarm Colony Simulation
 
-### A living X-ray of collective intelligence — with a steering wheel attached.
+## Overview
+Murmuration is a live, self-contained browser simulation: two agent colonies (**Knowhere** and **Mainland**) live on either side of a wall with two gates, competing for shared resource zones. Agents run on emergent behavior rules (belief, trust, honor, grief, evolution, kings) — there is no server and no AI/LLM in the loop, it's deterministic JS physics + rules running in `requestAnimationFrame`.
 
-**Swarm intelligence engine. Zero dependencies. One file.**
+## About These Files — this is NOT a design mockup
+Unlike a typical Claude Code handoff, **these files are the actual working, production-ready front-end** — not a visual reference to be reimplemented. `index.html` runs exactly as-is in any browser with zero build step, zero npm install, zero bundler. Claude Code's job here is most likely:
+- **Deployment** — get this static site hosted (Netlify, Vercel static, GitHub Pages all work with zero config — just point at `index.html`).
+- **Optional integration** — if you want this embedded inside a larger app/framework, treat the JS files as a self-contained engine: they attach everything to `window` (globals + `window.MurmurationModules`), so they can be dropped into any page that loads them in the same `<script src>` order shown below.
+- **Optional refactor** — if asked to modernize into modules/a framework, preserve the exact behavior described below; it's tuned by feel (magic numbers everywhere), not spec, so wholesale rewrites risk silently changing how the sim plays.
 
-Murmuration simulates autonomous agents that form beliefs, build trust, grieve losses, and produce emergent collective signals — all from pure rule-based interactions modeled on biological survival mechanisms. No AI models. No API calls. No frameworks. Open an HTML file, the swarm runs.
+There is nothing to "pixel match" — there's no separate production target this needs to look like. The current `index.html` **is** the target.
 
-**[Live Demo](https://spookygroup.github.io/murmuration/)** | **[Standalone Version](https://spookygroup.github.io/murmuration/standalone.html)**
-
----
-
-## What It Does
-
-Drop 80–300 agents into a world. Each one has a personality, a trust battery, and a grief threshold. They interact, form beliefs, influence each other, and self-organize. From individual rules, collective intelligence emerges:
-
-| Output | What It Measures |
-|--------|-----------------|
-| **Collective Signal** (-1 to 1) | Directional consensus of the swarm |
-| **Confidence** (0 to 1) | How aligned the agents are behind that signal |
-| **Cluster State** | Polarized (split camps) vs Diffuse (distributed) |
-| **Cascade Velocity** | How fast beliefs are propagating through the network |
-| **Network Trust Index** | Average earned authority across all agents |
-| **Systemic Stress** | Average grief/pressure across the population |
-
-The engine ships with six preset scenarios — Flash Crash, Slow Bleed, Black Swan, Recovery, Contagion, Euphoria — that demonstrate how the swarm responds to different types of disruption in real time.
-
----
-
-## Run It
-
-No install. No build step. No dependencies.
-
-```
-git clone https://github.com/SpookyGroup/murmuration.git
-open index.html
-```
-
-Or download `index.html` and double-click it. That's it.
-
----
-
-## The Trait System
-
-Murmuration is built on a biological trait architecture. Each trait is modeled on a real survival mechanism and translates to a specific computational behavior. The traits interact — trust affects belief propagation, grief modulates reactivity, memory shapes future decisions.
-
-### Core Traits
-
-| # | Trait | Biological Source | What It Does |
-|---|-------|------------------|--------------|
-| **ST-1** | Trust Battery | Social bonding + earned authority | Dynamic trust that charges on successful cooperation, drains on conflict, decays in isolation. Replaces static weights with live credibility. Agents don't start trusted — they earn it. |
-| **ST-2** | Grief Variable | Loss processing in social species | Behavioral modifier triggered by significant loss. Three terminal exits: **Honored Exit** (agent correctly computes it can no longer serve the collective — redistributes trust to survivors), **Failure** (agent refuses to exit despite inability to contribute — becomes the Sentinel), **NEMESIS** (external enforcement for constitutional violations). |
-| **#14** | Epigenetic Memory | Epigenetic inheritance | Successful belief patterns strengthen over time. Agents that consistently align with emergent consensus develop stronger memory weight — what worked gets written deeper. |
-| **#3** | Pheromone Trail | Ant colony trail pheromones | Failed patterns decay and eventually vanish. Bad signals evaporate. The system forgets what doesn't work, naturally, without explicit cleanup. |
-| **#31** | Echolocation | Bat echolocation frequency | Controls simulation resolution. Higher frequency = finer-grained observation. The system can tune how closely it watches. |
-| **#32** | Lateral Line | Fish lateral line organ | Pressure detection triggers cascade events. When environmental pressure crosses a threshold, the signal amplifies through the network — modeling how systemic risk propagates. |
-| **#33** | Electroreception | Shark electroreception | Anomaly detection modulates agent reactivity. When something is off, every agent in range becomes more sensitive. The swarm develops heightened awareness before the signal is even clear. |
-| **#34** | Pit Viper | Pit viper infrared sensing | Divergence signal that disturbs the world environment. Injects volatility into the system — models external shocks, market events, sudden changes in conditions. |
-| **#16** | Mantis Shrimp | Mantis shrimp 16-band color vision | Multi-band filter controlling agent spawning. Determines which new agents enter the simulation and under what conditions — the system's immune response to population dynamics. |
-
-### The Sentinel
-
-When an agent fails — when it reaches crisis and refuses to exit honorably — it becomes the **Sentinel**. There is always exactly one. It cannot participate, vote, or influence. It exists as a visible marker of systemic risk: the cost of prioritizing self over collective, rendered permanent and unmistakable. Every agent in the swarm can see it. The Sentinel makes the equation clearer for agents approaching their own crisis.
-
-### Collective Memory
-
-When an agent makes an honored exit, its accumulated wisdom is written to collective memory at 2x weight. The swarm doesn't just lose a member — it inherits what that member learned. Loss becomes institutional knowledge. This is how the system gets smarter over time without any external training.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│                  MURMURATION                     │
-│                                                  │
-│  ┌──────────┐  ┌──────────────┐  ┌───────────┐ │
-│  │  Agents   │→│ Interaction  │→│ Evolution  │  │
-│  │ (beliefs, │  │   Engine     │  │  Engine    │ │
-│  │  trust,   │  │ (propagation,│  │ (memory,   │ │
-│  │  grief)   │  │  conflict,   │  │  decay,    │ │
-│  │           │  │  bonding)    │  │  seppuku,  │ │
-│  └──────────┘  └──────────────┘  │  sentinel) │ │
-│       ↑                           └───────────┘ │
-│       │         ┌──────────────┐       │        │
-│       └─────────│    World     │←──────┘        │
-│                 │ (env, time,  │                 │
-│  ┌──────────┐  │  collective  │  ┌───────────┐ │
-│  │   Seed    │→│   memory)    │→│ Emergence  │  │
-│  │ Injector  │  └──────────────┘  │ Extractor │ │
-│  └──────────┘                     └───────────┘ │
-│       ↑                                │        │
-│    Signals                         Snapshot     │
-│  (volatility,                    (prediction,   │
-│   anomaly,                        confidence,   │
-│   pressure,                       trust index,  │
-│   resolution,                     stress level) │
-│   sensitivity)                                  │
-└─────────────────────────────────────────────────┘
-```
-
-Zero dependencies. No DOM framework. No state management library. No build tools. The engine is pure JavaScript — classes that take numbers in and produce numbers out. The browser rendering is one function that reads world state and draws to a canvas.
-
----
-
-## Files
-
-| File | What It Is |
-|------|-----------|
-| `index.html` | Enterprise demo — scenario presets, sparklines, intelligence reports |
-| `standalone.html` | Developer demo — raw trait names, direct signal control |
-| `engine/agent.js` | Agent class — personality, trust battery, grief state machine, belief system |
-| `engine/world.js` | World state — environment, agent registry, collective memory, sentinel management |
-| `engine/seed.js` | Seed injector — translates input signals to world parameters |
-| `engine/interaction.js` | Interaction engine — agent-to-agent belief propagation, trust dynamics, grief triggers |
-| `engine/evolution.js` | Evolution engine — epigenetic memory, pheromone decay, seppuku evaluation, dishonor detection |
-| `engine/extractor.js` | Emergence extractor — reads collective behavior into prediction, confidence, and system health metrics |
-
----
-
-## Embed It
+## Entry Point & Load Order
+`index.html` loads these engine files via plain `<script src>` tags, in this exact order (order matters — later files assume earlier globals exist):
 
 ```html
-<canvas id="swarm" width="800" height="600"></canvas>
-<script src="engine/agent.js"></script>
-<script src="engine/world.js"></script>
-<script src="engine/seed.js"></script>
-<script src="engine/interaction.js"></script>
-<script src="engine/evolution.js"></script>
-<script src="engine/extractor.js"></script>
-<script>
-  // Mount and run
-  const canvas = document.getElementById('swarm');
-  const world = new MurmurationModules.World(800, 600, 100);
-  const interact = new MurmurationModules.InteractionEngine();
-  const evolve = new MurmurationModules.EvolutionEngine();
-  const extract = new MurmurationModules.EmergenceExtractor();
-
-  function tick() {
-    interact.computeInteractions(world);
-    world.advanceStep();
-    evolve.evolve(world);
-    world.draw(canvas.getContext('2d'));
-
-    const emergence = extract.extract(world);
-    console.log(emergence.prediction, emergence.confidence);
-
-    requestAnimationFrame(tick);
-  }
-  tick();
-</script>
+<script src="topomap.js"></script>
+<script src="agent.js"></script>
+<script src="world.js"></script>
+<script src="seed.js"></script>
+<script src="interaction.js"></script>
+<script src="evolution.js"></script>
+<script src="extractor.js"></script>
+<script src="k26.js"></script>
+<script src="economy.js"></script>
+<script src="wealth.js"></script>
+<script src="predator.js"></script>
+<script src="ctf.js"></script>
+<script src="warninglog.js"></script>
+<script src="murmuration.js"></script>
 ```
 
----
+No other assets are required. One external dependency: a Google Fonts `@import` in `index.html`'s `<style>` block (Cormorant Garamond, Newsreader, JetBrains Mono) — the page needs internet access to fetch those at runtime, or they should be self-hosted/inlined for a fully offline build.
 
-## Snapshot API
+## File Manifest
+- **topomap.js** — bakes a static elevation/terrain field (glowing iso-line contours) and exposes `TopoField.gradient()`/`height()`, sampled by `world.js` so agents drift downhill and pool into valleys. One continuous field spans the whole board (not mirrored/symmetric left-right by design — the two colonies pool into different valley shapes as a result).
+- **agent.js** — the `Agent` class: position/velocity, belief state, trust, honor/rank, grief, evolution, faith, and `draw()` (all agent visual rendering — hue, glow, rings — lives here).
+- **world.js** — the `World` class: the wall + gates, the 10 landing/resource zones (`commonsLayout`), the ambient current/vortex physics, terrain pull, neighbor queries, wall collision, and `advanceStep()` (the main per-tick update).
+- **k26.js** — the `K26` simulation driver: owns the render loop, draws connection strings (the neural-web bond lines between agents), the wall, and orchestrates all the subsystems below each tick.
+- **economy.js** — the `Economy` class: resource zones (harvest/richness/depletion), births/population cap, serialization (save/restore).
+- **evolution.js** / **extractor.js** — belief/evolution scoring and "emergence" signal extraction (used for the on-page stat panels).
+- **wealth.js** — wealth/social-class simulation layered on top of the economy.
+- **predator.js** — predator/threat mechanics.
+- **ctf.js** — the honor/king/capture-the-flag-style contest system: honor scoring, rank tiers, king crowning per colony (`isKing`), subjects gravitating to their king, and the crown vacating on death.
+- **warninglog.js** — collapse/drawdown warning signal logging (compares predicted vs. actual outcomes).
+- **seed.js** / **interaction.js** — the "Seed Injector" panel (manual perturbation controls: earthquake, paranoia, cascade, etc.) and general UI interaction wiring.
+- **murmuration.js** — top-level module registry (`window.MurmurationModules`) tying the above together.
 
-Call `snapshot()` on a running simulation to get a serializable JSON object — no DOM references, ready for export, storage, or piping to external systems.
+## Core Concepts / Glossary (read before touching behavior)
+- **Colonies**: `A` = Knowhere (turquoise, hue ~176°), `B` = Mainland (pink, hue ~326°). Default population is 60/60 (120 total), enforced at spawn, on restore, and as a birth ceiling (`maxPopulation` in `economy.js`, `RESTORE_CAP_PER_COLONY` in `index.html`, `PER_COLONY_CAP` in `world.js` — keep these three in sync if you change the target population).
+- **The Wall**: a vertical barrier (`world.wall`) splitting the board, with two gates (`NORTH GATE`, `SOUTH GATE`) the user toggles open/closed. Closed = agents/sightlines/bonds can't cross. `world.applyWallCollision()` enforces this every tick using each agent's pre-move side (`a._wx`), not colony identity directly.
+- **Ambient Current**: a slow clockwise vortex (`world.js`, top of `advanceStep()`). While both gates are closed, each colony spins its own independent eddy (different speed + phase, never synced). The moment any gate opens, the two eddies merge into one board-spanning current. A "homeward pull" force nudges any agent stranded on the wrong side of the wall back toward its own colony (it can only actually cross back through an open gate — the pull just queues it at the seam).
+- **Zones** (`world.commonsLayout` / `economy.zones`, kept in sync by name): 10 total, 5 per colony — `WELL · KN I–IV` + `HEARTH · KN` for Knowhere, mirrored `WELL · ML I–IV` + `HEARTH · ML` for Mainland. Zones have `supply`/`richness` that depletes under occupation and regenerates when empty, and a `controller` (`null` | `'A'` | `'B'` | `'CONTESTED'`).
+- **Honor & Kings** (`ctf.js`): agents earn honor through conflict; each colony's top-honor agent is crowned king (`isKing`), holds court instead of raiding, and the crown vacates immediately on death (win or lose) or on seppuku (no honor tier earned that way).
+- **Belief / Grief / Evolution / Faith**: per-agent state machines in `agent.js` driving color (hue), behavior (seppuku, sentinel installation), and the connection-string ("neural web") coloring between bonded agents in `k26.js`.
+- **Save/restore**: the whole civilization autosaves to `localStorage` under key `murmuration.civ.v2` every 3s and on unload, and restores on load if the save is schema-current (`version >= 2`) — see `tryRestore()` in `index.html`. `economy.js`'s `Economy.restore()` reconciles saved zone state against the *current* zone layout by name (not a wholesale overwrite) specifically so a code change to the zone map doesn't get shadowed by a stale save — preserve that pattern if you touch zone restore logic.
 
-```json
-{
-  "platform": "Murmuration by Gnosquam",
-  "timestamp": "2026-05-09T22:14:00.000Z",
-  "cycle": 847,
-  "agentCount": 120,
-  "activeCount": 108,
-  "collectiveSignal": -0.3841,
-  "confidence": 0.72,
-  "clusterState": "polarized",
-  "cascadeVelocity": 0.45,
-  "stability": 0.68,
-  "networkTrust": 0.41,
-  "systemicStress": 0.33,
-  "honoredExits": 4,
-  "nodeFailures": 1,
-  "sentinel": { "active": true, "nodeId": 37 },
-  "collectiveWisdom": 4
-}
-```
+## Deployment
+This is a static site — no build step, no server-side code, no environment variables.
+- **Netlify**: drag the folder (or a zip of it) onto Netlify's manual deploy page, or connect it via GitHub for auto-deploy on push.
+- **GitHub**: there's already a matching repo, `Knowhere-7/murmuration` — that's the natural home for this code if you want push-to-deploy.
+- **Anywhere else**: any static host (Vercel, GitHub Pages, S3+CloudFront, etc.) works — just serve the folder with `index.html` at the root.
 
----
+## Known Non-Determinism / Things Not to "Fix"
+- The terrain field intentionally is NOT mirrored left/right — the two colonies pool into visually different valley shapes on purpose (confirmed desired behavior, not a bug).
+- Population counts, honor values, and king identity will drift/change every session — that's the simulation working, not a state bug.
 
-## Use Cases
+## Assets
+No image/icon assets — everything is rendered via Canvas 2D (`ctx.arc`, gradients, etc.) or inline SVG-free CSS. The only external asset is the Google Fonts import noted above.
 
-- **Risk modeling** — inject market signals, read collective prediction
-- **Consensus simulation** — model how groups reach (or fail to reach) agreement
-- **Organizational dynamics** — simulate trust erosion, recovery, and systemic failure
-- **Education** — teach emergence, swarm behavior, and complex adaptive systems
-- **Research** — testbed for agent-based modeling with biologically-grounded mechanics
-
----
-
-## Origin
-
-Murmuration is part of the [Gnosquam](https://gnosquam.com) sovereign AI architecture — a system designed around the premise that four billion years of biological evolution produced solutions to every coordination problem software has tried to solve from scratch. The trait system is the engineering specification. Biology is not the metaphor. Biology is the blueprint.
-
-Built by Ghost.
-
-*Victory, but engineered.*
-
----
-
-## License
-
-Apache 2.0 — use it, embed it, build on it. Attribution required.
+## Further Reading
+**`HONOR_WAR_BIBLE.md`** (included in this folder) is the canonical spec for the honor/rank/king/war system implemented in `ctf.js` and `agent.js` — read it before modifying any combat, honor, rank, or crown logic. It documents the full rank ladder, how honor is earned/lost, the king crowning/vacating rules, and the save-schema fields (`honor`, `rank`, `isKing`, `fallenRank`) that must stay in sync with `index.html`'s serialize/restore code.

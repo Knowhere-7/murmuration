@@ -264,6 +264,12 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
         neighbor.updateTrust(-0.012);
         neighbor.updateGrief(+0.015);
 
+        // A little burst of battle — the spark that shows a fight is actually happening
+        if (world && world.markHit) {
+          world.markHit(agent, '255,110,50');
+          world.markHit(neighbor, '255,110,50');
+        }
+
         agent._conflictTicks += 8;
         agent._conflictLevel  = Math.min(4, agent._conflictLevel + 1);
 
