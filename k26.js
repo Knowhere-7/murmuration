@@ -160,6 +160,9 @@ window.MurmurationModules.K26 = class K26 {
     // Layer 4.2: hit reactions — strike flashes for chaos signals and combat, above the agents
     if (this.world) this.world.drawHits(ctx);
 
+    // Layer 4.3: lightning storms — paranoia electricity, above the hit flashes
+    if (this.world && this.world.drawLightning) this.world.drawLightning(ctx);
+
     // Layer 4.5: apex predators + CTF flags — above agents so they always read
     if (this.predatorSystem) this.predatorSystem.draw(ctx);
     if (this.ctf) this.ctf.draw(ctx);

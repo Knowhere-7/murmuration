@@ -242,6 +242,92 @@ window.MurmurationModules.World = class World {
     }
   }
 
+  /** Lightning storm — electricity arcing through a colony when paranoia
+   *  (ElectroreceptionAnomaly) strikes. A compound detonation (several chaos
+   *  sliders at once) upgrades the storm: longer, denser, white-blue instead
+   *  of violet. Purely visual — the pain itself is delivered by the seeds. */
+  strikeLightning(colony, strength, opts = {}) {
+    if (!this._storms) this._storms = [];
+    const compound = !!opts.compound;
+    const s = Math.max(0.15, Math.min(1, strength || 0.5));
+    this._storms.push({
+      colony,
+      compound,
+      strength: s,
+      start: performance.now(),
+      duration: compound ? 4200 + s * 2800 : 1400 + s * 1400,
+      color: compound ? '150,200,255' : '200,90,255',
+      boltEvery: compound ? 70 : 150,
+      boltsPerSpawn: compound ? 3 : 1,
+      maxWidth: compound ? 2.6 : 1.6,
+      _nextBolt: 0,
+      _bolts: []
+    });
+    // Never let repeated detonations pile up unbounded storm state
+    if (this._storms.length > 6) this._storms.shift();
+  }
+
+  _spawnBolt(storm) {
+    const pool = this.agents.filter(a => a.colony === storm.colony && !a.seppukuDone);
+    if (pool.length < 2) return;
+    const target = pool[Math.floor(Math.random() * pool.length)];
+    let x1, y1;
+    const x2 = target.x, y2 = target.y;
+    if (Math.random() < 0.35) {
+      // Sky strike — from above the field down onto an agent
+      x1 = target.x + (Math.random() - 0.5) * 160;
+      y1 = -10;
+    } else {
+      // Arc between two colony agents — electricity through the network
+      const other = pool[Math.floor(Math.random() * pool.length)];
+      if (other === target) return;
+      x1 = other.x; y1 = other.y;
+    }
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const px = -dy / len, py = dx / len; // perpendicular for jag offsets
+    const segs = 9 + Math.floor(Math.random() * 6);
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const wobble = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * len * 0.14;
+      pts.push([x1 + dx * t + px * wobble, y1 + dy * t + py * wobble]);
+    }
+    storm._bolts.push({ pts, born: performance.now(), life: 130 + Math.random() * 120 });
+  }
+
+  drawLightning(ctx) {
+    if (!this._storms || !this._storms.length) return;
+    const now = performance.now();
+    this._storms = this._storms.filter(s => now - s.start < s.duration);
+    for (const storm of this._storms) {
+      if (now >= storm._nextBolt) {
+        for (let i = 0; i < storm.boltsPerSpawn; i++) this._spawnBolt(storm);
+        storm._nextBolt = now + storm.boltEvery * (0.7 + Math.random() * 0.6);
+      }
+      storm._bolts = storm._bolts.filter(b => now - b.born < b.life);
+      const fade = 1 - (now - storm.start) / storm.duration; // storm dies down at the end
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const bolt of storm._bolts) {
+        const e = (now - bolt.born) / bolt.life;
+        const al = (1 - e) * 0.9 * Math.min(1, fade * 2);
+        if (al <= 0) continue;
+        ctx.beginPath();
+        bolt.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        // Outer glow pass
+        ctx.strokeStyle = 'rgba(' + storm.color + ',' + (al * 0.35).toFixed(3) + ')';
+        ctx.lineWidth = storm.maxWidth * 3;
+        ctx.stroke();
+        // Hot white core, same path
+        ctx.strokeStyle = 'rgba(255,255,255,' + (al * 0.85).toFixed(3) + ')';
+        ctx.lineWidth = storm.maxWidth * (1 - e * 0.5);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
   /**
    * Reinforce a single colony mid-simulation (used by the Mantis Shrimp
    * "flood the gates" trait, scoped to whichever colony triggered it).

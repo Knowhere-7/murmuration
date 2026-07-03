@@ -11,6 +11,9 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
    *  colony only, so each side can be pushed down its own chaos path. */
   inject(world, signals = {}, colony = 'A') {
     const mine = a => a.colony === colony;
+    // How many chaos sliders are live in this detonation — 2+ means a
+    // compound storm: the sky answers with bigger, longer, colder lightning
+    const activeCount = Object.keys(signals).filter(k => (signals[k] || 0) > 0).length;
 
     // ═══ EARTHQUAKE (PitViperDivergence) ═══
     // Shatters trust, scatters positions, injects grief
@@ -50,6 +53,9 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
         a.updateGrief(str * 0.15);
         if (world.markHit) world.markHit(a, '200,90,255');
       });
+      // The electricity itself — violet arcs solo, white-blue when the
+      // detonation carried multiple sliders
+      if (world.strikeLightning) world.strikeLightning(colony, str, { compound: activeCount >= 2 });
     }
 
     // ═══ TICKING BOMB (LateralLinePressure) ═══
@@ -113,6 +119,14 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
           a.updateGrief(str * 0.08);
         });
       }
+    }
+
+    // ═══ COMPOUND STORM ═══
+    // Three or more sliders in one detonation electrifies the sky even
+    // without paranoia in the mix — the world itself objects
+    if (activeCount >= 3 && !(signals.ElectroreceptionAnomaly > 0) && world.strikeLightning) {
+      const maxStr = Math.max(...Object.values(signals).map(v => v || 0));
+      world.strikeLightning(colony, maxStr, { compound: true });
     }
   }
 
