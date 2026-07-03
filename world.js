@@ -268,32 +268,40 @@ window.MurmurationModules.World = class World {
   }
 
   _spawnBolt(storm) {
+    // The electricity comes FROM the agents themselves — their electric sense
+    // misfiring. Each bolt discharges off an afflicted agent's body: either
+    // jumping to a nearby agent, or crackling off into the space around them.
     const pool = this.agents.filter(a => a.colony === storm.colony && !a.seppukuDone);
-    if (pool.length < 2) return;
-    const target = pool[Math.floor(Math.random() * pool.length)];
-    let x1, y1;
-    const x2 = target.x, y2 = target.y;
-    if (Math.random() < 0.35) {
-      // Sky strike — from above the field down onto an agent
-      x1 = target.x + (Math.random() - 0.5) * 160;
-      y1 = -10;
+    if (!pool.length) return;
+    const src = pool[Math.floor(Math.random() * pool.length)];
+    const x1 = src.x, y1 = src.y;
+    let x2, y2;
+    // Prefer discharging into a nearby colony-mate — paranoia arcs between bodies
+    const reach = storm.compound ? 130 : 90;
+    const near = pool.filter(a => a !== src &&
+      Math.abs(a.x - src.x) < reach && Math.abs(a.y - src.y) < reach &&
+      Math.hypot(a.x - src.x, a.y - src.y) < reach);
+    if (near.length && Math.random() < 0.7) {
+      const dst = near[Math.floor(Math.random() * near.length)];
+      x2 = dst.x; y2 = dst.y;
     } else {
-      // Arc between two colony agents — electricity through the network
-      const other = pool[Math.floor(Math.random() * pool.length)];
-      if (other === target) return;
-      x1 = other.x; y1 = other.y;
+      // No one close enough — a short crackle off the body into open space
+      const ang = Math.random() * Math.PI * 2;
+      const crackleLen = 18 + Math.random() * (storm.compound ? 45 : 28);
+      x2 = x1 + Math.cos(ang) * crackleLen;
+      y2 = y1 + Math.sin(ang) * crackleLen;
     }
     const dx = x2 - x1, dy = y2 - y1;
     const len = Math.hypot(dx, dy) || 1;
     const px = -dy / len, py = dx / len; // perpendicular for jag offsets
-    const segs = 9 + Math.floor(Math.random() * 6);
+    const segs = 6 + Math.floor(Math.random() * 5);
     const pts = [];
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
-      const wobble = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * len * 0.14;
+      const wobble = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * len * 0.22;
       pts.push([x1 + dx * t + px * wobble, y1 + dy * t + py * wobble]);
     }
-    storm._bolts.push({ pts, born: performance.now(), life: 130 + Math.random() * 120 });
+    storm._bolts.push({ pts, born: performance.now(), life: 110 + Math.random() * 110 });
   }
 
   drawLightning(ctx) {
