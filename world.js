@@ -498,14 +498,23 @@ window.MurmurationModules.World = class World {
       });
     }
 
-    // ── Pre-tag commons membership so boids loop can skip them ──
+    // ── Pre-tag commons membership + membrane proximity ──
     const zones = this.getCommonsZones();
+    const membraneThickness = 12; // px — the sticky shell around each zone edge
     for (const agent of active) {
       agent.inCommons = false;
       agent._commonsZone = null;
+      agent._onMembrane = false;
       for (const z of zones) {
-        if (Math.hypot(agent.x - z.cx, agent.y - z.cy) < z.r) {
+        const dist = Math.hypot(agent.x - z.cx, agent.y - z.cy);
+        if (dist < z.r) {
           agent.inCommons = true;
+          agent._commonsZone = z;
+          break;
+        }
+        // Membrane shell: just outside the zone edge
+        if (dist < z.r + membraneThickness) {
+          agent._onMembrane = true;
           agent._commonsZone = z;
           break;
         }
@@ -596,8 +605,9 @@ window.MurmurationModules.World = class World {
 
       const isUnaligned = agent.colony === 'U';
 
-      // Agents in the commons skip ALL flocking — they just drift gently
-      if (agent.inCommons) {
+      // Agents in the commons or on a membrane skip ALL flocking —
+      // the membrane pass below owns their motion
+      if (agent.inCommons || agent._onMembrane) {
         agent.clusterSize = 0;
         agent.move(this.width, this.height);
         continue;
@@ -708,6 +718,21 @@ window.MurmurationModules.World = class World {
         }
       }
 
+      // ── ZONE MEMBRANE DEFLECTION — soft repulsion approaching zone edges ──
+      if (!agent.inCommons && !agent._onMembrane) {
+        for (const z of zones) {
+          const zdx = agent.x - z.cx, zdy = agent.y - z.cy;
+          const zDist = Math.hypot(zdx, zdy);
+          const approach = z.r + 30; // deflection field starts 30px outside edge
+          if (zDist < approach && zDist > 0.1) {
+            const penetration = (approach - zDist) / 30; // 0 at edge of field → 1 at zone surface
+            const znx = zdx / zDist, zny = zdy / zDist;
+            agent.vx += znx * penetration * 0.06;
+            agent.vy += zny * penetration * 0.06;
+          }
+        }
+      }
+
       agent.move(this.width, this.height);
     }
 
@@ -720,34 +745,77 @@ window.MurmurationModules.World = class World {
       if (!a.isSentinel) this.applyWallCollision(a);
     }
 
-    // ── COMMONS ZONES — slow agents inside, rotate visitors through ──
+    // ── COMMONS ZONES — membrane behavior ──
+    // Agents hit the outer edge, stick for ~5 seconds, drift along the surface,
+    // then get gently pushed back into the current. Soft membrane, not hard wall.
     for (const agent of active) {
       if (agent.isSentinel) continue;
 
-      if (agent.inCommons && agent._commonsZone) {
+      if (agent._onMembrane && agent._commonsZone) {
+        // ── ON THE MEMBRANE — stick, drift, then reject ──
         const z = agent._commonsZone;
         const dx = agent.x - z.cx, dy = agent.y - z.cy;
         const dist = Math.hypot(dx, dy);
-        const depth = 1 - (dist / z.r);
-        const keep = 0.82 - depth * 0.2;
-        agent.vx *= keep;
-        agent.vy *= keep;
+        if (dist < 0.1) continue;
+        const nx = dx / dist, ny = dy / dist; // outward normal
 
-        // After lingering ~5 sec, nudge toward a DIFFERENT zone — agents travel the network
+        // Kill radial velocity — agent sticks to the surface
+        const radialSpeed = agent.vx * nx + agent.vy * ny;
+        agent.vx -= radialSpeed * 0.85 * nx;
+        agent.vy -= radialSpeed * 0.85 * ny;
+
+        // Tangential drift — slide along the membrane edge
+        const tx = -ny, ty = nx; // tangent vector (perpendicular to normal)
+        agent.vx += tx * 0.04;
+        agent.vy += ty * 0.04;
+
+        // Dampen speed while on membrane
+        agent.vx *= 0.92;
+        agent.vy *= 0.92;
+
+        // Keep agent on the membrane surface (don't let them slip inside)
+        const targetDist = z.r + 4;
+        if (dist < targetDist) {
+          agent.x = z.cx + nx * targetDist;
+          agent.y = z.cy + ny * targetDist;
+        }
+
+        // Track linger time
+        agent._membraneTicks = (agent._membraneTicks || 0) + 1;
+
+        // After ~5 seconds (300 ticks at 60fps), gentle push outward
+        if (agent._membraneTicks > 300) {
+          const pushStrength = Math.min((agent._membraneTicks - 300) / 120, 1.0);
+          agent.vx += nx * 0.15 * pushStrength;
+          agent.vy += ny * 0.15 * pushStrength;
+        }
+      } else if (agent.inCommons && agent._commonsZone) {
+        // ── INSIDE the zone (got pulled in by desperate-pull or spawned here) ──
+        // Slow down, then push back out toward the membrane edge
+        const z = agent._commonsZone;
+        const dx = agent.x - z.cx, dy = agent.y - z.cy;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.1) {
+          agent.vx += (Math.random() - 0.5) * 0.3;
+          agent.vy += (Math.random() - 0.5) * 0.3;
+          continue;
+        }
+        const nx = dx / dist, ny = dy / dist;
+
+        // Dampen inside the zone
+        agent.vx *= 0.85;
+        agent.vy *= 0.85;
+
+        // Gentle outward push — the zone rejects occupants over time
         agent._commonsTicks = (agent._commonsTicks || 0) + 1;
-        if (agent._commonsTicks > 300) {
-          // Pick a random different zone as the next destination
-          const others = zones.filter(oz => oz !== z);
-          const dest = others[Math.floor(Math.random() * others.length)];
-          const toDx = dest.cx - agent.x, toDy = dest.cy - agent.y;
-          const toD = Math.hypot(toDx, toDy);
-          if (toD > 1) {
-            agent.vx += (toDx / toD) * 0.12;
-            agent.vy += (toDy / toD) * 0.12;
-          }
+        if (agent._commonsTicks > 180) {
+          const ejectForce = Math.min((agent._commonsTicks - 180) / 200, 0.8);
+          agent.vx += nx * 0.1 * ejectForce;
+          agent.vy += ny * 0.1 * ejectForce;
         }
       } else {
         agent._commonsTicks = 0;
+        agent._membraneTicks = 0;
       }
     }
 
