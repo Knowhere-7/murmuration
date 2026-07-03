@@ -271,7 +271,8 @@ window.MurmurationModules.Economy = class Economy {
           atZone = true;
           const proximity = 1 - (dist / (zone.radius + this.harvestRadius));
           const effective = zone.richness * (1 - zone.depleted) * proximity;
-          let gain = this.soloHarvest * effective * mult.harvest
+          const wildPenalty = zone._wildContested ? 0.5 : 1.0; // wilds contest zones
+          let gain = this.soloHarvest * effective * mult.harvest * wildPenalty
                     * (agent._terrainHarvest != null ? agent._terrainHarvest : 1.0)
                     * (agent._seasonHarvest  != null ? agent._seasonHarvest  : 1.0)
                     * (agent._terrainSeasonMod != null ? agent._terrainSeasonMod : 1.0);
@@ -337,6 +338,7 @@ window.MurmurationModules.Economy = class Economy {
     const ghostTTL = 1800; // 30 seconds at 60fps
     this.world.agents = this.world.agents.filter(a => {
       if (!a.seppukuDone) return true;
+      if (a.fallenRank) return true; // battle monuments are permanent
       // Track when they completed seppuku
       if (a._seppukuTick == null) a._seppukuTick = tick;
       return (tick - a._seppukuTick) < ghostTTL;
@@ -854,4 +856,6 @@ window.MurmurationModules.Economy = class Economy {
     return econ;
   }
 };
+
+
 

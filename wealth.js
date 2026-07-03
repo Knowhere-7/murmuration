@@ -206,6 +206,8 @@ window.MurmurationModules.WealthEngine = class WealthEngine {
   // ── REVOLUTION ──────────────────────────────────────────────
 
   triggerRevolution(liveAgents, counts) {
+    if (this.world.time - (this._lastRevolutionTick || -Infinity) < 1800) return;
+    this._lastRevolutionTick = this.world.time;
     this.revolutionCount++;
 
     // The elites lose most of their wealth
@@ -319,3 +321,4 @@ window.MurmurationModules.WealthEngine = class WealthEngine {
     return engine;
   }
 };
+

@@ -97,10 +97,8 @@ window.MurmurationModules.SeasonsEngine = class SeasonsEngine {
     for (const agent of this.world.agents) {
       if (agent.seppukuDone || agent.isSentinel) continue;
       if (agent.griefState === 'DISHONORED') continue;
-
-      // Speed — stacks on top of terrain speed applied in terrain.tick()
-      agent.vx *= m.speed;
-      agent.vy *= m.speed;
+      // Speed scalar — written for Agent.move() to apply at displacement
+      agent._seasonSpeed = m.speed;
 
       // Write harvest mods for economy.tick() to read
       agent._seasonHarvest    = m.harvest;
@@ -232,3 +230,4 @@ window.MurmurationModules.SeasonsEngine = class SeasonsEngine {
     return engine;
   }
 };
+

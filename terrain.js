@@ -79,15 +79,13 @@ window.MurmurationModules.TerrainEngine = class TerrainEngine {
       agent._terrainStealth     = mods.stealth;
       agent._terrainDefense     = mods.defense;
       agent._terrainVisibility  = mods.visibility;
-
-      // Speed — seasons.tick() applies its own multiplier on top of this
-      agent.vx *= mods.speed;
-      agent.vy *= mods.speed;
-
-      // Energy drain from hostile terrain
+// Energy drain from hostile terrain
       if (mods.drain > 0 && agent.energy != null) {
         agent.energy = Math.max(0.05, agent.energy - mods.drain);
       }
     }
   }
 };
+
+
+

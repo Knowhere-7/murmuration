@@ -130,7 +130,8 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
       }
     }
 
-    world.interactionLog = world.interactionLog.concat(interactions.slice(-50));
+    world.interactionLog.push(...interactions.slice(-50));
+    if (world.interactionLog.length > 200) world.interactionLog.splice(0, world.interactionLog.length - 200);
     return interactions;
   }
 
@@ -305,3 +306,4 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
     }
   }
 };
+

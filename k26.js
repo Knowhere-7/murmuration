@@ -13,6 +13,7 @@ window.MurmurationModules.K26 = class K26 {
     this.economy = null;
     this.terrainEngine = null;
     this.seasonsEngine = null;
+    this.wildSystem = null;
     this.wealthEngine = null;
     this.warningLog = null;
     this.seedInjector = new window.MurmurationModules.SeedInjector();
@@ -70,6 +71,12 @@ window.MurmurationModules.K26 = class K26 {
       this.seasonsEngine = new window.MurmurationModules.SeasonsEngine(this.world, this.economy);
     }
 
+    // Wild System — unaligned territorial beasts, apex hunter path to kingship
+    if (window.MurmurationModules.WildSystem) {
+      this.wildSystem = new window.MurmurationModules.WildSystem(this.world);
+      this.world.wildSystem = this.wildSystem;
+    }
+
     this.draw();
   }
 
@@ -99,6 +106,9 @@ window.MurmurationModules.K26 = class K26 {
 
     // Apex predator tick — hunts stragglers, scoped to each colony's own pressure
     if (this.predatorSystem) this.predatorSystem.tick();
+
+    // Wild System tick — unaligned territorial beasts; killing wilds near zones speeds kingship
+    if (this.wildSystem) this.wildSystem.tick();
   }
 
   extract() {
@@ -180,8 +190,9 @@ window.MurmurationModules.K26 = class K26 {
     // Layer 4.2: hit reactions — strike flashes for chaos signals and combat, above the agents
     if (this.world) this.world.drawHits(ctx);
 
-    // Layer 4.5: apex predators + CTF flags — above agents so they always read
+    // Layer 4.5: apex predators + wild beasts + CTF flags — above agents so they always read
     if (this.predatorSystem) this.predatorSystem.draw(ctx);
+    if (this.wildSystem) this.wildSystem.draw(ctx);
     if (this.ctf) this.ctf.draw(ctx);
     if (this.ctf) this.ctf.drawHonor(ctx);
 
@@ -510,5 +521,6 @@ window.MurmurationModules.K26 = class K26 {
 
 // Global for UI
 window.K26 = window.MurmurationModules.K26;
+
 
 

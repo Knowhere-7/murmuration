@@ -72,6 +72,10 @@ window.MurmurationModules.Agent = class Agent {
     this._evolutionReady       = false; // true when enough is accumulated for user to inspect/implement
     this._evolutionPulseTimer  = 0;    // drives the radiate animation on gold strings
     this._highTrustTicks       = 0;    // consecutive ticks above the trust threshold
+
+    // Combat evolution — weapon tier advancement
+    this.weaponTier = 0;  // 0=UNARMED  1=STONE  2=BLADED  3=ADVANCED
+    this.combatXP   = 0;  // earned via predator encounters, wild kills, and conflict
   }
 
   // ─── ST-1 ────────────────────────────────────────────────────────────────
@@ -99,6 +103,10 @@ window.MurmurationModules.Agent = class Agent {
         this.griefState = 'CRISIS';
         this.graceTimer = 0;
       }
+    } else if (this.griefState === 'CRISIS' && this.griefLevel < 0.6) {
+      this.griefState  = 'GRIEVING';
+      this.graceTimer  = 0;
+      this.wisdomScore = Math.min(1, this.wisdomScore + 0.15);
     } else if (this.griefLevel >= 0.3) {
       if (this.griefState === 'ACTIVE') this.griefState = 'GRIEVING';
     } else {
@@ -285,8 +293,9 @@ window.MurmurationModules.Agent = class Agent {
     if (this.y < margin)          this.vy += (margin - this.y) / margin * edgeForce;
     if (this.y > height - margin) this.vy -= (this.y - (height - margin)) / margin * edgeForce;
 
-    this.x += this.vx;
-    this.y += this.vy;
+    const _speedMul = Math.min(1.5, Math.max(0.3, (this._terrainSpeed || 1) * (this._seasonSpeed || 1)));
+    this.x += this.vx * _speedMul;
+    this.y += this.vy * _speedMul;
     this.vx *= 0.95;  // lighter damping — momentum carries
     this.vy *= 0.95;
 
@@ -481,6 +490,33 @@ window.MurmurationModules.Agent = class Agent {
       ctx.stroke();
     }
 
+
+    // Weapon tier indicator — small glyph floating above the agent
+    const wt = this.weaponTier || 0;
+    if (wt > 0) {
+      const wx = this.x, wy = this.y - this.radius - 5;
+      ctx.save();
+      ctx.shadowBlur = wt >= 3 ? 8 : 4;
+      ctx.shadowColor = wt >= 3 ? 'rgba(120,220,255,0.9)' : 'rgba(255,255,255,0.7)';
+      ctx.strokeStyle = wt >= 3 ? 'rgba(120,220,255,0.95)' : 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = wt >= 2 ? 1.2 : 0.9;
+      if (wt === 1) {
+        ctx.beginPath(); ctx.moveTo(wx - 2, wy); ctx.lineTo(wx + 2, wy);
+        ctx.moveTo(wx, wy - 2); ctx.lineTo(wx, wy + 2); ctx.stroke();
+      } else if (wt === 2) {
+        ctx.beginPath(); ctx.moveTo(wx, wy - 2.5); ctx.lineTo(wx - 2.5, wy + 1.5); ctx.lineTo(wx + 2.5, wy + 1.5); ctx.closePath(); ctx.stroke();
+      } else if (wt >= 3) {
+        ctx.beginPath(); ctx.moveTo(wx, wy - 3); ctx.lineTo(wx + 2.5, wy); ctx.lineTo(wx, wy + 3); ctx.lineTo(wx - 2.5, wy); ctx.closePath(); ctx.stroke();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = 'rgba(120,220,255,0.5)';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+    }
     ctx.restore();
   }
 };
+
+
+

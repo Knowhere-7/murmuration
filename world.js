@@ -460,8 +460,9 @@ window.MurmurationModules.World = class World {
       const swirlCy = a.colony === 'B' ? swirlCyB : swirlCyA;
       const cdx = a.x - swirlCx, cdy = a.y - swirlCy;
       const cdist = Math.hypot(cdx, cdy) || 1;
-      a.vx += (-cdy / cdist) * CURRENT_STRENGTH;
-      a.vy += ( cdx / cdist) * CURRENT_STRENGTH;
+      const vortexMod = (a._terrainSpeed != null) ? a._terrainSpeed : 1.0;
+      a.vx += (-cdy / cdist) * CURRENT_STRENGTH * vortexMod;
+      a.vy += ( cdx / cdist) * CURRENT_STRENGTH * vortexMod;
       // Wall moat — push off the barrier unless aimed at an open gate
       const dxw = a.x - this.width / 2, adxw = Math.abs(dxw);
       if (adxw < 72) {
@@ -496,6 +497,7 @@ window.MurmurationModules.World = class World {
       this.interactionLog.push({
         time: this.time, agent: agent.id, action, belief: agent.beliefState.current
       });
+      if (this.interactionLog.length > 200) this.interactionLog.splice(0, this.interactionLog.length - 200);
     }
 
     // ── Pre-tag commons membership so boids loop can skip them ──
@@ -524,10 +526,13 @@ window.MurmurationModules.World = class World {
       const cA = occupants.filter(a => (a.colony || 'A') === 'A').length;
       const cB = occupants.filter(a => a.colony === 'B').length;
       const prevController = layout.controller;
+      const domA = (this._wildDominion && this._wildDominion.A >= 5) ? 1.2 : 1.5;
+      const domB = (this._wildDominion && this._wildDominion.B >= 5) ? 1.2 : 1.5;
       if (occupants.length === 0)         layout.controller = null;
       else if (hasUnaligned)             layout.controller = 'CONTESTED';
-      else if (cA > cB * 1.5)            layout.controller = 'A';
-      else if (cB > cA * 1.5)            layout.controller = 'B';
+      else if (layout._wildContested)    layout.controller = 'CONTESTED';
+      else if (cA > cB * domA)           layout.controller = 'A';
+      else if (cB > cA * domB)           layout.controller = 'B';
       else                               layout.controller = 'CONTESTED';
 
       if (occupants.length > 0) {
@@ -718,6 +723,13 @@ window.MurmurationModules.World = class World {
     // ── WALL — hold each agent on its side unless it's inside an open gate ──
     for (const a of active) {
       if (!a.isSentinel) this.applyWallCollision(a);
+    }
+
+    // ── WALL CROSSING — detect for loop-bonus economy mechanic ──
+    const _wallX = this.width / 2;
+    for (const a of active) {
+      if (a.isSentinel || a._wx == null) continue;
+      if ((a._wx < _wallX) !== (a.x < _wallX)) a._crossedWall = true;
     }
 
     // ── COMMONS ZONES — slow agents inside, rotate visitors through ──
@@ -1064,3 +1076,6 @@ window.MurmurationModules.World = class World {
     };
   }
 };
+
+
+

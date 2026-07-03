@@ -1095,6 +1095,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
   <script src="seasons.js"></script>
 <script src="wealth.js"></script>
 <script src="predator.js"></script>
+<script src="wilds.js"></script>
 <script src="ctf.js"></script>
 <script src="warninglog.js"></script>
 <script src="murmuration.js"></script>
@@ -2393,6 +2394,11 @@ function restoreCivilization(snapshot) {
   if (window.MurmurationModules.SeasonsEngine) {
     k26.seasonsEngine = new window.MurmurationModules.SeasonsEngine(k26.world, k26.economy);
   }
+  // Wild System — restores territorial beasts; world.wildSystem kept in sync
+  if (window.MurmurationModules.WildSystem) {
+    k26.wildSystem = new window.MurmurationModules.WildSystem(k26.world);
+    k26.world.wildSystem = k26.wildSystem;
+  }
 
   // Reconnect sentinel
   if (snapshot.sentinel != null) {
@@ -2583,6 +2589,8 @@ document.addEventListener('keydown', function(e){ if (e.key === 'Escape') toggle
 </script>
 </body>
 </html>
+
+
 
 
 
