@@ -222,6 +222,7 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
         agent._conflictTicks = Math.max(0, agent._conflictTicks - 25);
         agent._conflictLevel = Math.max(1, agent._conflictLevel - 1);
         if (agent._conflictTicks === 0) {
+          const wasCross = agent._crossColonyConflict; // capture before clear
           agent.accumulateEvolution(0.15, 'conflict_resolved');
           neighbor.accumulateEvolution(0.08, 'conflict_resolved');
           agent._conflictWith        = null;
@@ -229,8 +230,7 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
           agent._crossColonyConflict = false;
 
           // Cross-colony negotiated resolution → propose treaty if both colonies willing
-          if (agent._crossColonyConflict && world?.treatyState === 'none') {
-            const agentColony    = agent.colony    || 'A';
+          if (wasCross && world?.treatyState === 'none') {
             const neighborColony = neighbor.colony || 'A';
             const aDoc = world.doctrine?.[agentColony]    || 'neutral';
             const bDoc = world.doctrine?.[neighborColony] || 'neutral';

@@ -85,6 +85,13 @@ window.MurmurationModules.Economy = class Economy {
     // Creates the swooping, flowing movement that defines a murmuration
     this._windAngle = Math.random() * Math.PI * 2;
     this._windSpeed = 0.03; // gentle but persistent
+
+    // ── Circuit — metabolic activation system (gates-closed + gates-open) ──
+    this._circuit = {
+      A: { progress: 0, lastAdvanceTick: 0, completions: 0 },
+      B: { progress: 0, lastAdvanceTick: 0, completions: 0 }
+    };
+    this._openCircuit = { phase: 'GIANT', progress: 0, lastAdvanceTick: 0, completions: 0, _spiralActive: false };
   }
 
   // ── RESOURCE ZONES ──────────────────────────────────────────
@@ -271,8 +278,11 @@ window.MurmurationModules.Economy = class Economy {
           atZone = true;
           const proximity = 1 - (dist / (zone.radius + this.harvestRadius));
           const effective = zone.richness * (1 - zone.depleted) * proximity;
+          const circuitMod = this._circuitHarvestMod(agent, zone);
+          if (circuitMod < 0.01) continue; // zone not yet activated in circuit
+          const stagMod = zone._stagnationPenalty != null ? zone._stagnationPenalty : 1.0;
           const wildPenalty = zone._wildContested ? 0.5 : 1.0; // wilds contest zones
-          let gain = this.soloHarvest * effective * mult.harvest * wildPenalty
+          let gain = this.soloHarvest * effective * mult.harvest * wildPenalty * circuitMod * stagMod
                     * (agent._terrainHarvest != null ? agent._terrainHarvest : 1.0)
                     * (agent._seasonHarvest  != null ? agent._seasonHarvest  : 1.0)
                     * (agent._terrainSeasonMod != null ? agent._terrainSeasonMod : 1.0);
@@ -332,6 +342,9 @@ window.MurmurationModules.Economy = class Economy {
 
     // ── REPRODUCTION — the generational drive ──
     this.tickReproduction(alive);
+
+    // ── CIRCUIT SYSTEM — metabolic activation pulse ──
+    this._tickCircuit();
 
     // ── GHOST CLEANUP — seppuku agents fade after ~30 seconds ──
     const tick = this.world.time;
@@ -748,6 +761,41 @@ window.MurmurationModules.Economy = class Economy {
       ctx.beginPath();
       ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2);
       ctx.fill();
+
+      // ── Circuit indicator — activated zones pulse gently, locked zones dim ──
+      const gatesOpen = this.world.wall && this.world.wall.open;
+      if (!gatesOpen) {
+        for (const colony of ['A', 'B']) {
+          const order = Economy.CIRCUIT_ORDER[colony];
+          const prog = this._circuit[colony].progress;
+          const zIdx = order ? order.indexOf(zone.name) : -1;
+          if (zIdx === -1) continue;
+          if (zIdx < prog) {
+            // Already activated — subtle ring
+            ctx.save();
+            ctx.strokeStyle = colony === 'A' ? 'rgba(40,200,170,0.25)' : 'rgba(220,80,180,0.25)';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          } else if (zIdx === prog) {
+            // Current target — pulsing ring
+            const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.004);
+            ctx.save();
+            ctx.strokeStyle = colony === 'A'
+              ? 'rgba(40,200,170,' + (0.4 + pulse * 0.45) + ')'
+              : 'rgba(220,80,180,' + (0.4 + pulse * 0.45) + ')';
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.arc(zone.x, zone.y, zone.radius + 4, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+        }
+      }
     }
 
     // ── Sacred ground — soft golden crosses where honor was chosen ──
@@ -854,6 +902,177 @@ window.MurmurationModules.Economy = class Economy {
     }
     if (data.sacredGrounds) world.sacredGrounds = data.sacredGrounds.map(sg => ({ ...sg }));
     return econ;
+  }
+
+  // ── CIRCUIT SYSTEM ─────────────────────────────────────────────
+  // Gates closed: each colony must touch its 5 zones farthest-first.
+  // Gates open:   the world shares a cross-colony loop (GIANT then SHORT).
+
+  static CIRCUIT_ORDER = {
+    A: ['WELL · KN I', 'WELL · KN III', 'HEARTH · KN', 'WELL · KN II', 'WELL · KN IV'],
+    B: ['WELL · ML II', 'WELL · ML IV', 'HEARTH · ML', 'WELL · ML I', 'WELL · ML III']
+  };
+
+  static CIRCUIT_GIANT_LOOP = [
+    'WELL · KN I', 'WELL · ML II', 'WELL · KN III', 'WELL · ML IV',
+    'HEARTH · KN', 'HEARTH · ML', 'WELL · KN II', 'WELL · ML I',
+    'WELL · KN IV', 'WELL · ML III'
+  ];
+
+  static CIRCUIT_SHORT_LOOP = ['HEARTH · KN', 'HEARTH · ML'];
+
+  // Returns 0.05 if the zone is locked in the current circuit, 1.0 if active.
+  _circuitHarvestMod(agent, zone) {
+    const gatesOpen = this.world.wall && this.world.wall.open;
+    if (gatesOpen) return 1.0; // open gates: all zones reachable
+    const colony = agent.colony;
+    if (colony === 'U') return 1.0;
+    const order = Economy.CIRCUIT_ORDER[colony];
+    if (!order) return 1.0;
+    const zoneIdx = order.indexOf(zone.name);
+    if (zoneIdx === -1) return 0.05; // other colony's zone, wall is up
+    const progress = this._circuit[colony].progress;
+    // Already activated (visited in this cycle) OR is the current target: full harvest
+    if (zoneIdx < progress) return 1.0;
+    if (zoneIdx === progress) return 0.6; // at the target node: partial (incentive to reach it)
+    return 0.05; // not yet reached in the circuit
+  }
+
+  _tickCircuit() {
+    const gatesOpen = this.world.wall && this.world.wall.open;
+    if (!gatesOpen) {
+      this._tickClosedCircuit();
+    } else {
+      this._tickOpenCircuit();
+    }
+    this._checkStagnation();
+  }
+
+  _tickClosedCircuit() {
+    for (const colony of ['A', 'B']) {
+      const state = this._circuit[colony];
+      const nodes = Economy.CIRCUIT_ORDER[colony];
+      if (state.progress >= nodes.length) {
+        this._circuitComplete(colony);
+        continue;
+      }
+      const targetName = nodes[state.progress];
+      const targetZone = this.zones.find(z => z.name === targetName);
+      if (!targetZone) continue;
+      const atTarget = this.world.agents.filter(a =>
+        !a.seppukuDone && !a.isSentinel && a.colony === colony &&
+        Math.hypot(a.x - targetZone.x, a.y - targetZone.y) < targetZone.radius + this.harvestRadius
+      ).length;
+      if (atTarget >= 3) {
+        state.progress++;
+        state.lastAdvanceTick = this.world.time;
+        if (window.logLine && state.progress < nodes.length) {
+          window.logLine(
+            'o Colony ' + colony + ' circuit ' + state.progress + '/' + nodes.length +
+            ' — ' + targetName + ' activated.', 'emerge'
+          );
+        }
+      }
+    }
+  }
+
+  _tickOpenCircuit() {
+    const open = this._openCircuit;
+    const loop = open.phase === 'GIANT' ? Economy.CIRCUIT_GIANT_LOOP : Economy.CIRCUIT_SHORT_LOOP;
+    if (open.progress >= loop.length) {
+      this._openLoopComplete(open.phase === 'GIANT' ? 'giant' : 'short');
+      return;
+    }
+    const targetName = loop[open.progress];
+    const targetZone = this.zones.find(z => z.name === targetName);
+    if (!targetZone) return;
+    const atTarget = this.world.agents.filter(a =>
+      !a.seppukuDone && !a.isSentinel &&
+      Math.hypot(a.x - targetZone.x, a.y - targetZone.y) < targetZone.radius + this.harvestRadius
+    ).length;
+    if (atTarget >= 5) {
+      open.progress++;
+      open.lastAdvanceTick = this.world.time;
+    }
+  }
+
+  _circuitComplete(colony) {
+    const state = this._circuit[colony];
+    state.completions++;
+    state.progress = 0;
+    state.lastAdvanceTick = this.world.time;
+    for (const a of this.world.agents) {
+      if (!a.seppukuDone && !a.isSentinel && a.colony === colony) {
+        a.energy = Math.min(1.0, (a.energy || 0.5) + 0.22);
+        a.updateTrust(+0.06);
+        a.updateGrief(-0.08);
+      }
+    }
+    if (window.addEvent) {
+      window.addEvent(
+        'o Colony ' + colony + ' metabolic circuit complete (#' + state.completions + ') — energy burst.',
+        'golden'
+      );
+    }
+  }
+
+  _openLoopComplete(type) {
+    const open = this._openCircuit;
+    open.completions++;
+    const big = type === 'giant';
+    const boost = big ? 0.28 : 0.14;
+    for (const a of this.world.agents) {
+      if (!a.seppukuDone && !a.isSentinel) {
+        a.energy = Math.min(1.0, (a.energy || 0.5) + boost);
+        if (big) { a.updateTrust(+0.08); a.updateGrief(-0.10); }
+      }
+    }
+    // Alternate: GIANT -> SHORT -> GIANT ...
+    open.phase = open.phase === 'GIANT' ? 'SHORT' : 'GIANT';
+    open.progress = 0;
+    open.lastAdvanceTick = this.world.time;
+    if (window.addEvent) {
+      window.addEvent(
+        (big ? 'o GIANT LOOP complete' : 'o short loop complete') +
+        ' — next: ' + open.phase + ' loop.', big ? 'golden' : 'emerge'
+      );
+    }
+  }
+
+  _checkStagnation() {
+    const tick = this.world.time;
+    const gatesOpen = this.world.wall && this.world.wall.open;
+    const LIMIT = 400;
+    if (!gatesOpen) {
+      for (const colony of ['A', 'B']) {
+        const state = this._circuit[colony];
+        const nodes = Economy.CIRCUIT_ORDER[colony];
+        const stagnant = state.progress > 0 && (tick - state.lastAdvanceTick) > LIMIT;
+        const side = colony === 'A' ? 'KN' : 'ML';
+        for (const z of this.zones) {
+          if (!z.name || !z.name.includes(side)) continue;
+          const zIdx = nodes.indexOf(z.name);
+          // Only penalize the currently-blocked zone
+          z._stagnationPenalty = (stagnant && zIdx === state.progress) ? 0.6 : 1.0;
+        }
+      }
+    } else {
+      const open = this._openCircuit;
+      const stagnant = open.progress > 0 && (tick - open.lastAdvanceTick) > LIMIT;
+      if (stagnant && !open._spiralActive) {
+        open._spiralActive = true;
+        if (window.addEvent) {
+          window.addEvent(
+            'o STAGNATION — the circuit has stalled. Zone richness cut until the loop resumes.',
+            'crisis'
+          );
+        }
+      } else if (!stagnant) {
+        open._spiralActive = false;
+      }
+      const penalty = open._spiralActive ? 0.6 : 1.0;
+      for (const z of this.zones) z._stagnationPenalty = penalty;
+    }
   }
 };
 
