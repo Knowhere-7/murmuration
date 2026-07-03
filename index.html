@@ -4,58 +4,85 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Murmuration — Collective Intelligence, Built From Survival</title>
-<meta name="description" content="80 agents. Zero scripts. Pure biological instinct. Watch collective intelligence emerge from nothing but survival rules stolen from nature.">
+<meta name="description" content="120 agents. Zero scripts. Pure biological instinct. Watch collective intelligence emerge from nothing but survival rules stolen from nature.">
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=JetBrains+Mono:wght@300;400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#06080a;--surface:#0c0f13;--border:#1a1f26;--border-hi:#2a3040;
-  --text:#c8cdd5;--text-dim:#5a6270;--text-bright:#fff;
-  --accent:#00ff99;--accent-dim:#00ff9933;--accent-mid:#00ff9966;
-  --red:#ff3344;--amber:#ff8800;--cyan:#00ccff;--purple:#aa66ff;
+  --bg:#0b0a09;--surface:#13110e;--border:rgba(232,227,217,0.09);--border-hi:rgba(232,227,217,0.18);
+  --text:#d9d4ca;--text-dim:#7c766b;--text-bright:#f3f0ea;
+  --accent:#c3a16b;--accent-dim:rgba(195,161,107,0.18);--accent-mid:rgba(195,161,107,0.45);
+  --red:#c2615a;--amber:#c79a5c;--cyan:#84a6ad;--purple:#a08bc0;
   --violet:#9945ff;--violet-dim:rgba(153,69,255,0.15);--violet-mid:rgba(153,69,255,0.55);
   --neon-pink:#ff2d7a;--neon-pink-dim:rgba(255,45,122,0.15);--neon-pink-mid:rgba(255,45,122,0.55);
+  --serif:'Cormorant Garamond',Georgia,serif;--read:'Newsreader',Georgia,serif;--mono:'JetBrains Mono','SF Mono',monospace;
 }
-body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code','Fira Code',monospace;overflow-x:hidden;min-height:100vh}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-weight:300;overflow-x:hidden;min-height:100vh;-webkit-font-smoothing:antialiased}
 
 /* ── HEADER ── */
 .header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:12px 24px;border-bottom:1px solid var(--border);
-  background:linear-gradient(90deg, var(--bg), var(--surface));
+  position:fixed;top:0;left:0;right:0;z-index:40;
+  display:flex;align-items:flex-end;justify-content:space-between;
+  padding:12px 26px 12px;border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg, rgba(11,10,9,0.9), rgba(11,10,9,0.45) 65%, transparent);
+  backdrop-filter:blur(4px);pointer-events:none;
 }
-.header h1{font-size:1.1em;letter-spacing:3px;color:var(--accent);font-weight:600}
-.header-sub{font-size:.6em;color:var(--text-dim);letter-spacing:1px}
+.header *{pointer-events:auto}
+.header h1{font-family:var(--serif);font-size:1.9em;letter-spacing:.24em;color:var(--text-bright);font-weight:300;line-height:1;padding-left:2px}
+.header-sub{font-size:.56em;color:var(--text-dim);letter-spacing:.34em;text-transform:uppercase;margin-top:9px;font-weight:300}
 .header-right{display:flex;align-items:center;gap:12px}
-.tag{font-size:.6em;color:var(--text-dim);letter-spacing:1px;padding:3px 8px;border:1px solid var(--border);border-radius:3px}
-.tag-live{color:var(--accent);border-color:var(--accent-dim);animation:pulse-glow 2s infinite}
-@keyframes pulse-glow{0%,100%{opacity:.5;text-shadow:none}50%{opacity:1;text-shadow:0 0 8px var(--accent-mid)}}
+.tag{font-size:.54em;color:var(--text-dim);letter-spacing:.28em;padding:5px 11px;border:1px solid var(--border);border-radius:1px;text-transform:uppercase;font-weight:400}
+.tag-live{color:var(--text);border-color:var(--border-hi);display:flex;align-items:center;gap:7px}
+.tag-live::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse-glow 2.6s infinite}
+@keyframes pulse-glow{0%,100%{opacity:.35}50%{opacity:1;box-shadow:0 0 6px var(--accent-mid)}}
 
 /* ── LAYOUT ── */
-.main{display:flex;height:calc(100vh - 40px);overflow:hidden}
+.main{display:flex;height:100vh;overflow:hidden;position:relative}
 .canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;overflow:hidden}
-.sidebar{width:260px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+/* invisible right-edge hotzone that GROWS on hover so the pointer stays inside it */
+/* Click-to-pin tab — always sits on top, always clickable. No hover races:
+   opening/closing is an explicit click, so it can never get stuck behind
+   whatever's rendered on the canvas underneath. */
+.panel-tab{
+  position:absolute;top:50%;right:0;transform:translateY(-50%);z-index:32;
+  width:22px;height:84px;border-radius:8px 0 0 8px;cursor:pointer;
+  background:rgba(20,20,26,0.55);border:1px solid var(--border-hi);border-right:none;
+  display:flex;align-items:center;justify-content:center;
+  transition:background 0.25s ease,width 0.25s ease;
+}
+.panel-tab:hover{background:rgba(30,30,40,0.75);width:26px}
+.panel-tab span{writing-mode:vertical-rl;font-size:.56em;letter-spacing:.22em;color:var(--text-dim);text-transform:uppercase;pointer-events:none}
+.sidebar{
+  position:absolute;top:0;right:0;bottom:0;width:320px;z-index:30;
+  border-left:1px solid transparent;
+  display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+  background:rgba(9,9,11,0.55);backdrop-filter:blur(12px);
+  transform:translateX(100%);opacity:0;pointer-events:none;
+  transition:transform 0.38s cubic-bezier(.22,.61,.36,1), opacity 0.3s ease;
+}
+.sidebar.open{transform:translateX(0);opacity:1;pointer-events:auto;border-left-color:var(--border-hi)}
+.sidebar.collapsed{transform:translateX(100%)}
 
 /* ── HUD STRIP — panels live below the canvas, not on top of it ── */
 .hud-strip{
-  height:110px;background:#000;
-  border-top:1px solid rgba(0,255,153,0.20);
-  box-shadow:inset 0 1px 0 rgba(255,170,0,0.06);
-  display:flex;align-items:center;gap:0;overflow:hidden;flex-shrink:0;
-  padding:0 8px;
+  position:absolute;left:0;right:0;bottom:0;z-index:15;
+  height:100px;background:linear-gradient(0deg, rgba(11,10,9,0.92), rgba(11,10,9,0.35) 70%, transparent);
+  border-top:none;
+  display:flex;align-items:center;gap:0;overflow:hidden;
+  padding:0 20px;pointer-events:none;
 }
 .hud-panel{
-  flex:1;min-width:100px;max-width:160px;height:90px;
-  border:1px solid rgba(0,255,153,0.10);
-  border-top:2px solid rgba(255,170,0,0.45);
-  padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;
-  background:rgba(0,255,153,0.015);flex-shrink:0;
+  flex:1;min-width:100px;max-width:210px;height:96px;
+  border:none;border-right:1px solid var(--border);
+  padding:16px 20px;display:flex;flex-direction:column;justify-content:center;gap:11px;
+  background:transparent;flex-shrink:0;
 }
 .hud-panel-wide{max-width:240px;flex:1.5;}
-.hp-label{font-size:0.48rem;letter-spacing:0.18em;color:rgba(255,170,0,0.60);text-transform:uppercase}
-.hp-value{font-size:1.3rem;font-weight:600;color:var(--accent);letter-spacing:0.05em;line-height:1;text-shadow:0 0 8px rgba(0,255,153,0.4)}
-.hp-sub{font-size:0.48rem;color:rgba(0,255,153,0.3);letter-spacing:0.1em}
-.hp-bar{height:2px;background:rgba(0,255,153,0.08);border-radius:1px;overflow:hidden}
-.hp-fill{height:100%;background:var(--accent);border-radius:1px;transition:width 0.8s ease}
+.hp-label{font-size:0.5rem;letter-spacing:0.28em;color:var(--text-dim);text-transform:uppercase;font-weight:400}
+.hp-value{font-family:var(--mono);font-size:1.55rem;font-weight:300;color:var(--text-bright);letter-spacing:0.01em;line-height:1}
+.hp-sub{font-size:0.46rem;color:var(--text-dim);letter-spacing:0.2em;opacity:.7}
+.hp-bar{height:1px;background:var(--border);border-radius:0;overflow:hidden}
+.hp-fill{height:100%;background:var(--accent);border-radius:0;transition:width 0.8s ease}
 
 /* ── HERO OVERLAY on canvas — fades out on interaction ── */
 .hero-overlay{
@@ -66,20 +93,19 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 }
 .hero-overlay.faded{opacity:0}
 .hero-title{
-  font-size:2em;letter-spacing:6px;color:var(--accent);font-weight:700;
-  text-shadow:0 0 30px var(--accent-dim), 0 0 60px rgba(0,255,153,0.1);
-  animation:hero-breathe 4s ease-in-out infinite;
-  margin-bottom:8px;
+  font-family:var(--serif);font-size:4.4em;letter-spacing:.18em;color:var(--text-bright);font-weight:300;
+  animation:hero-breathe 6s ease-in-out infinite;
+  margin-bottom:20px;padding-left:.18em;
 }
-@keyframes hero-breathe{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.02)}}
+@keyframes hero-breathe{0%,100%{opacity:.78}50%{opacity:1}}
 .hero-tagline{
-  font-size:.75em;color:var(--text);letter-spacing:2px;
-  opacity:0;animation:hero-fade-in 1.5s ease 0.8s forwards;
-  text-align:center;max-width:500px;line-height:1.6;
+  font-family:var(--read);font-size:1.02em;color:var(--text);letter-spacing:.005em;font-weight:300;font-style:italic;
+  opacity:0;animation:hero-fade-in 1.8s ease 0.8s forwards;
+  text-align:center;max-width:520px;line-height:1.85;
 }
 .hero-hook{
-  font-size:.6em;color:var(--accent);letter-spacing:3px;text-transform:uppercase;
-  margin-top:20px;opacity:0;animation:hero-fade-in 1.5s ease 2s forwards;
+  font-size:.6em;color:var(--text-dim);letter-spacing:.36em;text-transform:uppercase;font-weight:400;
+  margin-top:32px;opacity:0;animation:hero-fade-in 1.8s ease 2s forwards;
 }
 @keyframes hero-fade-in{to{opacity:1}}
 
@@ -99,21 +125,11 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 }
 .zone-gauge svg{display:block;margin:0 auto;}
 .zone-label{
-  font-family:'SF Mono','Cascadia Code',monospace;
-  font-size:0.48rem;letter-spacing:0.2em;
-  color:rgba(0,255,153,0.65);margin-top:2px;
-  text-shadow:0 0 6px rgba(0,255,153,0.35);
+  font-family:var(--mono);
+  font-size:0.5rem;letter-spacing:0.28em;
+  color:var(--text-dim);margin-top:4px;font-weight:400;
 }
-.hud-chip{
-  font-family:'SF Mono','Cascadia Code',monospace;font-size:0.58rem;
-  letter-spacing:0.12em;color:var(--accent);
-  background:rgba(0,0,0,0.60);
-  border:1px solid rgba(0,255,153,0.12);
-  border-left:2px solid rgba(255,170,0,0.60);
-  padding:3px 8px 3px 10px;min-width:140px;text-align:right;
-  text-shadow:0 0 6px rgba(0,255,153,0.35);
-  backdrop-filter:blur(2px);
-}
+.hud-chip{display:none}
 
 /* ── NARRATION BAR ── */
 .narration{
@@ -123,41 +139,41 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
   pointer-events:none;
 }
 .narration-text{
-  font-size:.78em;color:var(--accent);line-height:1.6;
+  font-family:var(--read);font-size:.98em;color:var(--text);line-height:1.7;font-style:italic;font-weight:300;letter-spacing:.005em;
   max-height:4em;overflow:hidden;
   opacity:0;transition:opacity 0.6s;
 }
 .narration-text.visible{opacity:1}
 
 /* Canvas HUD */
-.canvas-hud{position:absolute;top:12px;left:16px;pointer-events:none;z-index:5}
+.canvas-hud{position:absolute;top:66px;left:18px;pointer-events:none;z-index:16}
 .ch-row{display:flex;align-items:center;gap:8px;margin-bottom:3px}
-.ch-label{font-size:.58em;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase}
-.ch-value{font-size:.72em;color:var(--accent);font-weight:600}
-.ch-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-glow 1.5s infinite}
+.ch-label{font-size:.56em;color:var(--text-dim);letter-spacing:.24em;text-transform:uppercase;font-weight:400}
+.ch-value{font-size:.74em;color:var(--text);font-weight:400}
+.ch-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse-glow 2.6s infinite}
 
 /* ── SIDEBAR ── */
 .sb-section{padding:16px;border-bottom:1px solid var(--border)}
 .sb-section:last-child{border-bottom:none;flex:1}
 .sb-title{
-  font-size:.62em;letter-spacing:2.5px;text-transform:uppercase;
-  color:var(--accent);margin-bottom:10px;font-weight:600;
+  font-size:.6em;letter-spacing:.32em;text-transform:uppercase;
+  color:var(--text-dim);margin-bottom:12px;font-weight:400;
 }
-.sb-subtitle{font-size:.58em;color:var(--text-dim);margin-top:-6px;margin-bottom:12px;line-height:1.4}
+.sb-subtitle{font-family:var(--read);font-size:.78em;color:var(--text-dim);margin-top:-4px;margin-bottom:14px;line-height:1.55;font-style:italic}
 
 /* Controls */
 .controls-row{display:flex;gap:8px;margin-bottom:10px}
 .btn{
-  flex:1;padding:10px;font-family:inherit;font-size:.8em;cursor:pointer;
-  border:none;border-radius:4px;letter-spacing:1px;font-weight:700;
-  transition:all 0.15s;text-transform:uppercase;
+  flex:1;padding:11px 10px;font-family:var(--mono);font-size:.66em;cursor:pointer;
+  border:1px solid var(--border-hi);border-radius:1px;letter-spacing:.2em;font-weight:400;
+  transition:all 0.25s ease;text-transform:uppercase;background:transparent;color:var(--text);
 }
-.btn-run{background:var(--accent);color:var(--bg)}
-.btn-run:hover{filter:brightness(1.15);transform:translateY(-1px)}
-.btn-run:active{transform:translateY(0)}
-.btn-stop{background:var(--red);color:#fff}
-.btn-stop:hover{filter:brightness(1.1)}
-.btn-reset{background:var(--surface);color:var(--text-dim);border:1px solid var(--border)}
+.btn-run{background:transparent;color:var(--accent);border-color:var(--accent-mid)}
+.btn-run:hover{background:var(--accent-dim);border-color:var(--accent)}
+.btn-run:active{transform:translateY(1px)}
+.btn-stop{background:transparent;color:var(--text-dim);border-color:var(--border-hi)}
+.btn-stop:hover{color:var(--red);border-color:var(--red)}
+.btn-reset{background:transparent;color:var(--text-dim);border:1px solid var(--border)}
 .btn-reset:hover{color:var(--text);border-color:var(--border-hi)}
 .agent-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .agent-row label{font-size:.68em;color:var(--text-dim);font-weight:600}
@@ -167,9 +183,9 @@ body{background:var(--bg);color:var(--text);font-family:'SF Mono','Cascadia Code
 }
 
 /* Legend */
-.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.legend-item{display:flex;align-items:center;gap:5px;font-size:.6em;color:var(--text-dim)}
-.legend-dot{width:7px;height:7px;border-radius:50%}
+.legend{display:flex;flex-wrap:wrap;gap:9px 16px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:.62em;color:var(--text-dim);letter-spacing:.04em}
+.legend-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 
 /* ── CHAOS SLIDERS ── */
 .seed-signal{margin-bottom:16px;position:relative}
@@ -187,15 +203,23 @@ input[type="range"]::-webkit-slider-thumb{
   background:var(--accent);cursor:grab;transition:transform 0.15s;
 }
 input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:grabbing}
+/* Paired A/B mini-sliders — each colony dialed independently */
+.seed-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.seed-pair-col{display:flex;flex-direction:column;gap:5px;min-width:0}
+.seed-pair-label{font-size:.56em;letter-spacing:.16em;text-transform:uppercase;display:flex;justify-content:space-between;color:var(--text-dim)}
+.seed-pair-label.colA{color:#40e8d0}
+.seed-pair-label.colB{color:#ff5cc8}
+input[type="range"].colA::-webkit-slider-thumb{background:#40e8d0}
+input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 .btn-inject{
-  width:100%;padding:12px;margin-top:10px;
-  background:linear-gradient(135deg, var(--accent-dim), transparent);
-  color:var(--accent);
-  border:1px solid var(--accent-mid);border-radius:4px;
-  font-family:inherit;font-size:.85em;cursor:pointer;
-  letter-spacing:2px;font-weight:700;transition:all 0.2s;text-transform:uppercase;
+  width:100%;padding:13px;margin-top:12px;
+  background:transparent;
+  color:var(--text);
+  border:1px solid var(--border-hi);border-radius:1px;
+  font-family:var(--mono);font-size:.66em;cursor:pointer;
+  letter-spacing:.24em;font-weight:400;transition:all 0.25s;text-transform:uppercase;
 }
-.btn-inject:hover{background:var(--accent);color:var(--bg);transform:translateY(-1px)}
+.btn-inject:hover{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-mid)}
 
 /* ── LIVE METRICS ── */
 .metric{margin-bottom:14px}
@@ -263,44 +287,43 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
 /* ── ESSAY ── */
 .essay{
-  max-width:740px;margin:0 auto;padding:80px 28px 100px;
+  max-width:680px;margin:0 auto;padding:140px 28px 140px;
   border-top:1px solid var(--border);
 }
-.essay-section{margin-bottom:72px}
+.essay-section{margin-bottom:96px}
 .essay-num{
-  font-size:.6em;letter-spacing:4px;color:var(--accent);text-transform:uppercase;
-  margin-bottom:10px;font-weight:600;
+  font-family:var(--mono);font-size:.6em;letter-spacing:.34em;color:var(--text-dim);text-transform:uppercase;
+  margin-bottom:22px;font-weight:400;
 }
 .essay-h{
-  font-size:1.35em;color:var(--text-bright);font-weight:700;line-height:1.35;
-  margin-bottom:16px;letter-spacing:0.5px;
+  font-family:var(--serif);font-size:2.7em;color:var(--text-bright);font-weight:300;line-height:1.16;
+  margin-bottom:30px;letter-spacing:.004em;text-wrap:balance;
 }
 .essay-p{
-  font-size:.82em;color:var(--text);line-height:1.85;margin-bottom:14px;
-  font-family:'SF Mono','Cascadia Code','Fira Code',monospace;
+  font-family:var(--read);font-size:1.14em;color:var(--text);line-height:1.78;margin-bottom:20px;font-weight:300;
 }
-.essay-p strong{color:var(--text-bright)}
-.essay-p em{color:var(--accent);font-style:normal}
+.essay-p strong{color:var(--text-bright);font-weight:500}
+.essay-p em{color:var(--accent);font-style:italic}
 .essay-try{
-  margin:20px 0;padding:14px 18px;
-  background:rgba(0,255,153,0.04);border:1px solid var(--accent-dim);border-radius:4px;
-  font-size:.72em;color:var(--accent);line-height:1.7;
+  margin:34px 0;padding:18px 24px;
+  background:transparent;border:none;border-left:1px solid var(--accent-mid);border-radius:0;
+  font-family:var(--mono);font-size:.76em;color:var(--text-dim);line-height:1.75;letter-spacing:.01em;
 }
-.essay-try::before{content:'▶ TRY IT — ';font-weight:700;letter-spacing:1px}
+.essay-try::before{content:'TRY IT \2002 ';font-weight:400;letter-spacing:.24em;color:var(--accent);text-transform:uppercase}
 .essay-pull{
-  font-size:1.1em;color:var(--text-dim);font-style:italic;line-height:1.6;
-  margin:28px 0;padding:0 16px;border-left:2px solid var(--border-hi);
+  font-family:var(--serif);font-size:2em;color:var(--text-bright);font-style:italic;line-height:1.3;font-weight:300;
+  margin:52px 0;padding:0 0 0 30px;border-left:1px solid var(--accent-mid);text-wrap:balance;
 }
 .essay-divider{
-  width:60px;height:1px;background:var(--border-hi);margin:0 auto 72px;
+  width:1px;height:64px;background:var(--border-hi);margin:0 auto 96px;
 }
 .essay-cta{
-  text-align:center;padding:40px 20px;
-  border:1px solid var(--border);border-radius:6px;
-  background:rgba(0,255,153,0.02);
+  text-align:center;padding:68px 32px;
+  border:1px solid var(--border);border-radius:2px;
+  background:transparent;
 }
-.essay-cta-h{font-size:1em;color:var(--accent);letter-spacing:2px;font-weight:700;margin-bottom:10px}
-.essay-cta-p{font-size:.72em;color:var(--text-dim);line-height:1.7;max-width:500px;margin:0 auto}
+.essay-cta-h{font-family:var(--mono);font-size:.64em;color:var(--text-dim);letter-spacing:.34em;font-weight:400;margin-bottom:22px;text-transform:uppercase}
+.essay-cta-p{font-family:var(--read);font-size:1.06em;color:var(--text);line-height:1.85;max-width:520px;margin:0 auto;font-weight:300}
 .essay-cta-p a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
 .essay-cta-p a:hover{border-color:var(--accent)}
 
@@ -334,12 +357,14 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
     <span class="header-sub">SWARM INTELLIGENCE — ZERO DEPENDENCIES — PURE RULES</span>
   </div>
   <div class="header-right">
+    <button id="panelToggle" onclick="document.querySelector('.sidebar').classList.toggle('collapsed')" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);font-family:var(--mono);font-size:.55em;letter-spacing:.2em;padding:7px 11px;cursor:pointer;border-radius:1px;text-transform:uppercase">PANEL</button>
     <span class="tag tag-live" id="status-tag">LIVE</span>
   </div>
 </header>
 
 <!-- ═══════════ MAIN ═══════════ -->
 <div class="main">
+
 
   <!-- LEFT: CANVAS -->
   <div class="canvas-col">
@@ -360,8 +385,8 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       <div class="hero-overlay" id="hero-overlay">
         <div class="hero-title">MURMURATION</div>
         <div class="hero-tagline">
-          80 independent agents. No instructions. No AI. Just survival instincts stolen from nature.<br>
-          Watch them think together — or tear each other apart.
+          120 agents. Two colonies, split by a wall. No instructions. No AI. Just survival instincts stolen from nature.<br>
+          Open the gates and watch them think together — or tear each other apart.
         </div>
         <div class="hero-hook">▼ THE SWARM IS ALREADY RUNNING ▼</div>
       </div>
@@ -370,32 +395,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       <div id="hud-overlay" style="
         position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden;
       ">
-        <!-- Camera frame — viewport chrome, barely-there -->
-        <img src="hud-thumbs/CAMERA 001.png" style="
-          position:absolute;inset:0;width:100%;height:100%;
-          object-fit:fill;opacity:0.10;mix-blend-mode:screen;
-        ">
-
-        <!-- Scan ring — violet tint, sparse zone -->
-        <img id="hud-scan-ring" src="hud-thumbs/CIRCLE 002.png" style="
-          position:absolute;top:28%;left:22%;
-          width:180px;height:180px;
-          transform:translate(-50%,-50%) rotate(0deg);
-          opacity:0.14;mix-blend-mode:screen;
-          filter:hue-rotate(240deg) saturate(1.4);
-          animation:hud-spin 50s linear infinite;
-        ">
-
-        <!-- Cluster ring — neon pink, follows densest zone -->
-        <img id="hud-cluster-ring" src="hud-thumbs/CIRCLE 004.png" style="
-          position:absolute;top:50%;left:50%;
-          width:200px;height:200px;
-          transform:translate(-50%,-50%);
-          opacity:0.10;mix-blend-mode:screen;
-          filter:hue-rotate(300deg) saturate(1.8);
-          animation:hud-spin-rev 28s linear infinite;
-          transition:top 3s ease, left 3s ease;
-        ">
+        <!-- decorative HUD overlay imagery removed — the swarm stands on its own -->
 
         <!-- Live stat chips — corner only, minimal footprint -->
         <div style="position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:3px;pointer-events:none;">
@@ -408,12 +408,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
         <!-- Zone gauges — one per sacred zone, positioned dynamically via JS -->
         <div id="hud-zones"></div>
 
-        <!-- Scan line sweep — violet→pink gradient, deliberate 14s -->
-        <div id="hud-scanline" style="
-          position:absolute;left:0;right:0;height:1px;
-          background:linear-gradient(90deg,transparent,rgba(0,255,153,0.20),rgba(255,170,0,0.15),transparent);
-          animation:hud-sweep 14s ease-in-out infinite;top:0;
-        "></div>
+        <!-- scanline removed -->
       </div>
 
       <!-- Live HUD -->
@@ -422,6 +417,16 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
           <div class="ch-dot" id="ch-dot"></div>
           <span class="ch-label">ALIVE</span>
           <span class="ch-value" id="ch-agents">0</span>
+        </div>
+        <div class="ch-row">
+          <div class="ch-dot" style="background:hsl(176,80%,55%);box-shadow:0 0 5px hsl(176,80%,55%)"></div>
+          <span class="ch-label">COLONY A</span>
+          <span class="ch-value" id="ch-colA">0</span>
+        </div>
+        <div class="ch-row">
+          <div class="ch-dot" style="background:hsl(326,80%,60%);box-shadow:0 0 5px hsl(326,80%,60%)"></div>
+          <span class="ch-label">COLONY B</span>
+          <span class="ch-value" id="ch-colB">0</span>
         </div>
         <div class="ch-row">
           <span class="ch-label">TICK</span>
@@ -471,7 +476,8 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
   </div>
 
   <!-- RIGHT: SIDEBAR -->
-  <div class="sidebar">
+  <div class="panel-tab" id="panel-tab" onclick="togglePanel()"><span id="panel-tab-label">PANEL</span></div>
+  <div class="sidebar" id="sidebar">
 
     <!-- ── SECTION: WHAT IS THIS ── -->
     <div class="sb-section">
@@ -506,6 +512,42 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
         <button class="btn btn-stop" onclick="stopSim()">FREEZE</button>
       </div>
       <button class="btn btn-reset" style="width:100%" onclick="resetSim()">WIPE &amp; RESET</button>
+
+      <div class="sb-title" style="margin-top:18px">The wall</div>
+      <div class="sb-subtitle" style="margin-bottom:10px">A barrier splits the map. Two gates you control — open them to let the colonies mix, raid the far zones, or make peace across the seam.</div>
+      <div class="controls-row">
+        <button class="btn btn-reset" id="gate0Btn" onclick="toggleGate(0)" style="font-size:.62em">NORTH GATE: SHUT</button>
+        <button class="btn btn-reset" id="gate1Btn" onclick="toggleGate(1)" style="font-size:.62em">SOUTH GATE: SHUT</button>
+      </div>
+
+      <div class="seed-signal" style="margin-top:16px">
+        <div class="seed-header">
+          <span class="seed-name">Simulation Speed</span>
+          <span class="seed-value" id="simSpeedVal">1×</span>
+        </div>
+        <div class="seed-desc">Ticks processed per rendered frame. Fast-forward evolution instead of waiting on real time.</div>
+        <input type="range" id="simSpeedSlider" min="1" max="20" step="1" value="1"
+          oninput="document.getElementById('simSpeedVal').textContent=this.value+'×'; if(k26&&k26.world) k26.world.simSpeed=parseInt(this.value,10);">
+      </div>
+
+      <div class="seed-signal">
+        <div class="seed-header">
+          <span class="seed-name">Terrain Pull</span>
+        </div>
+        <div class="seed-desc">How hard the landscape channels each colony's movement — independent per side, so they can carve different paths through the same ground.</div>
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>COLONY A</span><span id="terrainAVal">1.00</span></div>
+            <input type="range" class="colA" id="terrainSliderA" min="0" max="2" step="0.01" value="1"
+              oninput="document.getElementById('terrainAVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.world) k26.world.terrainPullA=parseFloat(this.value);">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>COLONY B</span><span id="terrainBVal">1.00</span></div>
+            <input type="range" class="colB" id="terrainSliderB" min="0" max="2" step="0.01" value="1"
+              oninput="document.getElementById('terrainBVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.world) k26.world.terrainPullB=parseFloat(this.value);">
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── SECTION: BREAK THE SWARM ── -->
@@ -516,51 +558,91 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
       <div class="seed-signal">
         <div class="seed-header">
           <span class="seed-name">Black Swan</span>
-          <span class="seed-value" id="pitviperVal">0.00</span>
         </div>
         <div class="seed-desc">Shatter the environment. Every agent scrambles to find new ground.</div>
         <div class="seed-bio">Pit Viper infrared — they see heat signatures you can't</div>
-        <input type="range" id="pitviper" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'pitviperVal');">
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="pitviperAVal">0.00</span></div>
+            <input type="range" class="colA" id="pitviperA" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('pitviperAVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="pitviperBVal">0.00</span></div>
+            <input type="range" class="colB" id="pitviperB" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('pitviperBVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+        </div>
       </div>
 
       <div class="seed-signal">
         <div class="seed-header">
           <span class="seed-name">Market Instability</span>
-          <span class="seed-value" id="electroVal">0.00</span>
         </div>
         <div class="seed-desc">Crank up sensitivity. Every agent overreacts to everything.</div>
         <div class="seed-bio">Shark electroreception — feeling heartbeats through water</div>
-        <input type="range" id="electroreception" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'electroVal');">
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="electroAVal">0.00</span></div>
+            <input type="range" class="colA" id="electroreceptionA" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('electroAVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="electroBVal">0.00</span></div>
+            <input type="range" class="colB" id="electroreceptionB" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('electroBVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+        </div>
       </div>
 
       <div class="seed-signal">
         <div class="seed-header">
           <span class="seed-name">Cascade</span>
-          <span class="seed-value" id="lateralVal">0.00</span>
         </div>
         <div class="seed-desc">Delayed detonation. Pressure builds silently, then erupts.</div>
         <div class="seed-bio">Fish lateral line — feeling the current change before you see it</div>
-        <input type="range" id="lateralline" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'lateralVal');">
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="lateralAVal">0.00</span></div>
+            <input type="range" class="colA" id="laterallineA" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('lateralAVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="lateralBVal">0.00</span></div>
+            <input type="range" class="colB" id="laterallineB" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('lateralBVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+        </div>
       </div>
 
       <div class="seed-signal">
         <div class="seed-header">
-          <span class="seed-name">Tempo</span>
-          <span class="seed-value" id="echoVal">0.00</span>
+          <span class="seed-name">Cognitive Sharpness</span>
         </div>
-        <div class="seed-desc">Speed up or slow down how fast they process reality.</div>
+        <div class="seed-desc">How intensely a colony feels its own anomaly and disturbance signals — not simulation speed (see Simulation Speed above), a real per-colony trait now.</div>
         <div class="seed-bio">Bat echolocation — adjusting frequency to match the terrain</div>
-        <input type="range" id="echolocation" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'echoVal');">
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="echoAVal">0.00</span></div>
+            <input type="range" class="colA" id="echolocationA" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('echoAVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="echoBVal">0.00</span></div>
+            <input type="range" class="colB" id="echolocationB" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('echoBVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+        </div>
       </div>
 
       <div class="seed-signal">
         <div class="seed-header">
           <span class="seed-name">Population Boom</span>
-          <span class="seed-value" id="mantisVal">0.00</span>
         </div>
-        <div class="seed-desc">Pour in newcomers. Watch the swarm absorb — or reject — fresh blood.</div>
+        <div class="seed-desc">Pour in newcomers on that colony's own side. Watch the swarm absorb — or reject — fresh blood.</div>
         <div class="seed-bio">Mantis Shrimp — 16 color bands where you have 3</div>
-        <input type="range" id="mantisshrimp" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'mantisVal');">
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="mantisAVal">0.00</span></div>
+            <input type="range" class="colA" id="mantisshrimpA" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('mantisAVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="mantisBVal">0.00</span></div>
+            <input type="range" class="colB" id="mantisshrimpB" min="0" max="1" step="0.01" value="0" oninput="document.getElementById('mantisBVal').textContent=parseFloat(this.value).toFixed(2)">
+          </div>
+        </div>
       </div>
 
       <button class="btn-inject" id="injectBtn" onclick="injectSeeds()">DETONATE</button>
@@ -595,12 +677,60 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 
       <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
         <div class="seed-header">
-          <span class="seed-name">Resource Depletion</span>
-          <span class="seed-value" id="scarcityVal">0.50</span>
+          <span class="seed-name">Resource Scarcity &amp; Symbiotic Abundance</span>
         </div>
-        <div class="seed-desc">Resource pressure. Higher = faster drain, harder survival. Cooperation becomes life or death.</div>
-        <div class="seed-bio">Ghost's law — they need incentive to work together for the greater good</div>
-        <input type="range" id="scarcitySlider" min="0" max="1" step="0.01" value="0.5" oninput="updateVal(this,'scarcityVal'); if(k26 && k26.economy) k26.economy.scarcityLevel = parseFloat(this.value); if(k26?.world?.env?.preview) k26.world.env.preview.scarcity = parseFloat(this.value);">
+        <div class="seed-desc">Moved to the Economy panel below — each colony now dials its own resource pressure and its own positive flourishing lever.</div>
+      </div>
+    </div>
+
+    <!-- ── SECTION: APEX PREDATORS ── -->
+    <div class="sb-section">
+      <div class="sb-title">Apex predators</div>
+      <div class="sb-subtitle">A hunter surfaces in whichever colony's territory you dial up. It doesn't chase randomly — it finds whoever drifted from the group. Stay clustered to survive; wander off and you're prey.</div>
+      <div class="seed-signal">
+        <div class="seed-header"><span class="seed-name">Predator Pressure</span></div>
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="predatorAVal">0.00</span></div>
+            <input type="range" class="colA" id="predatorSliderA" min="0" max="1" step="0.01" value="0"
+              oninput="document.getElementById('predatorAVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.world) k26.world.envA.predatorPressure=parseFloat(this.value);">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="predatorBVal">0.00</span></div>
+            <input type="range" class="colB" id="predatorSliderB" min="0" max="1" step="0.01" value="0"
+              oninput="document.getElementById('predatorBVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.world) k26.world.envB.predatorPressure=parseFloat(this.value);">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION: WAR GAMES — CAPTURE THE FLAG ── -->
+    <div class="sb-section">
+      <div class="sb-title">War games — capture the flag</div>
+      <div class="sb-subtitle">Each colony's flag sits deep in its own territory. Carry the enemy's home to score — get intercepted and it drops wherever you're tagged. Squads aren't picked by you: raiders, defenders, escorts and scouts emerge on their own from each agent's traits.</div>
+      <div class="sb-subtitle" style="margin-top:6px;color:#ffd700">Attrition kills — and just standing in a real fight — earn honor. Grunt → Decorated → Veteran → General → Hero, each rank glowing a little brighter gold. The single highest-honor agent alive per colony wears the crown — KING. Seppuku can vacate the crown but never earns what only battle can: die fighting and your lifetime of honor decides your monument — HERO, LEGEND, or for the very greatest, GOD — permanent, title be damned.</div>
+
+      <div class="controls-row" style="margin-top:10px">
+        <button class="btn-inject" id="ctfModeSkirmish" onclick="setCTFMode('skirmish')" style="flex:1;background:rgba(100,220,150,0.10);border-color:rgba(100,220,150,0.4);color:#8be0a8">SKIRMISH</button>
+        <button class="btn-inject" id="ctfModeAttrition" onclick="setCTFMode('attrition')" style="flex:1">ATTRITION</button>
+      </div>
+      <div class="sb-subtitle" style="margin-top:6px;font-size:.6em" id="ctfModeDesc">Skirmish: running score, no eliminations — built for full 100/100 colonies indefinitely.</div>
+
+      <button class="btn-inject" id="ctfToggleBtn" onclick="toggleCTF()" style="width:100%;margin-top:10px;background:rgba(200,40,20,0.10);border-color:rgba(255,80,50,0.4);color:#ff8060">⚔ BEGIN WAR GAMES</button>
+
+      <div id="ctfScoreboard" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+          <span style="font-size:1.3em;color:#c8a0ff;font-family:var(--serif)" id="ctfScoreA">0</span>
+          <span style="font-size:.58em;letter-spacing:.3em;color:var(--text-dim)">CAPTURES</span>
+          <span style="font-size:1.3em;color:#40e8d0;font-family:var(--serif)" id="ctfScoreB">0</span>
+        </div>
+        <div id="ctfRolesA" style="font-size:.58em;color:#c8a0ff;letter-spacing:.03em;margin-bottom:4px;line-height:1.6">A —</div>
+        <div id="ctfRolesB" style="font-size:.58em;color:#40e8d0;letter-spacing:.03em;line-height:1.6">B —</div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <div id="ctfHonorA" style="font-size:.58em;color:#ffd700;letter-spacing:.03em;margin-bottom:4px;line-height:1.6">♛ A —</div>
+          <div id="ctfHonorB" style="font-size:.58em;color:#ffd700;letter-spacing:.03em;line-height:1.6">♛ B —</div>
+        </div>
+        <div id="ctfMatchBanner" style="display:none;margin-top:12px;text-align:center;font-size:.7em;letter-spacing:.12em;color:var(--accent);font-weight:600"></div>
       </div>
     </div>
 
@@ -608,6 +738,40 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
     <div class="sb-section">
       <div class="sb-title">Economy</div>
       <div class="sb-subtitle">Energy, resources, and the disaster cycle. Survival is not free.</div>
+
+      <div class="seed-signal">
+        <div class="seed-header"><span class="seed-name">Resource Scarcity</span></div>
+        <div class="seed-desc">Higher = faster drain, harder survival — dialed independently per colony.</div>
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="scarcityAVal">0.50</span></div>
+            <input type="range" class="colA" id="scarcitySliderA" min="0" max="1" step="0.01" value="0.5"
+              oninput="document.getElementById('scarcityAVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.economy) k26.economy.scarcityLevelA=parseFloat(this.value);">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="scarcityBVal">0.50</span></div>
+            <input type="range" class="colB" id="scarcitySliderB" min="0" max="1" step="0.01" value="0.5"
+              oninput="document.getElementById('scarcityBVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.economy) k26.economy.scarcityLevelB=parseFloat(this.value);">
+          </div>
+        </div>
+      </div>
+
+      <div class="seed-signal">
+        <div class="seed-header"><span class="seed-name" style="color:#7cffb2">Symbiotic Abundance</span></div>
+        <div class="seed-desc" style="color:rgba(124,255,178,0.65)">The positive lever. Higher = cooperation pays off harder, drain eases, evolution compounds faster — what flourishing looks like when a colony builds toward it.</div>
+        <div class="seed-pair">
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colA"><span>A</span><span id="abundanceAVal">0.00</span></div>
+            <input type="range" class="colA" id="abundanceSliderA" min="0" max="1" step="0.01" value="0"
+              oninput="document.getElementById('abundanceAVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.economy) k26.economy.abundanceA=parseFloat(this.value);">
+          </div>
+          <div class="seed-pair-col">
+            <div class="seed-pair-label colB"><span>B</span><span id="abundanceBVal">0.00</span></div>
+            <input type="range" class="colB" id="abundanceSliderB" min="0" max="1" step="0.01" value="0"
+              oninput="document.getElementById('abundanceBVal').textContent=parseFloat(this.value).toFixed(2); if(k26&&k26.economy) k26.economy.abundanceB=parseFloat(this.value);">
+          </div>
+        </div>
+      </div>
 
       <div class="metric">
         <div class="metric-header">
@@ -728,7 +892,7 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
         </div>
         <div class="seed-desc">Redistribute from elite to destitute. Too low = revolution. Too high = no one climbs.</div>
         <div class="seed-bio">The invisible hand vs. the visible fist</div>
-        <input type="range" id="taxSlider" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'taxVal'); if(k26 && k26.wealthEngine) k26.wealthEngine.taxRate = parseFloat(this.value); if(k26?.world?.env?.preview) k26.world.env.preview.tax = parseFloat(this.value);">
+        <input type="range" id="taxSlider" min="0" max="1" step="0.01" value="0" oninput="updateVal(this,'taxVal'); if(k26 && k26.wealthEngine) k26.wealthEngine.taxRate = parseFloat(this.value);">
       </div>
 
       <div class="controls-row" style="margin-top:8px">
@@ -918,17 +1082,18 @@ input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3);cursor:gra
 </div><!-- /essay -->
 
 <!-- ═══════════ ENGINE ═══════════ -->
-<script src="agent.js?v=2"></script>
-<script src="world.js"></script>
+<script src="topomap.js?v=5"></script>
+<script src="agent.js?v=4"></script>
+<script src="world.js?v=4"></script>
 <script src="seed.js"></script>
 <script src="interaction.js?v=2"></script>
 <script src="evolution.js"></script>
 <script src="extractor.js"></script>
-<script src="k26.js"></script>
-<script src="economy.js"></script>
+<script src="k26.js?v=7"></script>
+<script src="economy.js?v=4"></script>
 <script src="wealth.js"></script>
-<script src="terrain.js"></script>
-<script src="seasons.js"></script>
+<script src="predator.js"></script>
+<script src="ctf.js"></script>
 <script src="warninglog.js"></script>
 <script src="murmuration.js"></script>
 
@@ -1151,15 +1316,8 @@ window.addEventListener('resize', () => {
       if (k26.economy && k26.economy.recomputeZonePositions) {
         k26.economy.recomputeZonePositions();
       }
-      // Terrain must regenerate for new canvas dimensions
-      if (k26.terrainEngine) {
-        k26.terrainEngine.resize(c.width, c.height);
-      }
-      // Seasons overlay tracks world dimensions
-      if (k26.seasonsEngine && k26.seasonsEngine._dirty != null) {
-        k26.seasonsEngine._dirty = true;
-      }
     }
+    rebuildTopo();
     repositionZoneGauges();
   }, 80);
 });
@@ -1179,9 +1337,7 @@ function repositionZoneGauges() {
 
 window.addEventListener('load', () => {
   sizeCanvas();
-  if (!tryAutoRestore()) {
-    runSim();
-  }
+  runSim();
 
   // Fade the hero overlay after 5 seconds
   setTimeout(() => {
@@ -1203,21 +1359,33 @@ function runSim() {
   if (k26) k26.stop();
   k26 = new window.K26('canvas');
   k26.init(count);
+  rebuildTopo();
+  const _hz = document.getElementById('hud-zones'); if (_hz) _hz.innerHTML = '';
+  // Sync environment sliders into the fresh world
+  const _tsA = document.getElementById('terrainSliderA');
+  const _tsB = document.getElementById('terrainSliderB');
+  const _speed = document.getElementById('simSpeedSlider');
+  if (k26.world && _tsA) k26.world.terrainPullA = parseFloat(_tsA.value);
+  if (k26.world && _tsB) k26.world.terrainPullB = parseFloat(_tsB.value);
+  if (k26.world && _speed) k26.world.simSpeed = parseInt(_speed.value, 10);
+  const _predA = document.getElementById('predatorSliderA');
+  const _predB = document.getElementById('predatorSliderB');
+  if (k26.world && _predA) k26.world.envA.predatorPressure = parseFloat(_predA.value);
+  if (k26.world && _predB) k26.world.envB.predatorPressure = parseFloat(_predB.value);
+  const _scarA = document.getElementById('scarcitySliderA');
+  const _scarB = document.getElementById('scarcitySliderB');
+  const _abunA = document.getElementById('abundanceSliderA');
+  const _abunB = document.getElementById('abundanceSliderB');
+  if (k26.economy && _scarA) k26.economy.scarcityLevelA = parseFloat(_scarA.value);
+  if (k26.economy && _scarB) k26.economy.scarcityLevelB = parseFloat(_scarB.value);
+  if (k26.economy && _abunA) k26.economy.abundanceA = parseFloat(_abunA.value);
+  if (k26.economy && _abunB) k26.economy.abundanceB = parseFloat(_abunB.value);
+  // Reset gate button labels
+  [0,1].forEach(i => { const b=document.getElementById('gate'+i+'Btn'); if(b){ b.textContent=(i===0?'NORTH':'SOUTH')+' GATE: SHUT'; b.style.color=''; b.style.borderColor=''; } });
 
   // Hook UI updates BEFORE starting — the loop fires synchronously on start()
   const origUI = k26.updateUI.bind(k26);
   k26.updateUI = function(e) { origUI(e); updatePresentation(e); };
-
-  // Sync terrain to final canvas size after layout settles
-  requestAnimationFrame(() => {
-    sizeCanvas();
-    const c = document.getElementById('canvas');
-    if (k26 && k26.world) {
-      k26.world.width = c.width;
-      k26.world.height = c.height;
-      if (k26.terrainEngine) k26.terrainEngine.resize(c.width, c.height);
-    }
-  });
 
   k26.start();
 
@@ -1230,6 +1398,33 @@ function runSim() {
     count + ' minds, zero coordination. Watch what happens when survival is the only rule.',
   ]));
   addEvent('Swarm deployed — ' + count + ' agents, each with unique trust thresholds, grief limits, and risk tolerances.', 'emerge');
+}
+
+// ═══════════ TOPO MAP + WALL GATES ═══════════
+
+function rebuildTopo() {
+  const c = document.getElementById('canvas');
+  if (window.buildTopoMap && c && c.width > 0) {
+    const layer = window.buildTopoMap(c.width, c.height);
+    window._topoLayer = layer;
+    if (k26) k26.topoLayer = layer;
+  }
+}
+
+function toggleGate(i) {
+  if (!k26 || !k26.world) { narrate('Start the swarm first.'); return; }
+  const open = k26.world.toggleGate(i);
+  const btn = document.getElementById('gate' + i + 'Btn');
+  const name = i === 0 ? 'NORTH' : 'SOUTH';
+  if (btn) {
+    btn.textContent = name + ' GATE: ' + (open ? 'OPEN' : 'SHUT');
+    btn.style.color = open ? 'rgba(100,220,150,0.95)' : '';
+    btn.style.borderColor = open ? 'rgba(100,220,150,0.45)' : '';
+  }
+  narrate(open
+    ? name + ' gate is open. The barrier is breached — watch what crosses.'
+    : name + ' gate sealed. Whatever was mixing is now trapped on its side.');
+  addEvent((open ? '\u25B6 OPENED' : '\u25A0 SEALED') + ' — ' + name + ' GATE', open ? 'emerge' : 'crisis');
 }
 
 function stopSim() {
@@ -1263,6 +1458,12 @@ function resetSim() {
   narrate('Everything gone. Hit RESTART to bring them back.');
   eventCount = 0;
   prevState = {};
+
+  // Reset War Games UI back to dormant
+  const ctfBtn = document.getElementById('ctfToggleBtn');
+  if (ctfBtn) { ctfBtn.textContent = '⚔ BEGIN WAR GAMES'; ctfBtn.style.background = 'rgba(200,40,20,0.10)'; ctfBtn.style.borderColor = 'rgba(255,80,50,0.4)'; ctfBtn.style.color = '#ff8060'; }
+  const ctfBoard = document.getElementById('ctfScoreboard');
+  if (ctfBoard) ctfBoard.style.display = 'none';
 }
 
 // ═══════════ DOCTRINE + TREATY ═══════════
@@ -1336,6 +1537,86 @@ setInterval(() => {
   el.textContent = count;
 }, 1000);
 
+// ═══════════ CAPTURE THE FLAG — WAR GAMES ═══════════
+
+let ctfPendingMode = 'skirmish';
+
+function setCTFMode(mode) {
+  ctfPendingMode = mode;
+  const skB = document.getElementById('ctfModeSkirmish');
+  const atB = document.getElementById('ctfModeAttrition');
+  const desc = document.getElementById('ctfModeDesc');
+  if (mode === 'attrition') {
+    atB.style.background = 'rgba(255,80,50,0.14)'; atB.style.borderColor = 'rgba(255,80,50,0.5)'; atB.style.color = '#ff8060';
+    skB.style.background = ''; skB.style.borderColor = ''; skB.style.color = '';
+    if (desc) desc.textContent = 'Attrition: first to 3 captures wins, or last colony standing. Raiders caught deep behind enemy lines can be captured for good.';
+  } else {
+    skB.style.background = 'rgba(100,220,150,0.10)'; skB.style.borderColor = 'rgba(100,220,150,0.4)'; skB.style.color = '#8be0a8';
+    atB.style.background = ''; atB.style.borderColor = ''; atB.style.color = '';
+    if (desc) desc.textContent = 'Skirmish: running score, no eliminations — built for full 100/100 colonies indefinitely.';
+  }
+  if (k26 && k26.ctf && k26.ctf.enabled) k26.ctf.mode = mode; // live-switch if already running
+}
+
+function toggleCTF() {
+  if (!k26 || !k26.world || !k26.ctf) { narrate('Start the swarm first.'); return; }
+  const btn = document.getElementById('ctfToggleBtn');
+  const board = document.getElementById('ctfScoreboard');
+  const banner = document.getElementById('ctfMatchBanner');
+
+  if (!k26.ctf.enabled) {
+    k26.ctf.start(ctfPendingMode);
+    btn.textContent = '✖ END WAR GAMES';
+    btn.style.background = 'rgba(100,220,150,0.10)'; btn.style.borderColor = 'rgba(100,220,150,0.4)'; btn.style.color = '#8be0a8';
+    board.style.display = 'block';
+    banner.style.display = 'none';
+    // Gates opened by ctf.start() — reflect it in the gate buttons
+    [0,1].forEach(i => { const b=document.getElementById('gate'+i+'Btn'); if(b){ b.textContent=(i===0?'NORTH':'SOUTH')+' GATE: OPEN'; b.style.color='#8be0a8'; b.style.borderColor='rgba(100,220,150,0.5)'; } });
+    narrate('War games begin. ' + ctfPendingMode.toUpperCase() + '. Both gates thrown open — the raid is on.');
+  } else {
+    k26.ctf.stop();
+    btn.textContent = '⚔ BEGIN WAR GAMES';
+    btn.style.background = 'rgba(200,40,20,0.10)'; btn.style.borderColor = 'rgba(255,80,50,0.4)'; btn.style.color = '#ff8060';
+    board.style.display = 'none';
+    narrate('War games called off. The colonies stand down.');
+  }
+}
+
+function roleLine(counts) {
+  return 'RAID ' + counts.raider + ' · DEF ' + counts.defender + ' · ESC ' + counts.escort + ' · SCOUT ' + counts.scout + (counts.carrier ? ' · CARRIER!' : '');
+}
+
+function honorLine(ctf, colony) {
+  const s = ctf.honorSummary(colony);
+  let line;
+  if (s.king) line = 'KING #' + s.king.id + ' (' + s.king.honor.toFixed(2) + ' honor)';
+  else if (s.topAlive && s.topAlive.honor > 0) line = s.topAlive.rank + ' #' + s.topAlive.id + ' (' + s.topAlive.honor.toFixed(2) + ')';
+  else line = 'no honor yet';
+  const fallen = [];
+  if (s.gods > 0) fallen.push(s.gods + ' GOD' + (s.gods > 1 ? 'S' : ''));
+  if (s.legends > 0) fallen.push(s.legends + ' LEGEND' + (s.legends > 1 ? 'S' : ''));
+  if (s.heroes > 0) fallen.push(s.heroes + ' fallen HERO' + (s.heroes > 1 ? 'ES' : ''));
+  if (fallen.length) line += ' · ' + fallen.join(' · ');
+  return line;
+}
+
+setInterval(() => {
+  if (!k26 || !k26.ctf || !k26.ctf.enabled) return;
+  const ctf = k26.ctf;
+  const sa = document.getElementById('ctfScoreA'); if (sa) sa.textContent = ctf.score.A;
+  const sb = document.getElementById('ctfScoreB'); if (sb) sb.textContent = ctf.score.B;
+  const ra = document.getElementById('ctfRolesA'); if (ra) ra.textContent = 'A — ' + roleLine(ctf.roleCounts('A'));
+  const rb = document.getElementById('ctfRolesB'); if (rb) rb.textContent = 'B — ' + roleLine(ctf.roleCounts('B'));
+  const ha = document.getElementById('ctfHonorA'); if (ha) ha.textContent = '♛ A — ' + honorLine(ctf, 'A');
+  const hb = document.getElementById('ctfHonorB'); if (hb) hb.textContent = '♛ B — ' + honorLine(ctf, 'B');
+  const banner = document.getElementById('ctfMatchBanner');
+  if (banner && ctf.matchOver) {
+    banner.style.display = 'block';
+    banner.textContent = '🏆 COLONY ' + ctf.winner + ' WINS THE WAR';
+    banner.style.color = ctf.winner === 'B' ? '#40e8d0' : '#c8a0ff';
+  }
+}, 500);
+
 // ═══════════ SEED INJECTION ═══════════
 
 function injectSeeds() {
@@ -1343,12 +1624,10 @@ function injectSeeds() {
     narrate('Nothing to break — start the swarm first.');
     return;
   }
-  const signals = window.MurmurationModules.SeedInjector.fromForm();
-  k26.seedInjector.inject(k26.world, signals);
-
-  // Sliders PERSIST after detonation — they're the loaded charge, not a one-shot.
-  // Re-hit DETONATE to fire the same configuration again. No live preview effects:
-  // the only thing a slider does is arm the injector for the next detonation.
+  const signalsA = window.MurmurationModules.SeedInjector.fromForm('A');
+  const signalsB = window.MurmurationModules.SeedInjector.fromForm('B');
+  k26.seedInjector.inject(k26.world, signalsA, 'A');
+  k26.seedInjector.inject(k26.world, signalsB, 'B');
 
   const btn = document.getElementById('injectBtn');
   btn.style.background = 'var(--accent)';
@@ -1357,11 +1636,12 @@ function injectSeeds() {
   setTimeout(() => { btn.style.background = ''; btn.style.color = ''; btn.textContent = 'DETONATE'; }, 1500);
 
   const active = [];
-  if (parseFloat(document.getElementById('pitviper').value) > 0) active.push('earthquake');
-  if (parseFloat(document.getElementById('electroreception').value) > 0) active.push('paranoia');
-  if (parseFloat(document.getElementById('lateralline').value) > 0) active.push('ticking bomb');
-  if (parseFloat(document.getElementById('echolocation').value) > 0) active.push('time warp');
-  if (parseFloat(document.getElementById('mantisshrimp').value) > 0.7) active.push('fresh blood');
+  const anyAbove = (idA, idB, thresh) => (parseFloat(document.getElementById(idA).value) > (thresh||0)) || (parseFloat(document.getElementById(idB).value) > (thresh||0));
+  if (anyAbove('pitviperA','pitviperB')) active.push('earthquake');
+  if (anyAbove('electroreceptionA','electroreceptionB')) active.push('paranoia');
+  if (anyAbove('laterallineA','laterallineB')) active.push('ticking bomb');
+  if (anyAbove('echolocationA','echolocationB')) active.push('cognitive sharpness');
+  if (anyAbove('mantisshrimpA','mantisshrimpB', 0.7)) active.push('fresh blood');
 
   if (active.length > 0) {
     narrate(pickRandom([
@@ -1379,14 +1659,16 @@ function updateVal(input, valId) {
   document.getElementById(valId).textContent = parseFloat(input.value).toFixed(2);
 }
 
-// Patch seed fromForm
-window.MurmurationModules.SeedInjector.fromForm = function() {
+// Patch seed fromForm — now colony-scoped, reading the A/B slider pairs
+window.MurmurationModules.SeedInjector.fromForm = function(colony) {
+  const suf = colony === 'B' ? 'B' : 'A';
+  const val = id => Math.max(0, Math.min(1, parseFloat(document.getElementById(id + suf)?.value) || 0));
   return {
-    PitViperDivergence:      Math.max(0, Math.min(1, parseFloat(document.getElementById('pitviper').value) || 0)),
-    ElectroreceptionAnomaly: Math.max(0, Math.min(1, parseFloat(document.getElementById('electroreception').value) || 0)),
-    LateralLinePressure:     Math.max(0, Math.min(1, parseFloat(document.getElementById('lateralline').value) || 0)),
-    EcholocationFrequency:   Math.max(0, Math.min(1, parseFloat(document.getElementById('echolocation').value) || 0)),
-    MantisShrimp16Bands:     Math.max(0, Math.min(1, parseFloat(document.getElementById('mantisshrimp').value) || 0))
+    PitViperDivergence:      val('pitviper'),
+    ElectroreceptionAnomaly: val('electroreception'),
+    LateralLinePressure:     val('lateralline'),
+    EcholocationFrequency:   val('echolocation'),
+    MantisShrimp16Bands:     val('mantisshrimp')
   };
 };
 
@@ -1402,6 +1684,14 @@ function updatePresentation(e) {
 
   document.getElementById('ch-agents').textContent = alive;
   document.getElementById('ch-time').textContent = time;
+
+  // Colony population split
+  if (k26.world) {
+    const colA = k26.world.agents.filter(a => (a.colony||'A') === 'A' && !a.seppukuDone).length;
+    const colB = k26.world.agents.filter(a => a.colony === 'B' && !a.seppukuDone).length;
+    const eA = document.getElementById('ch-colA'); if (eA) eA.textContent = colA;
+    const eB = document.getElementById('ch-colB'); if (eB) eB.textContent = colB;
+  }
 
   // ── HUD updates ──
   const pct = v => Math.round((v||0)*100);
@@ -1449,8 +1739,9 @@ function updatePresentation(e) {
   const stateFill = document.getElementById('strip-state-fill');
   if(stateFill) stateFill.style.background = stateCol;
 
-  // ── Zone gauges ──
-  if(k26.economy && k26.economy.zones) {
+  // ── Zone gauges — DISABLED for performance (heavy per-frame SVG). The small
+  //    canvas zone discs carry the read now; metrics live in the sidebar. ──
+  if(false && k26.economy && k26.economy.zones) {
     const canvas = document.getElementById('canvas');
     const zonesEl = document.getElementById('hud-zones');
     const harvestR = k26.economy.harvestRadius || 80;
@@ -1469,23 +1760,23 @@ function updatePresentation(e) {
         <div class="zone-gauge" id="zg-${i}" data-r="${dynR}"
           style="left:${((z.px||z.x/WW)*100).toFixed(2)}%;top:${((z.py||z.y/WH)*100).toFixed(2)}%">
           <svg width="${C*2}" height="${C*2}" viewBox="0 0 ${C*2} ${C*2}" style="display:block">
-            <circle cx="${C}" cy="${C}" r="${dynR+5}" fill="rgba(0,0,0,0.50)"/>
+            <circle cx="${C}" cy="${C}" r="${dynR+5}" fill="rgba(0,0,0,0.42)"/>
             <circle cx="${C}" cy="${C}" r="${dynR}" fill="none"
-              stroke="rgba(0,255,153,0.12)" stroke-width="1.5"/>
+              stroke="rgba(217,212,202,0.10)" stroke-width="1"/>
             <circle cx="${C}" cy="${C}" r="${dynR-10}" fill="none"
-              stroke="rgba(255,170,0,0.08)" stroke-width="1"
+              stroke="rgba(217,212,202,0.06)" stroke-width="1"
               stroke-dasharray="3 6" id="zg-pop-ring-${i}"/>
             <circle cx="${C}" cy="${C}" r="${dynR}" fill="none"
-              stroke="rgba(0,255,153,0.65)" stroke-width="2.5"
+              stroke="rgba(195,161,107,0.6)" stroke-width="1.5"
               stroke-dasharray="${circ}" stroke-dashoffset="${circ}"
               stroke-linecap="round" transform="rotate(-90 ${C} ${C})"
               id="zg-arc-${i}" style="transition:stroke-dashoffset 1.4s ease,stroke 1.0s ease"/>
             <text x="${C}" y="${C-fs2*0.5}" text-anchor="middle" dominant-baseline="middle"
-              fill="rgba(255,170,0,0.92)" font-size="${fs1}" font-family="monospace"
-              font-weight="700" style="filter:drop-shadow(0 0 4px rgba(255,170,0,0.5))"
+              fill="rgba(243,240,234,0.92)" font-size="${fs1}" font-family="'JetBrains Mono',monospace"
+              font-weight="400"
               id="zg-v1-${i}">·</text>
             <text x="${C}" y="${C+fs1*0.9}" text-anchor="middle" dominant-baseline="middle"
-              fill="rgba(0,255,153,0.65)" font-size="${fs2}" font-family="monospace"
+              fill="rgba(124,118,107,0.95)" font-size="${fs2}" font-family="'JetBrains Mono',monospace"
               id="zg-v2-${i}"></text>
           </svg>
           <div class="zone-label" id="zg-name-${i}">${z.name||'ZONE'}</div>
@@ -1513,12 +1804,11 @@ function updatePresentation(e) {
       if(arc) {
         arc.style.strokeDashoffset = (circ * (1 - level)).toFixed(2);
         arc.style.stroke = level > 0.65
-          ? `rgba(0,255,153,${0.50 + level * 0.20})`      // matrix green — healthy
+          ? `rgba(195,161,107,${0.50 + level * 0.25})`    // brass — healthy
           : level > 0.35
-            ? `rgba(255,200,0,0.70)`                       // yellow-amber — mid
-            : `rgba(255,120,0,0.80)`;                      // orange — stressed
-        arc.style.filter = level < 0.35
-          ? 'drop-shadow(0 0 5px rgba(255,120,0,0.5))' : 'none';
+            ? `rgba(199,154,92,0.70)`                      // amber — mid
+            : `rgba(194,97,90,0.78)`;                      // muted red — stressed
+        arc.style.filter = 'none';
       }
 
       // Zone-specific data per narrative role
@@ -1526,7 +1816,7 @@ function updatePresentation(e) {
       const v2 = document.getElementById(`zg-v2-${i}`);
       const popRing = document.getElementById(`zg-pop-ring-${i}`);
       const pop = live.filter(a=>Math.hypot(a.x-z.x,a.y-z.y) < z.radius + harvestR).length;
-      if(popRing) popRing.style.stroke = `rgba(255,170,0,${Math.min(0.40, pop * 0.035)})`;
+      if(popRing) popRing.style.stroke = `rgba(217,212,202,${Math.min(0.28, pop * 0.025)})`;
 
       if(i === 0) {
         // HEARTH — vital signs: alive count + tick
@@ -1945,9 +2235,7 @@ function saveCivilization() {
       _prevDrawdown: a._prevDrawdown || 0
     })),
     economy: k26.economy ? k26.economy.serialize() : null,
-    wealth: k26.wealthEngine ? k26.wealthEngine.serialize() : null,
-    terrain: k26.terrainEngine ? k26.terrainEngine.serialize() : null,
-    seasons: k26.seasonsEngine ? k26.seasonsEngine.serialize() : null
+    wealth: k26.wealthEngine ? k26.wealthEngine.serialize() : null
   };
 
   const json = JSON.stringify(snapshot, null, 2);
@@ -2030,12 +2318,35 @@ function restoreCivilization(snapshot) {
     if (sa.evolution != null) agent.evolution = sa.evolution;
     if (sa.wealth != null) agent.wealth = sa.wealth;
     if (sa.socialClass) agent.socialClass = sa.socialClass;
-    // V2: seasonal state
-    agent._winterSurvivor = sa._winterSurvivor || false;
-    agent._springRewarded = sa._springRewarded || false;
-    agent._currentTerrain = sa._currentTerrain || null;
+    agent.honor = sa.honor || 0;
+    agent.rank = sa.rank || 'GRUNT';
+    agent.isKing = !!sa.isKing;
+    agent.fallenRank = sa.fallenRank || null;
+    // Colony tag — the wall split depends on it. Legacy saves lack it, so
+    // derive from which side of the wall the agent sits on.
+    agent.colony = sa.colony || (sa.x <= (w / 2) ? 'A' : 'B');
     return agent;
   });
+
+  // Enforce today's population caps even on an old save — never let a legacy
+  // snapshot resurrect a runaway colony (e.g. from before caps existed) that
+  // will just lag the sim right back out. Keep the most decorated / oldest,
+  // trim the rest.
+  const RESTORE_CAP_PER_COLONY = 60;
+  for (const colony of ['A', 'B']) {
+    const members = k26.world.agents.filter(a => a.colony === colony);
+    if (members.length > RESTORE_CAP_PER_COLONY) {
+      const keepIds = new Set(
+        members.slice()
+          .sort((a, b) => (b.honor || 0) - (a.honor || 0) || a.id - b.id)
+          .slice(0, RESTORE_CAP_PER_COLONY)
+          .map(a => a.id)
+      );
+      const trimmed = members.length - RESTORE_CAP_PER_COLONY;
+      k26.world.agents = k26.world.agents.filter(a => a.colony !== colony || keepIds.has(a.id));
+      if (window.logLine) window.logLine('Colony ' + colony + ' trimmed from a legacy save — ' + trimmed + ' excess agents removed (cap ' + RESTORE_CAP_PER_COLONY + ').', 'sys');
+    }
+  }
 
   // Restore world state
   k26.world.time = snapshot.meta.tick || 0;
@@ -2063,26 +2374,15 @@ function restoreCivilization(snapshot) {
     k26.warningLog = new window.MurmurationModules.WarningLog();
   }
 
-  // Restore V2: terrain
-  if (window.MurmurationModules.TerrainEngine) {
-    if (snapshot.terrain) {
-      k26.terrainEngine = window.MurmurationModules.TerrainEngine.restore(k26.world, snapshot.terrain);
-    } else {
-      k26.terrainEngine = new window.MurmurationModules.TerrainEngine(k26.world, { preset: 'continental' });
-    }
-    k26.world.terrain = k26.terrainEngine;
-    if (k26.economy) k26.economy.terrain = k26.terrainEngine;
+  // Apex predators + Capture the Flag — not part of the legacy snapshot schema,
+  // so every restore gets a fresh, dormant instance instead of being stuck
+  // permanently missing these systems.
+  if (window.MurmurationModules.PredatorSystem) {
+    k26.predatorSystem = new window.MurmurationModules.PredatorSystem(k26.world);
   }
-
-  // Restore V2: seasons
-  if (window.MurmurationModules.SeasonsEngine && k26.economy) {
-    if (snapshot.seasons) {
-      k26.seasonsEngine = window.MurmurationModules.SeasonsEngine.restore(k26.world, k26.economy, snapshot.seasons);
-    } else {
-      k26.seasonsEngine = new window.MurmurationModules.SeasonsEngine(k26.world, k26.economy);
-    }
-    k26.world.seasons = k26.seasonsEngine;
-    k26.economy.seasons = k26.seasonsEngine;
+  if (window.MurmurationModules.CTFSystem) {
+    k26.ctf = new window.MurmurationModules.CTFSystem(k26.world);
+    k26.world.ctf = k26.ctf;
   }
 
   // Reconnect sentinel
@@ -2116,93 +2416,6 @@ function restoreCivilization(snapshot) {
   narrate('Civilization restored from snapshot. Tick ' + snapshot.meta.tick + '. ' + snapshot.meta.alive + ' survivors resume.');
   addEvent('CIVILIZATION RESTORED — T' + snapshot.meta.tick + ' — ' + snapshot.meta.alive + ' alive from archive', 'emerge');
 }
-
-// ═══════════ AUTOSAVE — localStorage persistence ═══════════
-
-const AUTOSAVE_KEY = 'murmuration-autosave';
-const AUTOSAVE_INTERVAL = 30000;
-let _autosaveTimer = null;
-
-function autosaveSnapshot() {
-  if (!k26 || !k26.world || !k26.isRunning) return;
-  try {
-    const world = k26.world;
-    const snapshot = {
-      meta: {
-        savedAt: new Date().toISOString(),
-        tick: world.time,
-        alive: world.agents.filter(a => !a.seppukuDone).length,
-        dead: world.agents.filter(a => a.seppukuDone).length,
-        total: world.agents.length,
-        width: world.width,
-        height: world.height
-      },
-      env: { ...world.env },
-      collectiveMemory: world.collectiveMemory ? [...world.collectiveMemory] : [],
-      sentinel: world.sentinel ? world.sentinel.id : null,
-      agents: world.agents.map(a => ({
-        id: a.id, x: a.x, y: a.y, vx: a.vx, vy: a.vy, radius: a.radius,
-        personality: { ...a.personality },
-        beliefState: { ...a.beliefState },
-        trustCharge: a.trustCharge,
-        griefLevel: a.griefLevel,
-        griefState: a.griefState,
-        graceTimer: a.graceTimer,
-        wisdomScore: a.wisdomScore,
-        isSentinel: a.isSentinel,
-        seppukuDone: a.seppukuDone,
-        energy: a.energy != null ? a.energy : null,
-        generation: a.generation || 0,
-        faith: a.faith || 0,
-        evolution: a.evolution || 0,
-        wealth: a.wealth != null ? a.wealth : null,
-        socialClass: a.socialClass || null,
-        memory: a.memory ? a.memory.slice(-10) : [],
-        _prevDrawdown: a._prevDrawdown || 0,
-        _winterSurvivor: a._winterSurvivor || false,
-        _springRewarded: a._springRewarded || false,
-        _currentTerrain: a._currentTerrain || null
-      })),
-      economy: k26.economy ? k26.economy.serialize() : null,
-      wealth: k26.wealthEngine ? k26.wealthEngine.serialize() : null,
-      terrain: k26.terrainEngine ? k26.terrainEngine.serialize() : null,
-      seasons: k26.seasonsEngine ? k26.seasonsEngine.serialize() : null
-    };
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
-  } catch (e) { /* localStorage full or serialization error */ }
-}
-
-function startAutosave() {
-  stopAutosave();
-  _autosaveTimer = setInterval(autosaveSnapshot, AUTOSAVE_INTERVAL);
-}
-
-function stopAutosave() {
-  if (_autosaveTimer) { clearInterval(_autosaveTimer); _autosaveTimer = null; }
-}
-
-function tryAutoRestore() {
-  try {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
-    if (!raw) return false;
-    const snapshot = JSON.parse(raw);
-    if (!snapshot || !snapshot.agents || snapshot.agents.length === 0) return false;
-    const age = Date.now() - new Date(snapshot.meta.savedAt).getTime();
-    if (age > 86400000) { localStorage.removeItem(AUTOSAVE_KEY); return false; }
-    restoreCivilization(snapshot);
-    startAutosave();
-    narrate('Session restored from autosave — T' + snapshot.meta.tick + ', ' + snapshot.meta.alive + ' alive. The swarm remembers.');
-    return true;
-  } catch (e) { return false; }
-}
-
-const _origRunSim = runSim;
-runSim = function() { _origRunSim(); startAutosave(); };
-
-const _origStopSim = stopSim;
-stopSim = function() { autosaveSnapshot(); stopAutosave(); _origStopSim(); };
-
-window.addEventListener('beforeunload', autosaveSnapshot);
 </script>
 
 <script>
@@ -2216,7 +2429,10 @@ window.addEventListener('beforeunload', autosaveSnapshot);
 (async function initWorldMap() {
   const svg = document.getElementById('world-map-svg');
   if (!svg) return;
-
+  // Continent-outline backdrop intentionally disabled — the swarm reads best on pure void.
+  // (TopoJSON assets live in a separate build; skip cleanly here instead of throwing.)
+  return;
+  // eslint-disable-next-line no-unreachable
   // Simple equirectangular projection: lng/lat → x/y %
   // Works at any SVG size since we use viewBox coordinates (0–1000 × 500)
   const W = 1000, H = 500;
@@ -2289,6 +2505,72 @@ window.addEventListener('beforeunload', autosaveSnapshot);
     console.warn('World map CDN unavailable — running without background map.');
   }
 })();
+</script>
+<script>
+/* ── PERSISTENT COLONY MEMORY — survives reload, clears only on Reset ── */
+(function(){
+  const CIV_KEY='murmuration.civ.v2'; // v2: wall + 100/100 colony split era. Bump abandons pre-split saves.
+  try{ localStorage.removeItem('murmuration.civ.v1'); }catch(e){} // purge the drifted pre-split snapshot
+  function civSnapshot(){
+    if(!k26||!k26.world) return null;
+    const world=k26.world;
+    return {
+      version:2, // schema: wall + 100/100 colony split. tryRestore rejects anything older.
+      meta:{ savedAt:new Date().toISOString(), tick:world.time,
+        alive:world.agents.filter(a=>!a.seppukuDone).length,
+        dead:world.agents.filter(a=>a.seppukuDone).length,
+        total:world.agents.length, width:world.width, height:world.height },
+      env:{...world.env},
+      collectiveMemory:world.collectiveMemory?[...world.collectiveMemory]:[],
+      sentinel:world.sentinel?world.sentinel.id:null,
+      agents:world.agents.map(a=>({ id:a.id,x:a.x,y:a.y,vx:a.vx,vy:a.vy,radius:a.radius,
+        personality:{...a.personality}, beliefState:{...a.beliefState},
+        trustCharge:a.trustCharge, griefLevel:a.griefLevel, griefState:a.griefState,
+        graceTimer:a.graceTimer, wisdomScore:a.wisdomScore, isSentinel:a.isSentinel,
+        seppukuDone:a.seppukuDone, energy:a.energy!=null?a.energy:null,
+        generation:a.generation||0, faith:a.faith||0, evolution:a.evolution||0, colony:a.colony||null,
+        wealth:a.wealth!=null?a.wealth:null, socialClass:a.socialClass||null,
+        honor:a.honor||0, rank:a.rank||'GRUNT', isKing:!!a.isKing, fallenRank:a.fallenRank||null,
+        memory:a.memory?a.memory.slice(-10):[], _prevDrawdown:a._prevDrawdown||0 })),
+      economy:k26.economy?k26.economy.serialize():null,
+      wealth:k26.wealthEngine?k26.wealthEngine.serialize():null
+    };
+  }
+  function autoSave(){ try{ const s=civSnapshot(); if(s) localStorage.setItem(CIV_KEY,JSON.stringify(s)); }catch(e){} }
+  setInterval(autoSave,3000); window.addEventListener('beforeunload',autoSave);
+  if(typeof window.resetSim==='function'){ const _r=window.resetSim; window.resetSim=function(){ try{localStorage.removeItem(CIV_KEY);}catch(e){} return _r.apply(this,arguments); }; }
+  function tryRestore(){ let snap=null; try{ snap=JSON.parse(localStorage.getItem(CIV_KEY)||'null'); }catch(e){}
+    // Only restore healthy, current-schema snapshots. A missing/old version means the
+    // save predates the colony split (the drifted “everything on one side” state) — ignore it
+    // and let runSim() spawn a fresh 100/100 split.
+    if(snap && snap.version >= 2 && snap.agents && snap.agents.length && typeof restoreCivilization==='function' && window.MurmurationModules){ try{ restoreCivilization(snap); }catch(e){ console.warn('colony restore failed',e); } } }
+  if(document.readyState==='complete') setTimeout(tryRestore,300);
+  else window.addEventListener('load',()=>setTimeout(tryRestore,300));
+  const a=document.createElement('a'); a.href='Sovereign.html'; a.textContent='\u2190 MASTER NODE';
+  a.style.cssText='position:fixed;left:18px;bottom:16px;z-index:9999;font:400 10px/1 "JetBrains Mono",monospace;letter-spacing:.26em;text-transform:uppercase;color:#7c766b;text-decoration:none;padding:9px 14px;border:1px solid rgba(232,227,217,0.12);border-radius:1px;background:rgba(11,10,9,0.78);backdrop-filter:blur(4px);transition:all .25s ease';
+  a.onmouseenter=function(){a.style.borderColor='rgba(195,161,107,0.6)';a.style.color='#c3a16b';}; a.onmouseleave=function(){a.style.borderColor='rgba(232,227,217,0.12)';a.style.color='#7c766b';};
+  (document.body||document.documentElement).appendChild(a);
+})();
+
+function togglePanel(force){
+  const sb=document.getElementById('sidebar');
+  if(!sb) return;
+  const open = typeof force==='boolean' ? force : !sb.classList.contains('open');
+  sb.classList.toggle('open', open);
+  const label=document.getElementById('panel-tab-label');
+  if(label) label.textContent = open ? 'CLOSE' : 'PANEL';
+  const btn=document.getElementById('hdr-toggle');
+  if(btn) btn.textContent=open?'Close':'Controls';
+}
+// Clicking the canvas while the panel is open closes it \u2014 it can never
+// get stuck open over the sim. Escape also closes it.
+document.addEventListener('click', function(e){
+  var sb=document.getElementById('sidebar');
+  if(!sb || !sb.classList.contains('open')) return;
+  if (e.target.closest('#sidebar') || e.target.closest('#panel-tab')) return;
+  togglePanel(false);
+});
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') togglePanel(false); });
 </script>
 </body>
 </html>

@@ -26,7 +26,7 @@ window.MurmurationModules.Agent = class Agent {
     this.beliefState = {};
     this.vx = 0;
     this.vy = 0;
-    this.radius = 2.5;
+    this.radius = 1.2;
 
     // ST-1 Trust Battery
     this.trustCharge = personality.trustBaseline || 0.5;
@@ -38,6 +38,19 @@ window.MurmurationModules.Agent = class Agent {
     this.wisdomScore = 0;        // permanent scar — recovered grief becomes vigilance
     this.isSentinel  = false;    // designated by world — locked at grief=1.0
     this.seppukuDone = false;
+
+    // WAR HONOR — earned through CTF attrition kills, plus a steady trickle for
+    // any common soldier (below GENERAL) who actually stands in a fight.
+    // Rank ladder while alive: GRUNT → DECORATED → VETERAN → GENERAL → HERO.
+    // KING is a single unique title per colony, held by whoever is alive with
+    // the most honor — it passes on death or on being outranked.
+    // Dying in battle (never seppuku) always earns a posthumous tier too — not
+    // from title, but from the actual effort and honor brought to the clan:
+    // HERO, then LEGEND, then GOD for the very greatest contributors.
+    this.honor      = 0;
+    this.rank       = 'GRUNT';
+    this.isKing     = false;
+    this.fallenRank = null; // null | 'HERO' | 'LEGEND' | 'GOD' — set only on battle death
 
     // ST-3 Faith — belief in something larger than self
     this.faith       = 0.1 + Math.random() * 0.15;  // everyone starts with a seed
@@ -59,11 +72,6 @@ window.MurmurationModules.Agent = class Agent {
     this._evolutionReady       = false; // true when enough is accumulated for user to inspect/implement
     this._evolutionPulseTimer  = 0;    // drives the radiate animation on gold strings
     this._highTrustTicks       = 0;    // consecutive ticks above the trust threshold
-
-    // Detonation visual effects — set by SeedInjector, decay each frame
-    this._detonationEffect = null;   // 'earthquake'|'paranoia'|'cascade'|'timewarp'|'flood'
-    this._detonationTimer  = 0;      // frames remaining
-    this._detonationStr    = 0;      // intensity 0-1
   }
 
   // ─── ST-1 ────────────────────────────────────────────────────────────────
@@ -134,6 +142,14 @@ window.MurmurationModules.Agent = class Agent {
    * 3. Clean exit — no noise, no damage.
    */
   performSeppuku(world) {
+    // A King who chooses seppuku vacates the crown but earns no posthumous
+    // tier — HERO/LEGEND/GOD are reserved for those who fall in battle, not
+    // by their own hand.
+    if (this.isKing) {
+      this.isKing = false;
+      if (window.addEvent) window.addEvent('♛ Colony ' + this.colony + "'s KING has chosen seppuku — the crown passes on, but no honor tier is earned this way.", 'crisis');
+    }
+
     // 1. Redistribute trust to top bonded neighbors
     const neighbors = world.getNeighbors(this, 100);
     const top = neighbors
@@ -262,8 +278,8 @@ window.MurmurationModules.Agent = class Agent {
 
     // Soft edge repulsion — gradual push instead of hard bounce
     // Each agent hits the edge zone at a different position, breaking sync
-    const margin = 60;
-    const edgeForce = 0.08;
+    const margin = 95;
+    const edgeForce = 0.16;
     if (this.x < margin)          this.vx += (margin - this.x) / margin * edgeForce;
     if (this.x > width - margin)  this.vx -= (this.x - (width - margin)) / margin * edgeForce;
     if (this.y < margin)          this.vy += (margin - this.y) / margin * edgeForce;
@@ -367,19 +383,24 @@ window.MurmurationModules.Agent = class Agent {
       return;
     }
 
-    // ACTIVE / GRIEVING / CRISIS — violet/pink palette, agents are the show
+    // ACTIVE / GRIEVING / CRISIS — each colony holds its own hue family so they
+    // always read apart: Knowhere (A) is turquoise, Mainland (B) is pink.
     const belief = this.beliefState.current || 0;
     const energy = this.energy != null ? this.energy : 1;
-    const beliefHue   = 272 + belief * 52;          // 220 blue-violet → 272 violet → 324 neon pink
+    const isMainland  = this.colony === 'B';
+    const baseHue     = isMainland ? 326 : 176;               // Mainland pink · Knowhere turquoise
+    const wobbleDir   = isMainland ? -1 : 1;                  // wobble inward, never toward the other family
+    const beliefHue   = baseHue + wobbleDir * (belief * 16 - 8);   // gentle ±8 wobble within the family
 
-    // Spectral accents — high-evolution drifts toward magenta, high-faith warms toward gold
+    // Spectral accents — high-evolution and dense clusters deepen/brighten rather
+    // than shift hue across colonies, so identity never blurs between the two
     const evo         = Math.min(1, (this.evolution || 0) / 3);  // saturates at evo=3
     const faithLevel  = this.faith || 0;
-    const evoShift    = evo > 0.3 ? (evo - 0.3) / 0.7 * 35 : 0;          // +35 hue toward magenta
+    const evoShift    = evo > 0.3 ? wobbleDir * (evo - 0.3) / 0.7 * 10 : 0;   // small in-family drift
     const faithWarm   = faithLevel > 0.5 ? (faithLevel - 0.5) * 2 : 0;   // faith warms the body
 
-    const hue         = beliefHue + evoShift + (this.swarmTint || 0);
-    const energyLight = 42 + energy * 20 + faithWarm * 6;         // faith agents burn slightly brighter
+    const hue         = beliefHue + evoShift;
+    const energyLight = 52 + energy * 22 + faithWarm * 6;         // brighter base — faith agents burn even more
 
     // Cluster density glow — the bigger the group, the brighter and wider the bloom.
     // Additive, so overlapping glows in a dense flock stack into real radiance.
@@ -387,13 +408,14 @@ window.MurmurationModules.Agent = class Agent {
     if (cluster > 1) {
       const intensity  = Math.min(1, (cluster - 1) / 10);    // starts at a pair, full by ~11
       const glowRadius = this.radius + 5 + intensity * 18;   // scaled to smaller agent
-      const glowAlpha  = 0.06 + intensity * 0.18;            // slightly stronger to compensate for smaller body
+      const glowAlpha  = 0.12 + intensity * 0.26;            // brighter bloom so dense clusters read clearly
       const grad = ctx.createRadialGradient(
         this.x, this.y, this.radius * 0.5,
         this.x, this.y, glowRadius
       );
-      // Dense clusters burst toward neon pink — the civilization blazing
-      const bloomHue = hue + intensity * 40;        // violet → pink as crowd grows
+      // Dense clusters burn brighter and deeper into their own hue family — the
+      // civilization blazing, without crossing into the other colony's color
+      const bloomHue = hue + wobbleDir * intensity * 16;
       grad.addColorStop(0, `hsla(${bloomHue}, ${90 - intensity * 20}%, ${55 + intensity * 20}%, ${glowAlpha})`);
       grad.addColorStop(1, `hsla(${bloomHue}, 90%, 50%, 0)`);
       ctx.save();
@@ -405,10 +427,10 @@ window.MurmurationModules.Agent = class Agent {
       ctx.restore();
     }
 
-    // Body — tight contained shadow, dimmer body so core contrast reads clearly
-    ctx.shadowBlur  = this.radius * 1.2;           // tighter — less ambient spill into the void
-    ctx.shadowColor = `hsl(${hue}, 85%, 55%)`;
-    ctx.fillStyle   = `hsl(${hue}, 75%, ${energyLight}%)`;  // body is the color, not the brightness
+    // Body — brighter, more luminous shadow so the swarm reads clearly against the void
+    ctx.shadowBlur  = this.radius * 1.7;
+    ctx.shadowColor = `hsl(${hue}, 90%, 65%)`;
+    ctx.fillStyle   = `hsl(${hue}, 85%, ${energyLight}%)`;  // body is the color, not the brightness
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
@@ -416,11 +438,11 @@ window.MurmurationModules.Agent = class Agent {
 
     // Quantum core — pure near-white hot pinpoint; this is the brightest thing on screen
     // Two passes: outer soft corona then sharp white nucleus
-    ctx.fillStyle = `hsla(${hue}, 30%, 88%, 0.55)`;  // corona — slightly colored
+    ctx.fillStyle = `hsla(${hue}, 30%, 90%, 0.7)`;  // corona — slightly colored
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius * 0.62, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = `rgba(255, 255, 255, 0.92)`;      // nucleus — pure white, no hue
+    ctx.fillStyle = `rgba(255, 255, 255, 0.97)`;      // nucleus — pure white, no hue
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius * 0.28, 0, Math.PI * 2);
     ctx.fill();
@@ -441,157 +463,6 @@ window.MurmurationModules.Agent = class Agent {
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
       ctx.stroke();
-    }
-
-    // ── DETONATION VISUAL EFFECTS ──
-    if (this._detonationTimer > 0) {
-      const t = this._detonationTimer;
-      const str = this._detonationStr;
-      const progress = 1 - (t / 90); // 0→1 over ~90 frames (~1.5s)
-
-      if (this._detonationEffect === 'earthquake') {
-        // RED shockwave ring expanding outward — the ground is shaking
-        const ringR = this.radius + 3 + progress * 25 * str;
-        const alpha = (1 - progress) * 0.7 * str;
-        ctx.strokeStyle = `rgba(255, 40, 20, ${alpha})`;
-        ctx.lineWidth = 2 - progress * 1.5;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, ringR, 0, Math.PI * 2);
-        ctx.stroke();
-        // inner flash
-        if (progress < 0.3) {
-          ctx.fillStyle = `rgba(255, 80, 30, ${(0.3 - progress) * str})`;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      else if (this._detonationEffect === 'paranoia') {
-        // CYAN ELECTRIC STORM — multiple lightning bolts firing outward,
-        // they're seeing threats in every direction at once.
-        const alpha = (1 - progress) * str;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-
-        // 4 jagged lightning bolts radiating in random directions, re-rolled each frame
-        const bolts = 4;
-        const reach = this.radius + 8 + 14 * str;
-        for (let b = 0; b < bolts; b++) {
-          const ang = (b / bolts) * Math.PI * 2 + Math.random() * 1.2;
-          const len = reach * (0.6 + Math.random() * 0.4);
-          // jagged path: 3 segments stepping outward with lateral jitter
-          const segs = 3;
-          ctx.strokeStyle = `rgba(120, 240, 255, ${alpha * 0.9})`;
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.moveTo(this.x, this.y);
-          let px = this.x, py = this.y;
-          for (let s = 1; s <= segs; s++) {
-            const f = s / segs;
-            const perp = (Math.random() - 0.5) * 6 * str;
-            px = this.x + Math.cos(ang) * len * f + Math.cos(ang + 1.57) * perp;
-            py = this.y + Math.sin(ang) * len * f + Math.sin(ang + 1.57) * perp;
-            ctx.lineTo(px, py);
-          }
-          ctx.stroke();
-        }
-
-        // pulsing electric halo — flickers hard so it reads as panic
-        const flick = 0.55 + 0.45 * Math.sin(t * 1.7) * (Math.random() > 0.3 ? 1 : 0.3);
-        ctx.strokeStyle = `rgba(0, 230, 255, ${alpha * 0.7 * flick})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + 4 + Math.random() * 3, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // bright white-cyan core flash at the moment of detonation
-        if (progress < 0.35) {
-          ctx.fillStyle = `rgba(200, 255, 255, ${(0.35 - progress) * 2.5 * str})`;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      else if (this._detonationEffect === 'cascade') {
-        // ORANGE pressure pulse — builds then explodes
-        if (progress < 0.5) {
-          // pressure building — tight vibrating ring
-          const squeeze = 1 + Math.sin(t * 0.8) * 0.3 * str;
-          const alpha = progress * 2 * 0.6 * str;
-          ctx.strokeStyle = `rgba(255, 160, 0, ${alpha})`;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius * squeeze + 1.5, 0, Math.PI * 2);
-          ctx.stroke();
-        } else {
-          // BOOM — expanding blast ring
-          const blastProgress = (progress - 0.5) * 2;
-          const blastR = this.radius + 5 + blastProgress * 20 * str;
-          const alpha = (1 - blastProgress) * 0.8 * str;
-          ctx.strokeStyle = `rgba(255, 120, 0, ${alpha})`;
-          ctx.lineWidth = 2.5 - blastProgress * 2;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, blastR, 0, Math.PI * 2);
-          ctx.stroke();
-          // secondary ring
-          if (blastProgress > 0.2) {
-            const r2 = this.radius + 3 + (blastProgress - 0.2) * 15 * str;
-            ctx.strokeStyle = `rgba(255, 200, 50, ${(1 - blastProgress) * 0.4 * str})`;
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, r2, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-        }
-      }
-
-      else if (this._detonationEffect === 'timewarp') {
-        // PURPLE afterimage trail — time is bending
-        const alpha = (1 - progress) * 0.5 * str;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        for (let i = 1; i <= 3; i++) {
-          const trailX = this.x - this.vx * i * 3;
-          const trailY = this.y - this.vy * i * 3;
-          const trailA = alpha * (1 - i * 0.25);
-          ctx.fillStyle = `rgba(180, 80, 255, ${trailA})`;
-          ctx.beginPath();
-          ctx.arc(trailX, trailY, this.radius * (1 - i * 0.15), 0, Math.PI * 2);
-          ctx.fill();
-        }
-        // time distortion halo
-        ctx.strokeStyle = `rgba(200, 100, 255, ${alpha * 0.4})`;
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + 4 + Math.sin(t * 0.3) * 2, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      else if (this._detonationEffect === 'flood') {
-        // GREEN spawn flash — outsiders arriving
-        const alpha = (1 - progress) * 0.7 * str;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const flashR = this.radius + 2 + progress * 8;
-        ctx.fillStyle = `rgba(40, 255, 120, ${alpha * 0.4})`;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, flashR, 0, Math.PI * 2);
-        ctx.fill();
-        // newcomer mark — bright core
-        if (progress < 0.4) {
-          ctx.fillStyle = `rgba(100, 255, 180, ${(0.4 - progress) * 2 * str})`;
-          ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      this._detonationTimer--;
     }
 
     // ST-2 grief ring — amber (GRIEVING) → pulsing red (CRISIS)

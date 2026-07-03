@@ -7,18 +7,18 @@
 window.MurmurationModules = window.MurmurationModules || {};
 
 window.MurmurationModules.SeedInjector = class SeedInjector {
-  inject(world, signals = {}) {
+  /** colony: 'A' | 'B' — scopes every effect (env + agent-level) to that
+   *  colony only, so each side can be pushed down its own chaos path. */
+  inject(world, signals = {}, colony = 'A') {
+    const mine = a => a.colony === colony;
 
     // ═══ EARTHQUAKE (PitViperDivergence) ═══
     // Shatters trust, scatters positions, injects grief
     if ('PitViperDivergence' in signals && signals.PitViperDivergence > 0) {
       const str = signals.PitViperDivergence;
-      world.setEnv('disturbance', str);
+      world.setEnv('disturbance', str, colony);
       world.agents.forEach(a => {
-        if (a.seppukuDone) return;
-        a._detonationEffect = 'earthquake';
-        a._detonationTimer = 90;
-        a._detonationStr = str;
+        if (a.seppukuDone || !mine(a)) return;
         // Drain trust proportional to quake strength
         a.updateTrust(-str * 0.4);
         // Inject grief — the ground is shaking
@@ -31,6 +31,7 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
           a.beliefState.current += (Math.random() - 0.5) * str * 0.6;
           a.beliefState.current = Math.max(-1, Math.min(1, a.beliefState.current));
         }
+        if (world.markHit) world.markHit(a, '255,96,40');
       });
     }
 
@@ -38,18 +39,16 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
     // Every agent overreacts — trust plummets, reactivity spikes
     if ('ElectroreceptionAnomaly' in signals && signals.ElectroreceptionAnomaly > 0) {
       const str = signals.ElectroreceptionAnomaly;
-      world.setEnv('anomaly', str);
+      world.setEnv('anomaly', str, colony);
       world.agents.forEach(a => {
-        if (a.seppukuDone) return;
-        a._detonationEffect = 'paranoia';
-        a._detonationTimer = 90;
-        a._detonationStr = str;
+        if (a.seppukuDone || !mine(a)) return;
         // Crank reactivity WAY up — they overreact to everything
         a.personality.reactivity = Math.min(3.0, a.personality.reactivity * (1 + str * 1.5));
         // Trust nosedives — everyone looks like a threat
         a.updateTrust(-str * 0.3);
         // Grief from paranoia itself
         a.updateGrief(str * 0.15);
+        if (world.markHit) world.markHit(a, '200,90,255');
       });
     }
 
@@ -57,20 +56,18 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
     // Pressure builds, then detonates grief cascade after delay
     if ('LateralLinePressure' in signals && signals.LateralLinePressure > 0) {
       const str = signals.LateralLinePressure;
-      world.setEnv('pressure', str);
+      world.setEnv('pressure', str, colony);
       // Immediate: silent pressure — agents don't know yet
       world.agents.forEach(a => {
-        if (a.seppukuDone) return;
-        a._detonationEffect = 'cascade';
-        a._detonationTimer = 90;
-        a._detonationStr = str;
+        if (a.seppukuDone || !mine(a)) return;
         a.updateGrief(str * 0.1);
       });
       // Delayed detonation — grief bomb after 1.5 seconds
       setTimeout(() => {
-        world.setEnv('disturbance', (world.env.disturbance || 0) + str * 1.5);
+        const e = world.envFor(colony);
+        world.setEnv('disturbance', (e.disturbance || 0) + str * 1.5, colony);
         world.agents.forEach(a => {
-          if (a.seppukuDone) return;
+          if (a.seppukuDone || !mine(a)) return;
           // The bomb goes off — massive grief spike
           a.updateGrief(str * 0.5);
           a.updateTrust(-str * 0.35);
@@ -79,30 +76,23 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
             a.beliefState.current += (Math.random() - 0.5) * str * 0.8;
             a.beliefState.current = Math.max(-1, Math.min(1, a.beliefState.current));
           }
+          if (world.markHit) world.markHit(a, '255,60,40');
         });
       }, 1500);
     }
 
-    // ═══ TIME WARP (EcholocationFrequency) ═══
-    // Speed up processing — but faster processing means faster decay
-    // ALWAYS set timestepRes so slider=0 actually resets speed
+    // ═══ COGNITIVE SHARPNESS (EcholocationFrequency) ═══
+    // Sharpens how intensely this colony feels its own anomaly/disturbance —
+    // NOT a global speed control (that's the Simulation Speed slider now).
     if ('EcholocationFrequency' in signals) {
       const str = signals.EcholocationFrequency;
-      world.setEnv('timestepRes', str);
-      world.timestepRes = str;
-      if (str > 0) {
-        world.agents.forEach(a => {
-          if (a.seppukuDone) return;
-          a._detonationEffect = 'timewarp';
-          a._detonationTimer = 90;
-          a._detonationStr = str;
-        });
-      }
-      // At high speed, trust erodes — relationships can't keep up
+      world.setEnv('timestepRes', str, colony);
+      // At high sharpness, trust erodes — relationships can't keep up
       if (str > 0.5) {
         world.agents.forEach(a => {
-          if (a.seppukuDone) return;
+          if (a.seppukuDone || !mine(a)) return;
           a.updateTrust(-str * 0.15);
+          // Reactivity increases with time pressure
           a.personality.reactivity = Math.min(2.5, a.personality.reactivity * (1 + str * 0.3));
         });
       }
@@ -112,25 +102,13 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
     // Pour in newcomers — outsiders with zero trust, disrupting the network
     if ('MantisShrimp16Bands' in signals && signals.MantisShrimp16Bands > 0) {
       const str = signals.MantisShrimp16Bands;
-      world.setEnv('spawnFilter', str);
+      world.setEnv('spawnFilter', str, colony);
       if (str > 0.3) {
-        const existingCount = world.agents.length;
         const newCount = Math.floor(str * 15);
-        world.initAgents(newCount);
-        // Mark newcomers with flood effect
-        for (let i = existingCount; i < world.agents.length; i++) {
-          world.agents[i]._detonationEffect = 'flood';
-          world.agents[i]._detonationTimer = 90;
-          world.agents[i]._detonationStr = str;
-        }
+        world.spawnColonyReinforcements ? world.spawnColonyReinforcements(newCount, colony) : world.initAgents(newCount);
         // Existing agents react to strangers — trust hit
-        world.agents.forEach((a, idx) => {
-          if (a.seppukuDone) return;
-          if (idx < existingCount) {
-            a._detonationEffect = 'paranoia';
-            a._detonationTimer = 60;
-            a._detonationStr = str * 0.4;
-          }
+        world.agents.forEach(a => {
+          if (a.seppukuDone || !mine(a)) return;
           a.updateTrust(-str * 0.1);
           a.updateGrief(str * 0.08);
         });
