@@ -257,9 +257,10 @@ window.MurmurationModules.World = class World {
       start: performance.now(),
       duration: compound ? 4200 + s * 2800 : 1400 + s * 1400,
       color: compound ? '150,200,255' : '200,90,255',
-      boltEvery: compound ? 70 : 150,
-      boltsPerSpawn: compound ? 3 : 1,
-      maxWidth: compound ? 2.6 : 1.6,
+      boltEvery: compound ? 70 : 55,
+      boltsPerSpawn: compound ? 3 : 5,
+      maxWidth: compound ? 2.6 : 1.0,
+      coreAlpha: compound ? 0.85 : 1.0,
       _nextBolt: 0,
       _bolts: []
     });
@@ -276,32 +277,43 @@ window.MurmurationModules.World = class World {
     const src = pool[Math.floor(Math.random() * pool.length)];
     const x1 = src.x, y1 = src.y;
     let x2, y2;
-    // Prefer discharging into a nearby colony-mate — paranoia arcs between bodies
-    const reach = storm.compound ? 130 : 90;
+    // Compound storms arc between bodies across real distance; solo paranoia
+    // is extreme STATIC — tight, violent crackle hugging the agent itself,
+    // only jumping to another body if one is practically touching.
+    const reach = storm.compound ? 130 : 34;
+    const jumpChance = storm.compound ? 0.7 : 0.3;
     const near = pool.filter(a => a !== src &&
       Math.abs(a.x - src.x) < reach && Math.abs(a.y - src.y) < reach &&
       Math.hypot(a.x - src.x, a.y - src.y) < reach);
-    if (near.length && Math.random() < 0.7) {
+    if (near.length && Math.random() < jumpChance) {
       const dst = near[Math.floor(Math.random() * near.length)];
       x2 = dst.x; y2 = dst.y;
     } else {
-      // No one close enough — a short crackle off the body into open space
+      // Crackle off the body into open space — small to us, big to the agent
       const ang = Math.random() * Math.PI * 2;
-      const crackleLen = 18 + Math.random() * (storm.compound ? 45 : 28);
+      const crackleLen = storm.compound
+        ? 18 + Math.random() * 45
+        : 5 + Math.random() * 13;
       x2 = x1 + Math.cos(ang) * crackleLen;
       y2 = y1 + Math.sin(ang) * crackleLen;
     }
     const dx = x2 - x1, dy = y2 - y1;
     const len = Math.hypot(dx, dy) || 1;
     const px = -dy / len, py = dx / len; // perpendicular for jag offsets
-    const segs = 6 + Math.floor(Math.random() * 5);
+    // Static reads jagged: more kinks per pixel on solo bolts
+    const segs = storm.compound
+      ? 6 + Math.floor(Math.random() * 5)
+      : 4 + Math.floor(Math.random() * 4);
+    const wobbleScale = storm.compound ? 0.22 : 0.38;
     const pts = [];
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
-      const wobble = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * len * 0.22;
+      const wobble = (i === 0 || i === segs) ? 0 : (Math.random() - 0.5) * len * wobbleScale;
       pts.push([x1 + dx * t + px * wobble, y1 + dy * t + py * wobble]);
     }
-    storm._bolts.push({ pts, born: performance.now(), life: 110 + Math.random() * 110 });
+    // Static snaps fast; storm arcs linger a beat longer
+    const life = storm.compound ? 110 + Math.random() * 110 : 55 + Math.random() * 65;
+    storm._bolts.push({ pts, born: performance.now(), life });
   }
 
   drawLightning(ctx) {
@@ -327,8 +339,8 @@ window.MurmurationModules.World = class World {
         ctx.strokeStyle = 'rgba(' + storm.color + ',' + (al * 0.35).toFixed(3) + ')';
         ctx.lineWidth = storm.maxWidth * 3;
         ctx.stroke();
-        // Hot white core, same path
-        ctx.strokeStyle = 'rgba(255,255,255,' + (al * 0.85).toFixed(3) + ')';
+        // Hot white core, same path — solo static burns at full brightness
+        ctx.strokeStyle = 'rgba(255,255,255,' + (al * (storm.coreAlpha || 0.85)).toFixed(3) + ')';
         ctx.lineWidth = storm.maxWidth * (1 - e * 0.5);
         ctx.stroke();
       }
