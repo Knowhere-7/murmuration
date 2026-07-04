@@ -4,3 +4,10 @@
 # Saved swarm-state exports (runtime data dumps, not source)
 *-swarm.json
 clauds-missing-swarm.json
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
