@@ -83,15 +83,27 @@ window.MurmurationModules.World = class World {
     // bonds and sightlines still cross, so tension builds along the seam.
     this.wall = {
       thickness: 12,
+      // Spread far apart and pushed close to the top/bottom edges (was 0.28/0.72,
+      // clustered near mid-height). Solid wall segments above/below a gate are
+      // where agents pile up and wedge into the corner under crowd pressure —
+      // pushing the gates outward shrinks those segments and gives the crowd
+      // more open perimeter to bleed into instead of jamming the same corner.
+      // hf unchanged, so a real indentation/margin (~6.5% of height) still
+      // separates each gate from the canvas edge — it never touches the corner.
       gates: [
-        { yf: 0.28, hf: 0.075, open: false, name: 'NORTH GATE' },
-        { yf: 0.72, hf: 0.075, open: false, name: 'SOUTH GATE' }
+        { yf: 0.14, hf: 0.075, open: false, name: 'NORTH GATE' },
+        { yf: 0.86, hf: 0.075, open: false, name: 'SOUTH GATE' }
       ]
     };
 
     // Environmental control knobs (wired to sliders) — per-colony now.
     this.terrainPullA = 1.0;   // how strongly the topography channels colony A's movement
     this.terrainPullB = 1.0;   // same, for colony B — independent evolutionary path
+
+    // UNALIGNED escalation — each "INTRODUCE UNALIGNED" press ratchets the
+    // response up a tier and never de-escalates on its own (see introduceUnaligned).
+    this.unalignedTier   = 0;      // 0 = none introduced yet
+    this.unalignedTarget = 'both'; // 'A' | 'B' | 'both' — settable by the UI
 
     this.initAgents(agentCount);
   }
@@ -391,28 +403,77 @@ window.MurmurationModules.World = class World {
   }
 
   /**
+   * The nomadic UNALIGNED army escalates every time it's introduced — never
+   * de-escalates on its own. `target` ('A' | 'B' | 'both') picks which
+   * colony(ies) they're biased to spawn near and, at tier 2, hunt into.
+   *   Tier 1 — SCOUTS: small recon party, cautious, doesn't seek a fight.
+   *   Tier 2 — SPEC-OPS: tiny squad, each assigned to hunt down and strike
+   *            the target colony's King (see ctf.js §KING) until it dies.
+   *   Tier 3 — FULL INVASION: a large, maximally aggressive flood — no
+   *            individual hunting, just overwhelming numbers.
+   * Tier caps at 3 — repeated presses after that stay at full invasion.
+   */
+  introduceUnaligned(target) {
+    if (target) this.unalignedTarget = target;
+    this.unalignedTier = Math.min(3, this.unalignedTier + 1);
+    const tier = this.unalignedTier;
+    const label = tier === 1 ? 'SCOUTS' : tier === 2 ? 'SPEC-OPS' : 'FULL INVASION';
+    if (window.logLine) {
+      window.logLine(`⚠ UNALIGNED TIER ${tier} — ${label} (target: ${this.unalignedTarget.toUpperCase()})`, 'warn');
+    }
+    if (tier === 1) {
+      this.spawnUnaligned({ count: 4, tier, aggressive: false, hunt: false });
+    } else if (tier === 2) {
+      this.spawnUnaligned({ count: 4, tier, aggressive: true, hunt: true });
+    } else {
+      this.spawnUnaligned({ count: 24, tier, aggressive: true, hunt: false });
+    }
+    return { tier, label, target: this.unalignedTarget };
+  }
+
+  /**
    * Spawn UNALIGNED agents mid-simulation.
-   * They have max riskTolerance, near-zero trustBaseline, max reactivity.
+   * They have max riskTolerance, near-zero trustBaseline, max reactivity
+   * (unless `aggressive: false`, used for cautious Tier-1 scouts).
    * High capability on spawn, but no cooperation — no compounding.
    * colony = 'U' marks them for all behavior overrides.
+   * Spawn edges are biased toward `this.unalignedTarget`'s side of the wall;
+   * `hunt: true` assigns each agent a colony to chase down and strike its King.
    */
-  spawnUnaligned(count = 8) {
+  spawnUnaligned(opts = {}) {
+    const count = opts.count != null ? opts.count : 8;
+    const aggressive = opts.aggressive !== false;
+    const hunt = !!opts.hunt;
+    const target = this.unalignedTarget || 'both';
     const Agent = window.MurmurationModules.Agent;
     const startId = this.agents.length;
+    const wx = this.width / 2;
     for (let i = 0; i < count; i++) {
-      // Scatter them around the canvas edges — they emerge from outside
-      const edge = Math.floor(Math.random() * 4);
+      // Which side of the wall to emerge near — 'both' still scatters all 4 edges,
+      // 'A'/'B' restricts to the edges bordering that colony's half.
+      let side = target;
+      if (side === 'both') side = Math.random() < 0.5 ? 'A' : 'B';
+      const edge = Math.floor(Math.random() * 4); // 0 top, 1 right, 2 bottom, 3 left
       let x, y;
       if      (edge === 0) { x = Math.random() * this.width;  y = 5; }
-      else if (edge === 1) { x = this.width - 5;              y = Math.random() * this.height; }
       else if (edge === 2) { x = Math.random() * this.width;  y = this.height - 5; }
-      else                 { x = 5;                           y = Math.random() * this.height; }
+      else if (side === 'A') { x = 5;              y = Math.random() * this.height; }
+      else                   { x = this.width - 5; y = Math.random() * this.height; }
+      if ((edge === 0 || edge === 2)) {
+        // Bias the top/bottom-edge x position toward the targeted half too
+        x = side === 'A' ? Math.random() * wx : wx + Math.random() * wx;
+      }
 
-      const personality = {
+      const personality = aggressive ? {
         riskTolerance: 1.0,        // maximum — they take every risk
         trustBaseline: 0.08,       // barely any starting trust
         reactivity:    1.0,        // maximum reactivity — hair trigger
         memoryWeight:  0.15,       // low memory — they don't learn from others
+      } : {
+        riskTolerance: 0.35,       // scouts — cautious, here to observe not engage
+        trustBaseline: 0.15,
+        reactivity:    0.5,
+        memoryWeight:  0.15,
       };
       const agent = new Agent(startId + i, x, y, personality);
       agent.colony      = 'U';
@@ -421,10 +482,56 @@ window.MurmurationModules.World = class World {
       agent.griefLevel  = 0.0;     // grief doesn't register
       agent.wisdomScore = 0.6;     // smart but not socially intelligent
       agent.evolution   = 0.4;     // advanced — they're not primitive, they're misaligned
+      if (hunt) {
+        // 'both' target with hunt on (shouldn't normally happen at tier 2, which
+        // uses whatever target is set) still splits the squad across both kings.
+        agent.huntColony = target === 'both' ? (i % 2 === 0 ? 'A' : 'B') : target;
+        agent._strikeCd  = 0; // ticks until this assassin can land another strike
+      }
       this.agents.push(agent);
     }
-    if (window.logLine) {
+    if (window.logLine && !opts.tier) {
       window.logLine(`⚠ UNALIGNED — ${count} agents entered the system`, 'warn');
+    }
+  }
+
+  /**
+   * Tier-2 assassins steer toward their assigned colony's living King and,
+   * once in range, land periodic strikes that drain his honor. A King struck
+   * down to 0 honor while under assassination dies outright — same posthumous
+   * tier + monument treatment as an attrition kill (see ctf.js §KING).
+   * Runs every tick regardless of War Games mode, same as ctf._royalCourt.
+   */
+  _updateAssassins(active) {
+    const ctf = window.k26 && window.k26.ctf;
+    const kings = ctf && ctf._kings;
+    if (!kings) return;
+    for (const a of active) {
+      if (a.colony !== 'U' || !a.huntColony) continue;
+      const king = kings[a.huntColony];
+      if (!king || king.seppukuDone) continue; // no living king to hunt right now
+      const dx = king.x - a.x, dy = king.y - a.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      // Hard beeline — much stronger pull than the erratic wander it replaces
+      a.vx += (dx / dist) * 0.5;
+      a.vy += (dy / dist) * 0.5;
+      if (a._strikeCd > 0) { a._strikeCd--; continue; }
+      const STRIKE_RANGE = 20;
+      if (dist > STRIKE_RANGE) continue;
+      a._strikeCd = 50; // cooldown between strikes so it's an "attempt", not instant
+      king.honor = Math.max(0, (king.honor || 0) - 2);
+      if (this.markHit) this.markHit(king, '255,60,40');
+      if (window.logLine) window.logLine(`⚔ Assassination attempt — UNALIGNED struck Colony ${a.huntColony}'s King`, 'crisis');
+      if (king.honor <= 0) {
+        const lifetimeHonor = king.honor || 0;
+        king.isKing = false;
+        king.fallenRank = 'HERO'; // struck down at 0 honor — the base posthumous tier
+        king.seppukuDone = true;
+        king.ctfCaptured = true;
+        if (this.markHit) this.markHit(king, '255,40,30');
+        if (window.logLine) window.logLine(`☠ Colony ${a.huntColony}'s King has been assassinated by UNALIGNED forces.`, 'crisis');
+        a.huntColony = null; // mission complete — rejoin general erratic wander
+      }
     }
   }
 
@@ -845,6 +952,9 @@ window.MurmurationModules.World = class World {
     // ── CTF — flag-carrier steering, tags, pickups, scoring. Runs before the
     // wall collision pass so a raider aimed at a closed gate still gets clamped. ──
     if (this.ctf) this.ctf.applyForces(active);
+
+    // ── UNALIGNED assassins (Tier 2) — beeline toward their target King ──
+    this._updateAssassins(active);
 
     // ── WALL — hold each agent on its side unless it's inside an open gate ──
     for (const a of active) {

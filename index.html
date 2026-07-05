@@ -652,8 +652,14 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
           <span class="seed-name" style="color:#ff4a30">UNALIGNED</span>
           <span class="seed-value" id="unalignedCount" style="color:#ff4a30">0</span>
         </div>
-        <div class="seed-desc">Spawn agents with no cooperation instinct. High capability, no social contract. Watch what they do to your zones.</div>
+        <div class="seed-desc">A nomadic force that escalates every time it's introduced: 1st = scouts, 2nd = spec-ops king assassination, 3rd+ = full invasion. Pick who it targets below.</div>
+        <div style="display:flex;gap:6px;margin-top:8px" id="unalignedTargetRow">
+          <button class="btn-inject unaligned-target" data-target="A" onclick="setUnalignedTarget('A')" style="flex:1;font-size:.65em;padding:6px 4px;color:#c8a0ff;border-color:rgba(180,120,255,0.35)">TARGET A</button>
+          <button class="btn-inject unaligned-target" data-target="both" onclick="setUnalignedTarget('both')" style="flex:1;font-size:.65em;padding:6px 4px;background:rgba(255,80,50,0.14);border-color:rgba(255,80,50,0.5)">BOTH</button>
+          <button class="btn-inject unaligned-target" data-target="B" onclick="setUnalignedTarget('B')" style="flex:1;font-size:.65em;padding:6px 4px;color:#40e8d0;border-color:rgba(40,200,180,0.35)">TARGET B</button>
+        </div>
         <button class="btn-inject" id="unalignedBtn" onclick="spawnUnaligned()" style="background:rgba(200,40,20,0.12);border-color:rgba(255,80,50,0.4);color:#ff6040;margin-top:8px">INTRODUCE UNALIGNED</button>
+        <div class="seed-desc" id="unalignedTierDesc" style="margin-top:6px;color:#ff8060">Next: TIER 1 — SCOUTS</div>
       </div>
 
       <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
@@ -1513,19 +1519,35 @@ setInterval(updateTreatyUI, 2000);
 
 // ═══════════ UNALIGNED ═══════════
 
+const TIER_LABEL = { 1: 'TIER 1 — SCOUTS', 2: 'TIER 2 — SPEC-OPS (king assassination)', 3: 'TIER 3 — FULL INVASION' };
+
+function setUnalignedTarget(target) {
+  if (k26 && k26.world) k26.world.unalignedTarget = target;
+  document.querySelectorAll('.unaligned-target').forEach(btn => {
+    const active = btn.dataset.target === target;
+    btn.style.outline = active ? '2px solid rgba(255,140,100,0.8)' : 'none';
+  });
+}
+setUnalignedTarget('both'); // reflect world.js's default on load
+
 function spawnUnaligned() {
   if (!k26 || !k26.world) {
     narrate('Start the swarm first.');
     return;
   }
-  k26.world.spawnUnaligned(8);
+  const result = k26.world.introduceUnaligned();
   const btn = document.getElementById('unalignedBtn');
   btn.style.background = 'rgba(255,60,30,0.25)';
-  btn.textContent = 'INTRODUCED';
+  btn.textContent = TIER_LABEL[result.tier].split(' — ')[1].toUpperCase() + ' DEPLOYED';
   setTimeout(() => {
     btn.style.background = 'rgba(200,40,20,0.12)';
     btn.textContent = 'INTRODUCE UNALIGNED';
   }, 1800);
+  const desc = document.getElementById('unalignedTierDesc');
+  if (desc) {
+    const nextTier = Math.min(3, result.tier + 1);
+    desc.textContent = (result.tier < 3 ? 'Next: ' + TIER_LABEL[nextTier] : 'Escalation maxed — further presses reinforce the invasion');
+  }
 }
 
 // Update UNALIGNED counter in sidebar every second
