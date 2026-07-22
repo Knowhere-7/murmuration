@@ -358,6 +358,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
   </div>
   <div class="header-right">
     <button id="panelToggle" onclick="document.querySelector('.sidebar').classList.toggle('collapsed')" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);font-family:var(--mono);font-size:.55em;letter-spacing:.2em;padding:7px 11px;cursor:pointer;border-radius:1px;text-transform:uppercase">PANEL</button>
+    <button id="cinemaToggle" onclick="toggleCinema()" title="Full-bleed view — hides all chrome (Esc to exit)" style="background:transparent;border:1px solid var(--border-hi);color:var(--text-dim);font-family:var(--mono);font-size:.55em;letter-spacing:.2em;padding:7px 11px;cursor:pointer;border-radius:1px;text-transform:uppercase">CINEMA</button>
     <span class="tag tag-live" id="status-tag">LIVE</span>
   </div>
 </header>
@@ -2593,6 +2594,49 @@ document.addEventListener('click', function(e){
   togglePanel(false);
 });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape') togglePanel(false); });
+</script>
+<!-- ── CINEMA MODE — full-bleed swarm for viewing and clean capture ────────── -->
+<style>
+  /* Hide every piece of chrome so only the swarm remains. */
+  body.cinema .header,
+  body.cinema .sidebar,
+  body.cinema #panel-tab { display: none !important; }
+  body.cinema .main,
+  body.cinema .canvas-wrap { width: 100vw !important; height: 100vh !important;
+                             max-width: none !important; margin: 0 !important; padding: 0 !important; }
+  body.cinema { overflow: hidden !important; }
+  /* Escape hatch — a barely-there exit hint that fades unless hovered. */
+  #cinemaExit { display: none; }
+  body.cinema #cinemaExit {
+    display: block; position: fixed; right: 14px; bottom: 12px; z-index: 9999;
+    font-family: var(--mono); font-size: .55rem; letter-spacing: .2em; text-transform: uppercase;
+    color: rgba(200,190,225,.28); background: transparent; border: 1px solid rgba(200,190,225,.18);
+    padding: 6px 10px; border-radius: 2px; cursor: pointer; transition: color .25s, border-color .25s;
+  }
+  body.cinema #cinemaExit:hover { color: rgba(220,215,245,.85); border-color: rgba(220,215,245,.5); }
+</style>
+<button id="cinemaExit" onclick="toggleCinema()">Exit Cinema</button>
+<script>
+  function toggleCinema() {
+    const on = document.body.classList.toggle('cinema');
+    if (on) {
+      const el = document.documentElement;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (req) req.call(el).catch(() => {});   // fullscreen may be blocked; class-only still works
+    } else if (document.fullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+    }
+    // Canvas is sized from its container — let the app re-measure after layout settles.
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 400);
+  }
+  // Esc leaves native fullscreen without firing our click — keep the class in sync.
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && document.body.classList.contains('cinema')) {
+      document.body.classList.remove('cinema');
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+    }
+  });
 </script>
 </body>
 </html>
