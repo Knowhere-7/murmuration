@@ -632,6 +632,9 @@ window.MurmurationModules.World = class World {
     // Exclude seppuku-complete agents from belief/action — they are memory, not participants
     const active = this.agents.filter(a => !a.seppukuDone);
 
+    // B — break any frozen consensus with a small bounded jolt (peace survives).
+    this._antiStagnation(active);
+
     // ── TERRAIN — remember pre-move position (for wall collision) and apply a
     // gentle downhill drift so agents pool in the valleys of the topo map.
     // Terrain Pull is per-colony now — each side can channel differently. ──
@@ -1329,6 +1332,34 @@ window.MurmurationModules.World = class World {
       ctx.fillStyle = 'rgba(220,120,20,0.75)'; // Ember
       ctx.fillText('SENTINEL', this.sentinel.x + 10, this.sentinel.y - 10);
       ctx.restore();
+    }
+  }
+
+  /**
+   * B — BOUNDED ANTI-STAGNATION SHOCK.
+   * A swarm frozen in perfect consensus is stable but behaviorally dead. Track how
+   * long consensus has pinned near-perfect; once it dwells too long, nudge a SMALL
+   * fraction of agents' beliefs by a BOUNDED amount to restart divergence — which
+   * re-feeds belief-propagation and (via the economy's flourishing accrual) evolution
+   * — WITHOUT touching trust or faith. The swarm re-converges on its own, so the
+   * peaceful equilibrium survives; it just can never become a permanent freeze.
+   */
+  _antiStagnation(active) {
+    const PINNED = 0.985;   // "perfect" consensus threshold
+    const DWELL  = 900;     // ~15s at 60fps of frozen consensus before one bounded jolt
+    const consensus = this.getEmergenceMetrics().consensus;
+    this._stagnantTicks = (consensus >= PINNED) ? (this._stagnantTicks || 0) + 1 : 0;
+    if (this._stagnantTicks >= DWELL && active.length) {
+      this._stagnantTicks = 0;                     // one shock, then it must re-earn stillness
+      const n = Math.max(1, Math.floor(active.length * 0.12));
+      for (let i = 0; i < n; i++) {
+        const a = active[Math.floor(Math.random() * active.length)];
+        const jolt = (Math.random() - 0.5) * 0.5;  // bounded: ±0.25
+        a.beliefState.current = Math.max(-1, Math.min(1, (a.beliefState.current || 0) + jolt));
+      }
+      if (window.logLine) {
+        window.logLine('◇ ANTI-STAGNATION — a bounded jolt breaks the frozen consensus; the swarm must re-find itself.', 'evolve');
+      }
     }
   }
 

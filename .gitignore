@@ -4,3 +4,6 @@
 # Saved swarm-state exports (runtime data dumps, not source)
 *-swarm.json
 clauds-missing-swarm.json
+
+_bc_backup/
+.wrangler/

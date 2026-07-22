@@ -255,6 +255,22 @@ window.MurmurationModules.Economy = class Economy {
         agent._highTrustTicks = 0;
       }
 
+      // ── FLOURISHING COMPOUNDS ────────────────────────────────────────────
+      // Peace must BUILD, not just hold. Sustained trust+faith slowly realizes
+      // buffered cooperation (_evolutionAccumulator) into real evolution, so a
+      // cooperative swarm climbs instead of freezing. Symbiotic Abundance is the
+      // accelerator its own description above always promised ("evolution accrues
+      // faster") but was never wired to. The manual ⚗ IMPLEMENT crystallize
+      // remains the deliberate, amplified burst — this is the earned trickle.
+      if (agent.trustCharge >= 0.6 && agent.faith >= 0.45
+          && (agent._evolutionAccumulator || 0) > 0.05) {
+        const abundance = (agent.colony === 'B' ? this.abundanceB : this.abundanceA);
+        const rate = 0.00015 + abundance * 0.0006;   // baseline climb + abundance accelerator
+        const realize = Math.min(agent._evolutionAccumulator, rate);
+        agent.evolution = Math.min(5.0, (agent.evolution || 0) + realize);
+        agent._evolutionAccumulator -= realize;
+      }
+
       // ── DRAIN — Symbiotic Abundance eases the cost of living for a colony
       // that's cultivated it; Scarcity is its harsher opposite. ──
       const abundanceMod = 1 - (agent.colony === 'B' ? this.abundanceB : this.abundanceA) * 0.35;
