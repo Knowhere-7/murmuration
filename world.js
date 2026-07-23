@@ -477,6 +477,7 @@ window.MurmurationModules.World = class World {
       };
       const agent = new Agent(startId + i, x, y, personality);
       agent.colony      = 'U';
+      agent._bornTick   = this.time; // mortality clock — the unaligned burn hot and brief (~4 min)
       agent.trustCharge = 0.5;     // starts capable
       agent.faith       = 0.0;     // no faith — they believe in nothing larger
       agent.griefLevel  = 0.0;     // grief doesn't register
@@ -531,6 +532,55 @@ window.MurmurationModules.World = class World {
         if (this.markHit) this.markHit(king, '255,40,30');
         if (window.logLine) window.logLine(`☠ Colony ${a.huntColony}'s King has been assassinated by UNALIGNED forces.`, 'crisis');
         a.huntColony = null; // mission complete — rejoin general erratic wander
+      }
+    }
+  }
+
+  /**
+   * UNALIGNED MORTALITY — the unaligned had no death path at all (CTF excludes them,
+   * conflict only drains, griefLevel=0 blocks seppuku), so they were effectively immortal.
+   * Two conditions now end them:
+   *   1) LIFESPAN — they burn hot and brief; none outlast ~4 minutes.
+   *   2) SIEGE — enough aligned bodies pressing in wear one down. Our agents can finish
+   *      them now, but they must band together (a lone agent can't) — group takedown.
+   * Tunables are all here.
+   */
+  _updateUnalignedMortality(active) {
+    const U_LIFESPAN   = 14400; // ~4 min at 1x (60 ticks/s); compresses under fast-forward like every timer here
+    const SIEGE_RADIUS = 34;    // how close an aligned agent must be to press the kill
+    const SIEGE_MIN    = 2;     // a lone agent can't do it — the aligned must gang up
+    const SIEGE_KILL   = 300;   // accumulated pressure to bring one down (~a few seconds of a small group)
+    const now = this.time;
+    const R2  = SIEGE_RADIUS * SIEGE_RADIUS;
+    const killU = (a, reason, col) => {
+      a.seppukuDone = true;
+      if (this.markHit) this.markHit(a, col || '255,70,50');
+      if (window.logLine) window.logLine(`☠ UNALIGNED #${a.id} ${reason}`, 'crisis');
+      if (window.addEvent) window.addEvent(`☠ An UNALIGNED agent ${reason}.`, 'crisis');
+    };
+    for (const a of active) {
+      if (a.colony !== 'U' || a.seppukuDone) continue;
+      if (a._bornTick == null) a._bornTick = now; // legacy unaligned get a clock the first time they're seen
+
+      // 1) LIFESPAN
+      if (now - a._bornTick >= U_LIFESPAN) { killU(a, 'burned out — its four minutes are spent', '255,120,40'); continue; }
+
+      // 2) SIEGE — count aligned bodies pressing in
+      let nearby = 0;
+      for (const o of active) {
+        if (o === a || o.isSentinel || o.seppukuDone) continue;
+        if (o.colony !== 'A' && o.colony !== 'B') continue;
+        const dx = o.x - a.x, dy = o.y - a.y;
+        if (Math.abs(dx) > SIEGE_RADIUS || Math.abs(dy) > SIEGE_RADIUS) continue;
+        if (dx * dx + dy * dy <= R2) nearby++;
+      }
+      if (nearby >= SIEGE_MIN) {
+        a._uSiege = (a._uSiege || 0) + nearby;
+        if (a.updateTrust) a.updateTrust(-0.012 * nearby);            // visibly weaken under the swarm
+        if (a.energy != null) a.energy = Math.max(0, a.energy - 0.004 * nearby);
+        if (a._uSiege >= SIEGE_KILL) { killU(a, 'cut down — surrounded and overwhelmed', '255,60,40'); continue; }
+      } else {
+        a._uSiege = Math.max(0, (a._uSiege || 0) - 4);                // pressure fades if it breaks free
       }
     }
   }
@@ -965,6 +1015,7 @@ window.MurmurationModules.World = class World {
 
     // ── UNALIGNED assassins (Tier 2) — beeline toward their target King ──
     this._updateAssassins(active);
+    this._updateUnalignedMortality(active);
 
     // ── WALL — hold each agent on its side unless it's inside an open gate ──
     for (const a of active) {
