@@ -61,9 +61,18 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     this.mold = window.MurmurationModules.SlimeMoldCore
       ? new window.MurmurationModules.SlimeMoldCore()
       : null;
-    if (this.mold) this.mold.buildFromGrid(this.cells, this.cols, this.rows, this.start, this.goal);
+    if (this.mold) {
+      this.mold.buildFromGrid(this.cells, this.cols, this.rows, this.start, this.goal);
+      // Scale the stochastic explore-walk to the graph so flow can actually reach a distant goal
+      // (the tiny default only suited small abstract graphs). The deterministic Dijkstra
+      // extraction solves regardless of size; this just lets the flow layer contribute/animate.
+      this.mold.config.exploreSteps = Math.min(120, 3 * (this.cols + this.rows));
+    }
     this.trueShortest = this._bfsShortest(this.start, this.goal);   // honesty baseline
     this.bestPath = null; this._bestSet = new Set();
+    // Solve immediately so the optimal path is visible (gold) from t=0 — this IS the answer
+    // the pentest engine consumes: the optimal path through the topology.
+    if (this.mold) this._refreshBestPath();
 
     const sId = this._id(this.start.c, this.start.r);
     const s = this._cellCenter(this.start.c, this.start.r);
@@ -188,14 +197,23 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     }
 
     if (this.mold) {
-      this.mold.settle();                                  // process deposits + evaporate
-      if ((this.world.time & 31) === 0) {                  // refresh the extracted best path ~every 32 ticks
-        const res = this.mold.extractOptimalPaths();
-        this.bestPath = res.paths[0] || null;
-        this._bestSet = new Set();
-        if (this.bestPath) for (let i = 0; i < this.bestPath.nodes.length - 1; i++)
-          this._bestSet.add(this.bestPath.nodes[i] + '|' + this.bestPath.nodes[i + 1]).add(this.bestPath.nodes[i + 1] + '|' + this.bestPath.nodes[i]);
-      }
+      // The mold ACTUALLY SOLVES the graph — self-exploration (Physarum flow) + the agents'
+      // deposited traffic together. This is the pentest-relevant computation: find the optimal
+      // path through the topology. Dead-end tubes decay (= H2O pruning a non-credible path);
+      // the route to the goal thickens. The swarm then follows the solved gradient.
+      this.mold.step();
+      if ((this.world.time & 15) === 0) this._refreshBestPath();   // re-extract often (watch it hold/adapt)
+    }
+  }
+
+  /** Extract the optimal path from the core (deterministic, scales) and cache its edge set for render. */
+  _refreshBestPath() {
+    const res = this.mold.extractOptimalPaths();
+    this.bestPath = res.paths[0] || null;
+    this._bestSet = new Set();
+    if (this.bestPath) for (let i = 0; i < this.bestPath.nodes.length - 1; i++) {
+      this._bestSet.add(this.bestPath.nodes[i] + '|' + this.bestPath.nodes[i + 1]);
+      this._bestSet.add(this.bestPath.nodes[i + 1] + '|' + this.bestPath.nodes[i]);
     }
   }
 
