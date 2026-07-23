@@ -64,6 +64,18 @@ window.MurmurationModules.K26 = class K26 {
       this.world.relicSystem = this.relicSystem;
     }
 
+    // Gauntlet — team obstacle (pressure gate). Off until enabled.
+    if (window.MurmurationModules.GauntletSystem) {
+      this.gauntlet = new window.MurmurationModules.GauntletSystem(this.world);
+      this.world.gauntlet = this.gauntlet;
+    }
+
+    // Maze — navigation test rig (Phase A geometry). Off until enabled.
+    if (window.MurmurationModules.MazeSystem) {
+      this.maze = new window.MurmurationModules.MazeSystem(this.world);
+      this.world.maze = this.maze;
+    }
+
     this.draw();
   }
 
@@ -91,6 +103,12 @@ window.MurmurationModules.K26 = class K26 {
 
     // Relic tick — pull pilgrims to the far points, resolve claims, expire charges
     if (this.relicSystem) this.relicSystem.tick();
+
+    // Gauntlet tick — pads, gate, barrier collision, reward
+    if (this.gauntlet) this.gauntlet.tick();
+
+    // Maze tick — confine agents to passages, score goal reaches
+    if (this.maze) this.maze.tick();
   }
 
   extract() {
@@ -163,6 +181,12 @@ window.MurmurationModules.K26 = class K26 {
 
     // Layer 3.7: relic beacons at the far points — above the wall, under agents
     if (this.relicSystem) this.relicSystem.draw(ctx);
+
+    // Layer 3.8: gauntlet obstacle — barrier, gate, pads, reward
+    if (this.gauntlet) this.gauntlet.draw(ctx);
+
+    // Layer 3.9: maze walls, reward, markers
+    if (this.maze) this.maze.draw(ctx);
 
     // Layer 4: agents on top
     for (const agent of this.world.agents) {
