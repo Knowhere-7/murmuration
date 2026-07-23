@@ -713,6 +713,13 @@ window.MurmurationModules.World = class World {
         time: this.time, agent: agent.id, action, belief: agent.beliefState.current
       });
     }
+    // Cap the interaction log. It is pushed ~once per agent per tick (~120/tick) and
+    // is ONLY ever read via slice(-50) at the deepest — so an uncapped log grows into
+    // the millions and every slice() copies the whole thing, strangling the framerate
+    // after a few hundred thousand ticks. Keep a generous tail; drop the ancient head.
+    if (this.interactionLog.length > 500) {
+      this.interactionLog.splice(0, this.interactionLog.length - 500);
+    }
 
     // ── Pre-tag commons membership + membrane proximity ──
     const zones = this.getCommonsZones();
