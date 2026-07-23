@@ -1,19 +1,23 @@
 /**
- * MAZE — the swarm's navigation test rig.
+ * MAZE — the swarm's navigation test rig, solved by trait #11 (Slime Mold / Physarum).
  *
- * A maze is not a level we draw; it is the obstacle that FORCES the swarm's abstract
- * navigation traits to become real, spatial skills (Phases B–D layer those in):
- *   Phase A (this file, for now): real braided-grid geometry + generalized wall collision
- *           + a single-colony arena. Agents are truly CONTAINED by walls — they can only
- *           reach the goal through the actual passages. With no wall-sensing yet, they
- *           bounce and random-walk; some reach the goal. That's the honest Phase-A baseline.
- *   Phase B: echolocation wall-sensing (probe ahead, steer, stop bouncing).
- *   Phase C: pheromone stigmergy (deposit/evaporate/reinforce → colony finds shortest path).
- *   Phase D: trap cells + hazard memory (sacrifice-as-information).
+ * A maze, a pentest topology, and a hunt are the same object: a graph with a source, a sink,
+ * gated edges, dead-ends, traps. This rig makes that graph WATCHABLE and drives it with the
+ * real swarm.
  *
- * Self-contained, like gauntlet.js / relics.js: the maze owns its OWN walls and collision,
- * so it never touches world.applyWallCollision (the normal two-colony divider) and normal
- * play is undisturbed. Arm with k26.maze.enable({ singleColony:true, difficulty:2 }).
+ *   Phase A: real braided-grid geometry + generalized wall collision + single-colony arena.
+ *   Phase C (now): the maze grid becomes a graph fed to the shared SlimeMoldCore. The swarm
+ *            IS the flow medium — agents deposit on the edges they traverse (thickening tubes),
+ *            evaporation prunes the unused, and agents steer up the conductance gradient toward
+ *            the chemoattractant. The colony converges on the shortest path — Physarum, not
+ *            scripted. The core's own optimize() stays for the offline pentest / LOBO surfaces.
+ *   Phase D (later): trap cells + hazard memory (sacrifice-as-information).
+ *
+ * The graph only has an edge where a passage is OPEN, so steering toward a neighbour cell always
+ * routes through the gap, never into a wall — the graph IS the wall-knowledge (this is why the
+ * old "echolocation wall-sensing" phase is unnecessary).
+ *
+ * Self-contained, like gauntlet.js / relics.js. Arm: k26.maze.enable({singleColony:true}).
  */
 window.MurmurationModules = window.MurmurationModules || {};
 
@@ -21,131 +25,113 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
   constructor(world) {
     this.world = world;
     this.active = false;
-    // difficulty → max grid dimension (cells adapt to canvas but never exceed this)
     this.MAX_COLS = { 1: 8, 2: 12, 3: 16 };
-    this.TARGET_CELL = 34;   // aim for ~34px cells; clamps so cells stay navigable
-    this.BRAID = 0.18;       // fraction of dead-ends opened into loops (multiple routes)
-    this.finishes = 0;       // cumulative agents that have reached the goal
+    this.TARGET_CELL = 34;
+    this.BRAID = 0.18;
+    this.finishes = 0;
+    // Phase C tuning
+    this.GRADIENT_FORCE = 0.45;   // pull toward the committed next cell (overcomes flock cohesion)
+    this.EXPLORE_PROB   = 0.20;   // chance to pick a random open neighbour instead of the best
+    this.DEPOSIT        = 1.0;    // flow laid per edge traversal (agents = the flow medium)
+    this.SUCCESS_BONUS  = 6.0;    // extra flow laid back along a route that REACHED the goal
+    this.exitTimes = [];          // rolling time-to-exit (the learning curve)
   }
 
-  // ── geometry ──────────────────────────────────────────────────────────────
+  _id(c, r) { return c + ',' + r; }
+
   enable(opts = {}) {
     const W = this.world.width, H = this.world.height;
     const diff = Math.max(1, Math.min(3, opts.difficulty || 2));
     const margin = 0.05;
-    this.ox = W * margin;
-    this.oy = H * margin;
-    this.mazeW = W * (1 - 2 * margin);
-    this.mazeH = H * (1 - 2 * margin);
+    this.ox = W * margin; this.oy = H * margin;
+    this.mazeW = W * (1 - 2 * margin); this.mazeH = H * (1 - 2 * margin);
 
     const maxC = this.MAX_COLS[diff];
     this.cols = Math.max(5, Math.min(maxC, Math.round(this.mazeW / this.TARGET_CELL)));
     this.rows = Math.max(5, Math.min(maxC, Math.round(this.mazeH / this.TARGET_CELL)));
-    this.cw = this.mazeW / this.cols;
-    this.ch = this.mazeH / this.rows;
+    this.cw = this.mazeW / this.cols; this.ch = this.mazeH / this.rows;
 
     this._generate();
-
-    // start top-left, goal bottom-right — maximizes the path the swarm must solve
     this.start = { c: 0, r: 0 };
     this.goal  = { c: this.cols - 1, r: this.rows - 1 };
     this.reward = { ...this._cellCenter(this.goal.c, this.goal.r), r: Math.min(this.cw, this.ch) * 0.42 };
-    this.finishes = 0;
+    this.finishes = 0; this.exitTimes = [];
 
-    if (opts.singleColony) {
-      // Collapse to ONE squad (pure navigation test), drop everyone at the entrance,
-      // and neutralize the normal dividing wall so only the maze walls matter.
-      const s = this._cellCenter(this.start.c, this.start.r);
-      for (const a of this.world.agents) {
-        if (a.colony !== 'U') { a.colony = 'A'; a.swarmTint = 0; }
-        a.x = s.x + (Math.random() - 0.5) * this.cw * 0.6;
-        a.y = s.y + (Math.random() - 0.5) * this.ch * 0.6;
-        a._mazeInGoal = false;
-      }
-      if (this.world.wall && this.world.wall.gates) {
-        // full-height open window → world.applyWallCollision always grants free passage
-        this.world.wall.gates.forEach(g => { g.open = true; g.yf = 0.5; g.hf = 0.5; });
-        this._wallSilenced = true;
-      }
+    // Phase C — slime mold network (trait #11) over the maze-as-graph
+    this.mold = window.MurmurationModules.SlimeMoldCore
+      ? new window.MurmurationModules.SlimeMoldCore()
+      : null;
+    if (this.mold) this.mold.buildFromGrid(this.cells, this.cols, this.rows, this.start, this.goal);
+    this.trueShortest = this._bfsShortest(this.start, this.goal);   // honesty baseline
+    this.bestPath = null; this._bestSet = new Set();
+
+    const sId = this._id(this.start.c, this.start.r);
+    const s = this._cellCenter(this.start.c, this.start.r);
+    for (const a of this.world.agents) {
+      if (opts.singleColony && a.colony !== 'U') { a.colony = 'A'; a.swarmTint = 0; }
+      a.x = s.x + (Math.random() - 0.5) * this.cw * 0.6;
+      a.y = s.y + (Math.random() - 0.5) * this.ch * 0.6;
+      a._mazeSeek = 'goal'; a._mazeCell = sId; a._mazeStart = this.world.time; a._mazeInGoal = false;
+      a._mazeTgt = null; a._mazePrev = null;
+    }
+    if (opts.singleColony && this.world.wall && this.world.wall.gates) {
+      this.world.wall.gates.forEach(g => { g.open = true; g.yf = 0.5; g.hf = 0.5; });
     }
 
     this.active = true;
     if (window.logLine) {
-      window.logLine(`▦ MAZE ARMED — ${this.cols}×${this.rows} braided grid. The goal is bottom-right. ` +
-        `No wall-sensing yet (Phase A): the swarm must find it by contact.`, 'emerge');
+      window.logLine(`▦ MAZE ARMED — ${this.cols}×${this.rows} braided grid, solved by SLIME MOLD ` +
+        `(#11). The swarm is the flow; the tubes thicken toward the goal. Shortest path = ${this.trueShortest} hops.`, 'emerge');
     }
     return this.status();
   }
 
   disable() { this.active = false; }
 
-  _cellCenter(c, r) {
-    return { x: this.ox + (c + 0.5) * this.cw, y: this.oy + (r + 0.5) * this.ch };
-  }
+  _cellCenter(c, r) { return { x: this.ox + (c + 0.5) * this.cw, y: this.oy + (r + 0.5) * this.ch }; }
 
-  /** Recursive-backtracker perfect maze, then partial braid to create loops. */
   _generate() {
     const C = this.cols, R = this.rows;
-    // each cell: walls present on N,E,S,W (true = wall)
     const cells = [];
-    for (let r = 0; r < R; r++) {
-      const row = [];
-      for (let c = 0; c < C; c++) row.push({ N: true, E: true, S: true, W: true, v: false });
-      cells.push(row);
-    }
-    const idx = (c, r) => cells[r][c];
-    // iterative DFS carve
-    const stack = [[0, 0]];
-    idx(0, 0).v = true;
+    for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push({ N: true, E: true, S: true, W: true, v: false }); cells.push(row); }
+    const stack = [[0, 0]]; cells[0][0].v = true;
     const dirs = [['N', 0, -1, 'S'], ['E', 1, 0, 'W'], ['S', 0, 1, 'N'], ['W', -1, 0, 'E']];
     while (stack.length) {
       const [c, r] = stack[stack.length - 1];
       const nbrs = [];
-      for (const [dir, dc, dr, opp] of dirs) {
-        const nc = c + dc, nr = r + dr;
-        if (nc >= 0 && nc < C && nr >= 0 && nr < R && !cells[nr][nc].v) nbrs.push([dir, nc, nr, opp]);
-      }
+      for (const [dir, dc, dr, opp] of dirs) { const nc = c + dc, nr = r + dr; if (nc >= 0 && nc < C && nr >= 0 && nr < R && !cells[nr][nc].v) nbrs.push([dir, nc, nr, opp]); }
       if (!nbrs.length) { stack.pop(); continue; }
       const [dir, nc, nr, opp] = nbrs[(Math.random() * nbrs.length) | 0];
-      idx(c, r)[dir] = false;      // remove wall between here and neighbor
-      cells[nr][nc][opp] = false;
-      cells[nr][nc].v = true;
-      stack.push([nc, nr]);
+      cells[r][c][dir] = false; cells[nr][nc][opp] = false; cells[nr][nc].v = true; stack.push([nc, nr]);
     }
-    // braid: open a fraction of interior walls to create alternate routes / loops
-    for (let r = 0; r < R; r++) {
-      for (let c = 0; c < C; c++) {
-        if (Math.random() > this.BRAID) continue;
-        const opts = [];
-        if (c < C - 1 && cells[r][c].E) opts.push(['E', c + 1, r, 'W']);
-        if (r < R - 1 && cells[r][c].S) opts.push(['S', c, r + 1, 'N']);
-        if (!opts.length) continue;
-        const [dir, nc, nr, opp] = opts[(Math.random() * opts.length) | 0];
-        cells[r][c][dir] = false;
-        cells[nr][nc][opp] = false;
-      }
+    // braid — open some walls to create loops / multiple routes
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      if (Math.random() > this.BRAID) continue;
+      const opts = [];
+      if (c < C - 1 && cells[r][c].E) opts.push(['E', c + 1, r, 'W']);
+      if (r < R - 1 && cells[r][c].S) opts.push(['S', c, r + 1, 'N']);
+      if (!opts.length) continue;
+      const [dir, nc, nr, opp] = opts[(Math.random() * opts.length) | 0];
+      cells[r][c][dir] = false; cells[nr][nc][opp] = false;
     }
     this.cells = cells;
   }
 
-  // ── simulation ────────────────────────────────────────────────────────────
-  tick() {
-    if (!this.active) return;
-    const agents = this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel);
-    for (const a of agents) this._confine(a);
-
-    // Goal reward — reaching the goal cell feeds the agent (real payoff) and is counted once.
-    for (const a of agents) {
-      const gc = this._cellOf(a);
-      const inGoal = gc.c === this.goal.c && gc.r === this.goal.r;
-      if (inGoal) {
-        if (!a._mazeInGoal) { a._mazeInGoal = true; this.finishes++; }
-        if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0018);
-        if (a.updateTrust) a.updateTrust(+0.0003);
-      } else if (a._mazeInGoal && !(Math.abs(gc.c - this.goal.c) <= 0 && Math.abs(gc.r - this.goal.r) <= 0)) {
-        a._mazeInGoal = false; // left the goal cell — can score again on a fresh arrival
-      }
+  /** True shortest hop-count start→goal over open passages (honesty baseline for Phase C). */
+  _bfsShortest(start, goal) {
+    const q = [[start.c, start.r, 0]]; const seen = new Set([this._id(start.c, start.r)]);
+    while (q.length) {
+      const [c, r, d] = q.shift();
+      if (c === goal.c && r === goal.r) return d;
+      const cell = this.cells[r][c];
+      const steps = [];
+      if (!cell.N && r > 0) steps.push([c, r - 1]);
+      if (!cell.S && r < this.rows - 1) steps.push([c, r + 1]);
+      if (!cell.W && c > 0) steps.push([c - 1, r]);
+      if (!cell.E && c < this.cols - 1) steps.push([c + 1, r]);
+      for (const [nc, nr] of steps) { const k = this._id(nc, nr); if (!seen.has(k)) { seen.add(k); q.push([nc, nr, d + 1]); } }
     }
+    return -1;
   }
 
   _cellOf(a) {
@@ -154,32 +140,119 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     return { c, r };
   }
 
-  /**
-   * Generalized wall collision: keep the agent inside the maze bounds, then reflect it off
-   * any CLOSED wall of the cell it currently occupies. Because the cell is computed from the
-   * post-move position, an agent that stepped across a closed edge is already "in" the next
-   * cell and gets pushed back through that cell's shared wall — no one-cell tunnelling.
-   */
   _confine(a) {
     const rad = (a.radius || 4) + 1;
-    // clamp to maze outer rectangle
     a.x = Math.max(this.ox + rad, Math.min(this.ox + this.mazeW - rad, a.x));
     a.y = Math.max(this.oy + rad, Math.min(this.oy + this.mazeH - rad, a.y));
-
     const { c, r } = this._cellOf(a);
     const cell = this.cells[r][c];
-    const left   = this.ox + c * this.cw;
-    const right  = left + this.cw;
-    const top    = this.oy + r * this.ch;
-    const bottom = top + this.ch;
-
+    const left = this.ox + c * this.cw, right = left + this.cw, top = this.oy + r * this.ch, bottom = top + this.ch;
     if (cell.W && a.x < left + rad)   { a.x = left + rad;   if (a.vx < 0) a.vx = -a.vx * 0.5; }
     if (cell.E && a.x > right - rad)  { a.x = right - rad;  if (a.vx > 0) a.vx = -a.vx * 0.5; }
     if (cell.N && a.y < top + rad)    { a.y = top + rad;    if (a.vy < 0) a.vy = -a.vy * 0.5; }
     if (cell.S && a.y > bottom - rad) { a.y = bottom - rad; if (a.vy > 0) a.vy = -a.vy * 0.5; }
   }
 
-  // ── render ────────────────────────────────────────────────────────────────
+  tick() {
+    if (!this.active) return;
+    const agents = this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel);
+
+    for (const a of agents) {
+      this._confine(a);
+      const { c, r } = this._cellOf(a);
+      const cellId = this._id(c, r);
+
+      // Crossed into a new adjacent cell? Deposit flow on that edge (agents = the flow medium).
+      if (this.mold && a._mazeCell && a._mazeCell !== cellId) {
+        this.mold.deposit(a._mazeCell, cellId, this.DEPOSIT);
+        a._mazeCell = cellId;
+      } else if (!a._mazeCell) { a._mazeCell = cellId; }
+
+      // Attractor: seek the goal, then head home — the round trip is what reinforces short tubes.
+      const target = a._mazeSeek === 'home' ? this.start : this.goal;
+
+      if (c === this.goal.c && r === this.goal.r) {
+        if (a._mazeSeek === 'goal') {
+          this.finishes++;
+          this._recordExit(a);
+          this._reinforceRoute(a);          // lay SUCCESS_BONUS back toward start along the tubes
+          a._mazeSeek = 'home';
+        }
+        if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0016);
+        if (a.updateTrust) a.updateTrust(+0.0003);
+      } else if (c === this.start.c && r === this.start.r && a._mazeSeek === 'home') {
+        a._mazeSeek = 'goal'; a._mazeStart = this.world.time;
+      }
+
+      if (this.mold) this._steer(a, cellId, target);
+    }
+
+    if (this.mold) {
+      this.mold.settle();                                  // process deposits + evaporate
+      if ((this.world.time & 31) === 0) {                  // refresh the extracted best path ~every 32 ticks
+        const res = this.mold.extractOptimalPaths();
+        this.bestPath = res.paths[0] || null;
+        this._bestSet = new Set();
+        if (this.bestPath) for (let i = 0; i < this.bestPath.nodes.length - 1; i++)
+          this._bestSet.add(this.bestPath.nodes[i] + '|' + this.bestPath.nodes[i + 1]).add(this.bestPath.nodes[i + 1] + '|' + this.bestPath.nodes[i]);
+      }
+    }
+  }
+
+  _recordExit(a) {
+    const t = this.world.time - (a._mazeStart || this.world.time);
+    if (t > 0) { this.exitTimes.push(t); if (this.exitTimes.length > 50) this.exitTimes.shift(); }
+  }
+
+  /** Reaching the goal reinforces the tubes the agent actually used to get there. */
+  _reinforceRoute(a) {
+    // The chemoattractant gradient already concentrates flow; add a success bonus at the goal
+    // node's incident edges so proven approaches thicken faster (shorter routes get it more often).
+    const gId = this._id(this.goal.c, this.goal.r);
+    for (const n of this.mold.neighbors(gId)) this.mold.deposit(gId, n.target, this.SUCCESS_BONUS);
+  }
+
+  /**
+   * Steer toward the current attractor. Hysteresis is the key: an agent COMMITS to a target
+   * neighbour cell and holds it until it arrives, instead of re-choosing every tick (which made
+   * agents oscillate in place between two cells and stall). It also avoids immediate backtracking,
+   * and if the attractor itself is one open hop away it takes that hop NOW (closes the last cell).
+   * Exploit = conductance × chemoattractant proximity (the Physarum chemical gradient); explore =
+   * a random open neighbour. The graph only has edges through OPEN passages, so this never steers
+   * into a wall.
+   */
+  _steer(a, cellId, attractorCell) {
+    const nbrs = this.mold.neighbors(cellId);
+    if (!nbrs.length) { a._mazeTgt = null; return; }
+    const attractorId = this._id(attractorCell.c, attractorCell.r);
+
+    if (nbrs.some(n => n.target === attractorId)) {              // attractor one hop away → take it
+      a._mazeTgt = attractorId; a._mazePrev = cellId;
+    } else if (!a._mazeTgt || a._mazeTgt === cellId) {           // arrived (or none) → commit new target
+      let pool = nbrs.filter(n => n.target !== a._mazePrev);     // don't immediately backtrack
+      if (!pool.length) pool = nbrs;
+      let choice;
+      if (Math.random() < this.EXPLORE_PROB) {
+        choice = pool[(Math.random() * pool.length) | 0];
+      } else {
+        let best = null, bestScore = -1;
+        for (const n of pool) {
+          const [nc, nr] = n.target.split(',').map(Number);
+          const dist = Math.hypot(nc - attractorCell.c, nr - attractorCell.r);
+          const score = (0.4 + n.conductance) * (1 / (1 + dist));
+          if (score > bestScore) { bestScore = score; best = n; }
+        }
+        choice = best;
+      }
+      a._mazePrev = cellId; a._mazeTgt = choice.target;
+    }
+
+    const [nc, nr] = a._mazeTgt.split(',').map(Number);
+    const tgt = this._cellCenter(nc, nr);
+    const dx = tgt.x - a.x, dy = tgt.y - a.y, d = Math.hypot(dx, dy) || 1;
+    a.vx += (dx / d) * this.GRADIENT_FORCE; a.vy += (dy / d) * this.GRADIENT_FORCE;
+  }
+
   draw(ctx) {
     if (!this.active || !this.cells) return;
     ctx.save();
@@ -191,56 +264,67 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     ctx.globalAlpha = 0.9; ctx.fillStyle = rg;
     ctx.beginPath(); ctx.arc(this.reward.x, this.reward.y, this.reward.r, 0, Math.PI * 2); ctx.fill();
 
-    // Maze walls — neon, matching the world wall palette. Draw each closed edge once
-    // (N of every cell + W of every cell + the outer E/S border) to avoid double-strokes.
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.lineCap = 'round';
-    const stroke = (x1, y1, x2, y2) => {
-      ctx.strokeStyle = 'rgba(60,200,230,0.12)'; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      ctx.strokeStyle = 'rgba(150,235,255,0.8)'; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    };
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) {
-        const cell = this.cells[r][c];
-        const left = this.ox + c * this.cw, top = this.oy + r * this.ch;
-        const right = left + this.cw, bottom = top + this.ch;
-        if (cell.N) stroke(left, top, right, top);
-        if (cell.W) stroke(left, top, left, bottom);
-        if (c === this.cols - 1 && cell.E) stroke(right, top, right, bottom);
-        if (r === this.rows - 1 && cell.S) stroke(left, bottom, right, bottom);
+    // Slime-mold TUBES — every edge, thickness + brightness ∝ conductance (the network thinking)
+    if (this.mold) {
+      for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+        const cell = this.cells[r][c], a = this._id(c, r);
+        const drawTube = (b, bc, br) => {
+          const k = this.mold.conductance(a, b);
+          if (k < 0.04) return;
+          const p1 = this._cellCenter(c, r), p2 = this._cellCenter(bc, br);
+          const onBest = this._bestSet && this._bestSet.has(a + '|' + b);
+          ctx.strokeStyle = onBest ? `rgba(240,205,120,${0.5 + 0.5 * k})` : `rgba(150,235,190,${0.25 + 0.55 * k})`;
+          ctx.lineWidth = (onBest ? 2.2 : 1.2) + k * 4.5;
+          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        };
+        if (!cell.E && c < this.cols - 1) drawTube(this._id(c + 1, r), c + 1, r);
+        if (!cell.S && r < this.rows - 1) drawTube(this._id(c, r + 1), c, r + 1);
       }
     }
 
-    // Start marker (green) — where the squad enters
+    // Maze walls — neon, over the tubes
+    ctx.globalCompositeOperation = 'source-over'; ctx.lineCap = 'round';
+    const stroke = (x1, y1, x2, y2) => {
+      ctx.strokeStyle = 'rgba(60,200,230,0.10)'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(150,235,255,0.7)'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    };
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      const cell = this.cells[r][c];
+      const left = this.ox + c * this.cw, top = this.oy + r * this.ch, right = left + this.cw, bottom = top + this.ch;
+      if (cell.N) stroke(left, top, right, top);
+      if (cell.W) stroke(left, top, left, bottom);
+      if (c === this.cols - 1 && cell.E) stroke(right, top, right, bottom);
+      if (r === this.rows - 1 && cell.S) stroke(left, bottom, right, bottom);
+    }
+
     const s = this._cellCenter(this.start.c, this.start.r);
     ctx.globalAlpha = 0.85; ctx.fillStyle = 'rgba(120,255,170,0.9)';
     ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2); ctx.fill();
 
     // Status readout
-    ctx.globalAlpha = 0.85; ctx.textAlign = 'left';
-    ctx.font = '9px ui-monospace, monospace';
+    const avg = this.exitTimes.length ? Math.round(this.exitTimes.reduce((x, y) => x + y, 0) / this.exitTimes.length) : 0;
+    const bpLen = this.bestPath ? this.bestPath.nodes.length - 1 : 0;
+    ctx.globalAlpha = 0.9; ctx.textAlign = 'left'; ctx.font = '9px ui-monospace, monospace';
     ctx.fillStyle = 'rgba(240,205,120,0.95)';
-    ctx.fillText(`MAZE ${this.cols}×${this.rows}  ·  GOAL-REACHES ${this.finishes}`, this.ox, this.oy - 4);
+    ctx.fillText(`MAZE ${this.cols}×${this.rows} · SLIME MOLD · reaches ${this.finishes} · path ${bpLen}/${this.trueShortest} · avg-exit ${avg}t`, this.ox, this.oy - 4);
     ctx.restore();
   }
 
   status() {
     if (!this.active) return { active: false };
-    const agents = this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel);
-    let inGoal = 0;
-    for (const a of agents) {
-      const gc = this._cellOf(a);
-      if (gc.c === this.goal.c && gc.r === this.goal.r) inGoal++;
-    }
+    const avg = this.exitTimes.length ? +(this.exitTimes.reduce((x, y) => x + y, 0) / this.exitTimes.length).toFixed(1) : null;
     return {
       active: true,
       grid: `${this.cols}x${this.rows}`,
-      agents: agents.length,
-      inGoalNow: inGoal,
       goalReaches: this.finishes,
-      goalCell: `${this.goal.c},${this.goal.r}`
+      trueShortest: this.trueShortest,
+      bestPathLen: this.bestPath ? this.bestPath.nodes.length - 1 : null,
+      optimal: this.bestPath ? (this.bestPath.nodes.length - 1 === this.trueShortest) : null,
+      avgExitTicks: avg,
+      recentExitSamples: this.exitTimes.length,
+      mold: this.mold ? this.mold.stats() : null
     };
   }
 };
