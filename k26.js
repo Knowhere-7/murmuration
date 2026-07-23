@@ -58,6 +58,12 @@ window.MurmurationModules.K26 = class K26 {
       this.warningLog = new window.MurmurationModules.WarningLog();
     }
 
+    // Relics — heritable abilities at the far points (Phase 1: claim/charge/reload)
+    if (window.MurmurationModules.RelicSystem) {
+      this.relicSystem = new window.MurmurationModules.RelicSystem(this.world);
+      this.world.relicSystem = this.relicSystem;
+    }
+
     this.draw();
   }
 
@@ -82,6 +88,9 @@ window.MurmurationModules.K26 = class K26 {
 
     // Apex predator tick — hunts stragglers, scoped to each colony's own pressure
     if (this.predatorSystem) this.predatorSystem.tick();
+
+    // Relic tick — pull pilgrims to the far points, resolve claims, expire charges
+    if (this.relicSystem) this.relicSystem.tick();
   }
 
   extract() {
@@ -151,6 +160,9 @@ window.MurmurationModules.K26 = class K26 {
 
     // Layer 3.5: the wall + gates — above bonds, below agents
     if (this.world.drawWall) this.world.drawWall(ctx);
+
+    // Layer 3.7: relic beacons at the far points — above the wall, under agents
+    if (this.relicSystem) this.relicSystem.draw(ctx);
 
     // Layer 4: agents on top
     for (const agent of this.world.agents) {
