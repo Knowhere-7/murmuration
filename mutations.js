@@ -102,13 +102,15 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
       for (const k in P) { C.exp[k] += P[k]; engagement += P[k]; }
       C.progress += Math.min(1, engagement) * this.FILL * this.SAMPLE_EVERY;
 
-      if (C.progress >= 1) this._crystallize(c);
+      // Multiple at once: a surge can chain several crystallizations. Carry the remainder
+      // instead of discarding it (cap the burst so a spike can't run away).
+      let bursts = 0;
+      while (C.progress >= 1 && bursts < 5) { C.progress -= 1; this._crystallize(c); bursts++; }
     }
   }
 
   _crystallize(c) {
     const C = this.col[c];
-    C.progress = 0;
     let gene = null;
 
     // wildcard first — the surprise
@@ -119,11 +121,29 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
       const lineage = Object.keys(C.exp).sort((a, b) => C.exp[b] - C.exp[a])[0];
       gene = { ...this.CATALOG[lineage], lineage };
     }
-    C.genome.push(gene);
     for (const k in C.exp) C.exp[k] *= 0.25;   // spend the window, keep a little memory
 
-    if (window.logLine) window.logLine(`🧬 Colony ${c} crystallizes ${gene.icon} ${gene.name} — ${gene.flavor}`, 'evolve');
-    if (window.addEvent) window.addEvent(`🧬 Colony ${c} earned a new gene: ${gene.name} — ${gene.flavor}.`, 'emerge');
+    // TIER REPEATS: earning a gene you already hold DEEPENS it (I→II→III…) instead of
+    // stacking a duplicate. A one-note life grows a mastery, not a pile of copies.
+    const existing = C.genome.find(g => g.id === gene.id);
+    if (existing) {
+      existing.tier = (existing.tier || 1) + 1;
+      const label = `${existing.name} ${this._roman(existing.tier)}`;
+      if (window.logLine) window.logLine(`🧬 Colony ${c} deepens ${existing.icon} ${label}${gene.chimeric ? ' (chimeric)' : ''}`, 'evolve');
+      if (window.addEvent) window.addEvent(`🧬 Colony ${c} deepened a gene: ${label}.`, 'emerge');
+    } else {
+      gene.tier = 1;
+      C.genome.push(gene);
+      if (window.logLine) window.logLine(`🧬 Colony ${c} crystallizes ${gene.icon} ${gene.name} — ${gene.flavor}`, 'evolve');
+      if (window.addEvent) window.addEvent(`🧬 Colony ${c} earned a new gene: ${gene.name} — ${gene.flavor}.`, 'emerge');
+    }
+  }
+
+  _roman(n) {
+    const map = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+    let s = '', x = Math.max(1, n | 0);
+    for (const [v, r] of map) while (x >= v) { s += r; x -= v; }
+    return s;
   }
 
   _wildcard(c) {
@@ -132,7 +152,7 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
     // CHIMERA — seize a gene from the rival lineage
     if (rival.length && Math.random() < 0.6) {
       const g = rival[(Math.random() * rival.length) | 0];
-      return { id: g.id, name: 'CHIMERA · ' + g.name, icon: '⚗', lineage: g.lineage,
+      return { id: g.id, name: 'CHIMERA · ' + g.name, icon: '⚗', lineage: g.lineage, chimeric: true,
                flavor: 'horizontal gene transfer — seized from the rival lineage' };
     }
     // APEX — only for a true generalist that has survived every kind of pressure
@@ -149,18 +169,20 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
     for (const c of ['A', 'B']) {
       const genes = this.col[c].genome;
       if (!genes.length) continue;
-      const ids = new Set(genes.map(g => g.id));
-      const stack = genes.length;                          // more genes = slightly stronger
-      const k = 1 + Math.min(2, stack * 0.15);             // gentle compounding, capped
+      // per-gene tier map → each gene's effect scales with ITS OWN tier (deepening mastery)
+      const tierOf = {};
+      for (const g of genes) tierOf[g.id] = Math.max(tierOf[g.id] || 0, g.tier || 1);
+      const K = (id) => tierOf[id] ? 1 + Math.min(2.5, (tierOf[id] - 1) * 0.6) : 0;   // 0 = gene absent
       const mine = this.world.agents.filter(a => a.colony === c && !a.seppukuDone && !a.isSentinel);
       for (const a of mine) {
-        if (ids.has('PACK_SINEW') && a._conflictWith != null) a.honor = (a.honor || 0) + 0.003 * k;
-        if (ids.has('SYMBIOSIS')) { if (a.updateTrust) a.updateTrust(0.0005 * k); if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0003 * k); }
-        if (ids.has('DEEP_RESERVE')) { if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0006 * k); a.griefLevel = Math.max(0, (a.griefLevel || 0) - 0.0004 * k); }
-        if (ids.has('FARSIGHT')) { const s = Math.hypot(a.vx, a.vy) || 1; a.vx += (a.vx / s) * 0.006 * k; a.vy += (a.vy / s) * 0.006 * k; }
-        if (ids.has('INNER_LIGHT')) { a.faith = Math.min(1, (a.faith || 0) + 0.0006 * k); a.griefLevel = Math.max(0, (a.griefLevel || 0) - 0.0004 * k); }
-        if (ids.has('VITALITY')) { if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0004 * k); if (a.evolution != null) a.evolution = Math.min(5, a.evolution + 0.0003 * k); }
-        if (ids.has('APEX')) { if (a.updateTrust) a.updateTrust(0.0003 * k); if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0004 * k); a.faith = Math.min(1, (a.faith || 0) + 0.0004 * k); }
+        let k;
+        if ((k = K('PACK_SINEW')) && a._conflictWith != null) a.honor = (a.honor || 0) + 0.003 * k;
+        if ((k = K('SYMBIOSIS'))) { if (a.updateTrust) a.updateTrust(0.0005 * k); if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0003 * k); }
+        if ((k = K('DEEP_RESERVE'))) { if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0006 * k); a.griefLevel = Math.max(0, (a.griefLevel || 0) - 0.0004 * k); }
+        if ((k = K('FARSIGHT'))) { const s = Math.hypot(a.vx, a.vy) || 1; a.vx += (a.vx / s) * 0.006 * k; a.vy += (a.vy / s) * 0.006 * k; }
+        if ((k = K('INNER_LIGHT'))) { a.faith = Math.min(1, (a.faith || 0) + 0.0006 * k); a.griefLevel = Math.max(0, (a.griefLevel || 0) - 0.0004 * k); }
+        if ((k = K('VITALITY'))) { if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0004 * k); if (a.evolution != null) a.evolution = Math.min(5, a.evolution + 0.0003 * k); }
+        if ((k = K('APEX'))) { if (a.updateTrust) a.updateTrust(0.0003 * k); if (a.energy != null) a.energy = Math.min(1, a.energy + 0.0004 * k); a.faith = Math.min(1, (a.faith || 0) + 0.0004 * k); }
       }
     }
   }
@@ -182,8 +204,8 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
       ctx.fillRect(bx, 22, bw * Math.max(0, Math.min(1, C.progress)), bh);
       ctx.fillStyle = c === 'A' ? 'rgba(120,200,255,0.95)' : 'rgba(255,180,120,0.95)';
       ctx.fillText(`Colony ${c} · genome ${C.genome.length}`, x, 18);
-      // earned genes as a row of icons
-      const icons = C.genome.slice(-10).map(g => g.icon).join(' ');
+      // earned genes as a row of icons, each tagged with its tier when deepened
+      const icons = C.genome.slice(-10).map(g => g.icon + (g.tier > 1 ? this._roman(g.tier) : '')).join(' ');
       if (icons) ctx.fillText(icons, x, 38);
       ctx.restore();
     };
@@ -194,7 +216,7 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
   status() {
     const one = (c) => ({
       progress: +this.col[c].progress.toFixed(2),
-      genome: this.col[c].genome.map(g => g.name),
+      genome: this.col[c].genome.map(g => g.name + (g.tier > 1 ? ' ' + this._roman(g.tier) : '')),
       dominant: Object.keys(this.col[c].exp).sort((a, b) => this.col[c].exp[b] - this.col[c].exp[a])[0]
     });
     return { A: one('A'), B: one('B') };
