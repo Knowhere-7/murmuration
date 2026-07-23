@@ -76,6 +76,12 @@ window.MurmurationModules.K26 = class K26 {
       this.world.maze = this.maze;
     }
 
+    // Mutations — the evolution meter reborn as a living genome. Active by default.
+    if (window.MurmurationModules.MutationSystem) {
+      this.mutations = new window.MurmurationModules.MutationSystem(this.world);
+      this.world.mutations = this.mutations;
+    }
+
     this.draw();
   }
 
@@ -109,6 +115,9 @@ window.MurmurationModules.K26 = class K26 {
 
     // Maze tick — confine agents to passages, score goal reaches
     if (this.maze) this.maze.tick();
+
+    // Mutations tick — sample engagement, crystallize genes, apply effects
+    if (this.mutations) this.mutations.tick();
   }
 
   extract() {
@@ -187,6 +196,9 @@ window.MurmurationModules.K26 = class K26 {
 
     // Layer 3.9: maze walls, reward, markers
     if (this.maze) this.maze.draw(ctx);
+
+    // Layer 3.95: mutation genome readout (per-colony progress + earned genes)
+    if (this.mutations) this.mutations.draw(ctx);
 
     // Layer 4: agents on top
     for (const agent of this.world.agents) {
