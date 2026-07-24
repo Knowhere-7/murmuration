@@ -35,6 +35,16 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     this.DEPOSIT        = 1.0;    // flow laid per edge traversal (agents = the flow medium)
     this.SUCCESS_BONUS  = 6.0;    // extra flow laid back along a route that REACHED the goal
     this.exitTimes = [];          // rolling time-to-exit (the learning curve)
+    // Phase D — traps + hazard memory (sacrifice-as-information)
+    this.TRAP_FRAC    = 0.10;   // base fraction of cells that are traps (scaled by difficulty)
+    this.TRAP_DRAIN   = 0.010;  // energy drained per tick standing in a trap
+    this.TRAP_GRIEF   = 0.004;  // grief added per tick in a trap
+    this.DANGER_LEARN = 0.05;   // danger the colony learns per suffering-tick (∝ harm)
+    this.DANGER_EVAP  = 0.006;  // danger memory fades where no one suffers (a shunned trap dims)
+    this.DANGER_AVOID = 0.9;    // how strongly learned danger repels steering
+    this.traps  = new Set();    // cellIds that are physical traps (invisible until discovered)
+    this.danger = new Map();    // cellId → learned danger 0..1 (the collective spatial memory)
+    this.trapFalls = 0;
   }
 
   _id(c, r) { return c + ',' + r; }
@@ -56,6 +66,19 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     this.goal  = { c: this.cols - 1, r: this.rows - 1 };
     this.reward = { ...this._cellCenter(this.goal.c, this.goal.r), r: Math.min(this.cw, this.ch) * 0.42 };
     this.finishes = 0; this.exitTimes = [];
+
+    // Phase D — scatter trap cells (never on start/goal). Difficulty scales the count.
+    // Traps are INVISIBLE until an agent falls; the danger mark is learned from suffering.
+    this.traps = new Set(); this.danger = new Map(); this.trapFalls = 0;
+    const trapN = Math.round(this.cols * this.rows * this.TRAP_FRAC * (0.5 + diff * 0.35));
+    const startId = this._id(this.start.c, this.start.r), goalId = this._id(this.goal.c, this.goal.r);
+    let guard = 0;
+    while (this.traps.size < trapN && guard++ < trapN * 25) {
+      const c = (Math.random() * this.cols) | 0, r = (Math.random() * this.rows) | 0;
+      const id = this._id(c, r);
+      if (id === startId || id === goalId) continue;
+      this.traps.add(id);
+    }
 
     // Phase C — slime mold network (trait #11) over the maze-as-graph
     this.mold = window.MurmurationModules.SlimeMoldCore
@@ -177,6 +200,27 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
         a._mazeCell = cellId;
       } else if (!a._mazeCell) { a._mazeCell = cellId; }
 
+      // Phase D — TRAPS: standing in one harms the agent AND teaches the colony. The danger
+      // mark grows from suffering (sacrifice-as-information). A depleted agent that falls here
+      // is the sacrifice: a hard danger spike + honor + a note in collective memory. The living
+      // then route around it (see _steer). Nobody was told where the traps are — they learned.
+      if (this.traps.has(cellId)) {
+        if (a.energy != null) a.energy = Math.max(0, a.energy - this.TRAP_DRAIN);
+        a.griefLevel = Math.min(1, (a.griefLevel || 0) + this.TRAP_GRIEF);
+        this.danger.set(cellId, Math.min(1, (this.danger.get(cellId) || 0) + this.DANGER_LEARN));
+        if (this.world.markHit) this.world.markHit(a, '255,60,40');
+        if (a.energy != null && a.energy <= 0 && !a._mazeFell) {
+          a._mazeFell = true; this.trapFalls++;
+          this.danger.set(cellId, 1);
+          a.honor = (a.honor || 0) + 1;      // a death that teaches earns honor
+          a.seppukuDone = true;              // the sacrifice
+          if (this.world.collectiveMemory) this.world.collectiveMemory.push({ type: 'trap_learned', cell: cellId, t: this.world.time });
+          if (window.logLine) window.logLine(`☠ Agent #${a.id} fell to the trap at ${cellId} — the colony learns the danger.`, 'crisis');
+          if (window.addEvent) window.addEvent(`☠ A scout fell to a hidden trap — the swarm now marks it and routes around.`, 'crisis');
+          continue;                          // fallen — no steering
+        }
+      }
+
       // Attractor: seek the goal, then head home — the round trip is what reinforces short tubes.
       const target = a._mazeSeek === 'home' ? this.start : this.goal;
 
@@ -203,6 +247,15 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       // the route to the goal thickens. The swarm then follows the solved gradient.
       this.mold.step();
       if ((this.world.time & 15) === 0) this._refreshBestPath();   // re-extract often (watch it hold/adapt)
+    }
+
+    // Phase D — danger memory fades where no one is suffering (a truly-shunned trap dims, so
+    // the colony can re-explore if the map changes). Cheap sweep every 8 ticks.
+    if ((this.world.time & 7) === 0 && this.danger.size) {
+      for (const [id, d] of this.danger) {
+        const nd = d - this.DANGER_EVAP;
+        if (nd <= 0) this.danger.delete(id); else this.danger.set(id, nd);
+      }
     }
   }
 
@@ -257,7 +310,8 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
         for (const n of pool) {
           const [nc, nr] = n.target.split(',').map(Number);
           const dist = Math.hypot(nc - attractorCell.c, nr - attractorCell.r);
-          const score = (0.4 + n.conductance) * (1 / (1 + dist));
+          const dgr = this.danger.get(n.target) || 0;               // Phase D — shun learned traps
+          const score = (0.4 + n.conductance) * (1 / (1 + dist)) * (1 - dgr * this.DANGER_AVOID);
           if (score > bestScore) { bestScore = score; best = n; }
         }
         choice = best;
@@ -317,6 +371,26 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       if (r === this.rows - 1 && cell.S) stroke(left, bottom, right, bottom);
     }
 
+    // Phase D — DANGER MARKS: learned traps glow red ∝ how much the colony has suffered there.
+    // Undiscovered traps are INVISIBLE — the mark is knowledge, earned by sacrifice.
+    ctx.globalCompositeOperation = 'source-over';
+    for (const [id, d] of this.danger) {
+      const [c, r] = id.split(',').map(Number);
+      const p = this._cellCenter(c, r);
+      const rad = Math.min(this.cw, this.ch) * 0.30;
+      ctx.globalAlpha = 0.25 + 0.5 * d;
+      ctx.fillStyle = `rgba(255,60,50,${0.18 + 0.4 * d})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, Math.PI * 2); ctx.fill();
+      if (d > 0.5) {   // an X once the colony knows it well
+        ctx.strokeStyle = `rgba(255,140,130,${0.5 + 0.4 * d})`; ctx.lineWidth = 1.4;
+        const q = rad * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x - q, p.y - q); ctx.lineTo(p.x + q, p.y + q);
+        ctx.moveTo(p.x + q, p.y - q); ctx.lineTo(p.x - q, p.y + q); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
     const s = this._cellCenter(this.start.c, this.start.r);
     ctx.globalAlpha = 0.85; ctx.fillStyle = 'rgba(120,255,170,0.9)';
     ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2); ctx.fill();
@@ -326,7 +400,7 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     const bpLen = this.bestPath ? this.bestPath.nodes.length - 1 : 0;
     ctx.globalAlpha = 0.9; ctx.textAlign = 'left'; ctx.font = '9px ui-monospace, monospace';
     ctx.fillStyle = 'rgba(240,205,120,0.95)';
-    ctx.fillText(`MAZE ${this.cols}×${this.rows} · SLIME MOLD · reaches ${this.finishes} · path ${bpLen}/${this.trueShortest} · avg-exit ${avg}t`, this.ox, this.oy - 4);
+    ctx.fillText(`MAZE ${this.cols}×${this.rows} · SLIME MOLD · reaches ${this.finishes} · path ${bpLen}/${this.trueShortest} · avg-exit ${avg}t · traps ${this.traps.size} learned ${this.danger.size} fell ${this.trapFalls}`, this.ox, this.oy - 4);
     ctx.restore();
   }
 
@@ -342,6 +416,9 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       optimal: this.bestPath ? (this.bestPath.nodes.length - 1 === this.trueShortest) : null,
       avgExitTicks: avg,
       recentExitSamples: this.exitTimes.length,
+      traps: this.traps.size,
+      dangerLearned: this.danger.size,
+      trapFalls: this.trapFalls,
       mold: this.mold ? this.mold.stats() : null
     };
   }
