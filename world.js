@@ -728,6 +728,17 @@ window.MurmurationModules.World = class World {
       const cdist = Math.hypot(cdx, cdy) || 1;
       a.vx += (-cdy / cdist) * CURRENT_STRENGTH;
       a.vy += ( cdx / cdist) * CURRENT_STRENGTH;
+      // Boundary layer — a pure circular current orbits the centre and never reaches the
+      // corners of a square map, and its vertical components pin agents against the north/south
+      // edges. Near any edge, add a push ALONG the perimeter (same clockwise sense as the
+      // interior) and damp the into-edge component, so agents glide along the edge, ROUND the
+      // corners (where the relics sit), and back — instead of jamming on the top/bottom.
+      const band = Math.min(this.width, this.height) * 0.11;
+      const GLIDE = 0.16;
+      if (a.y < band)                 { a.vx += GLIDE; if (a.vy < 0) a.vy *= 0.4; } // north → east
+      if (a.y > this.height - band)   { a.vx -= GLIDE; if (a.vy > 0) a.vy *= 0.4; } // south → west
+      if (a.x > this.width - band)    { a.vy += GLIDE; if (a.vx > 0) a.vx *= 0.4; } // east  → south
+      if (a.x < band)                 { a.vy -= GLIDE; if (a.vx < 0) a.vx *= 0.4; } // west  → north
       // Wall moat — push off the barrier unless aimed at an open gate
       const dxw = a.x - this.width / 2, adxw = Math.abs(dxw);
       if (adxw < 72) {

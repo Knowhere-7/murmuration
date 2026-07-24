@@ -21,8 +21,10 @@ window.MurmurationModules.RelicSystem = class RelicSystem {
     // every other timed system here. 60 * 180 = 10800.
     this.CHARGE_TICKS = 10800;
     this.CLAIM_RADIUS = 24;    // must actually reach the node to claim it
-    this.PULL_RADIUS  = 130;   // pilgrims within this feel the draw
-    this.PULL_FORCE   = 0.045; // gentle — creates traffic, doesn't teleport
+    this.PULL_RADIUS  = 165;   // pilgrims within this feel the draw (widened — relics sit in corners)
+    this.PULL_FORCE   = 0.05;  // gentle far draw — creates traffic, doesn't teleport
+    this.GRAB_RADIUS  = 80;    // strong final capture zone so a relic wins the last stretch
+    this.GRAB_FORCE   = 0.28;  // must out-muscle the ambient current (0.19) + boundary glide (0.16)
     this.relics = this._define();
   }
 
@@ -67,7 +69,11 @@ window.MurmurationModules.RelicSystem = class RelicSystem {
         const dx = p.x - a.x, dy = p.y - a.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < this.PULL_RADIUS) {
-          const f = this.PULL_FORCE * (1 - d / this.PULL_RADIUS);
+          let f = this.PULL_FORCE * (1 - d / this.PULL_RADIUS);
+          // Strong close-range grab: within GRAB_RADIUS the pull ramps up steeply so the relic
+          // can actually capture an agent against the ambient current instead of losing the
+          // tug-of-war and letting it get swept past.
+          if (d < this.GRAB_RADIUS) f += this.GRAB_FORCE * (1 - d / this.GRAB_RADIUS);
           a.vx += (dx / d) * f;
           a.vy += (dy / d) * f;
         }
