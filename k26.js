@@ -82,6 +82,12 @@ window.MurmurationModules.K26 = class K26 {
       this.world.mutations = this.mutations;
     }
 
+    // Chronicle — flight recorder for emergent events (passive, active by default).
+    if (window.MurmurationModules.Chronicle) {
+      this.chronicle = new window.MurmurationModules.Chronicle(this.world);
+      this.world.chronicle = this.chronicle;
+    }
+
     this.draw();
   }
 
@@ -118,6 +124,9 @@ window.MurmurationModules.K26 = class K26 {
 
     // Mutations tick — sample engagement, crystallize genes, apply effects
     if (this.mutations) this.mutations.tick();
+
+    // Chronicle tick — sample macro-state, detect + record emergent events
+    if (this.chronicle) this.chronicle.tick();
   }
 
   extract() {
@@ -199,6 +208,9 @@ window.MurmurationModules.K26 = class K26 {
 
     // Layer 3.95: mutation genome readout (per-colony progress + earned genes)
     if (this.mutations) this.mutations.draw(ctx);
+
+    // Chronicle badge — unreviewed emergent events
+    if (this.chronicle) this.chronicle.draw(ctx);
 
     // Layer 4: agents on top
     for (const agent of this.world.agents) {

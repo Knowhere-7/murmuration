@@ -1101,8 +1101,9 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="slimeMoldCore.js?v=1"></script>
 <script src="maze.js?v=9"></script>
 <script src="mutations.js?v=2"></script>
+<script src="chronicle.js?v=1"></script>
 <script src="relics.js?v=2"></script>
-<script src="k26.js?v=11"></script>
+<script src="k26.js?v=12"></script>
 <script src="economy.js?v=5"></script>
 <script src="wealth.js"></script>
 <script src="predator.js"></script>
@@ -2434,6 +2435,10 @@ function restoreCivilization(snapshot) {
   if (window.MurmurationModules.MutationSystem) {
     k26.mutations = new window.MurmurationModules.MutationSystem(k26.world);
     k26.world.mutations = k26.mutations;
+  }
+  if (window.MurmurationModules.Chronicle) {
+    k26.chronicle = new window.MurmurationModules.Chronicle(k26.world);
+    k26.world.chronicle = k26.chronicle;
   }
 
   // Reconnect sentinel
