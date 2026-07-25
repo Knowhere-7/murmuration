@@ -37,9 +37,10 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     this.exitTimes = [];          // rolling time-to-exit (the learning curve)
     // Phase D — traps + hazard memory (sacrifice-as-information)
     this.TRAP_FRAC    = 0.10;   // base fraction of cells that are traps (scaled by difficulty)
-    this.TRAP_DRAIN   = 0.010;  // energy drained per tick standing in a trap
+    this.SUSTAIN      = 0.003;  // arena baseline: safe travel sustains an agent (no background starving)
+    this.TRAP_DRAIN   = 0.009;  // trap net = SUSTAIN - TRAP_DRAIN < 0, so ONLY traps cause loss/death
     this.TRAP_GRIEF   = 0.004;  // grief added per tick in a trap
-    this.DANGER_LEARN = 0.05;   // danger the colony learns per suffering-tick (∝ harm)
+    this.DANGER_LEARN = 0.09;   // colony learns fast — a couple of passes mark a trap (less death needed)
     this.DANGER_EVAP  = 0.006;  // danger memory fades where no one suffers (a shunned trap dims)
     this.DANGER_AVOID = 0.9;    // how strongly learned danger repels steering
     this.traps  = new Set();    // cellIds that are physical traps (invisible until discovered)
@@ -191,6 +192,9 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
 
     for (const a of agents) {
       this._confine(a);
+      // Arena sustenance — safe travel keeps an agent alive so the colony can actually solve the
+      // maze instead of background-starving; only traps (which drain faster) cause net loss.
+      if (a.energy != null) a.energy = Math.min(1, a.energy + this.SUSTAIN);
       const { c, r } = this._cellOf(a);
       const cellId = this._id(c, r);
 
