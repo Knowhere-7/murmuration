@@ -12,6 +12,14 @@ window.MurmurationModules.World = class World {
     this.width  = width;
     this.height = height;
     this.agents = [];
+    // ── EASY-CURRENT VARIANT (branch: easy-current) ──
+    // The current has been adjusted to make the corner power-ups easier to reach:
+    // boundary-layer glide (world.js) + strong relic grab (relics.js) are turned ON.
+    // This is the DELIBERATE counterpart to the crucible on `super-murmuration`, where
+    // this flag is false and the unreachable-corners-against-the-current forced THE-SWARM
+    // to invent orbital-slingshot travel (2026-07-24). Effect of easy access on emergence
+    // is UNKNOWN and under observation — that is the point of keeping this a separate line.
+    this.easyCorners = true;
     // ── PER-COLONY ENVIRONMENT — each colony evolves on its own path. Every
     // 'Break the Swarm' trait, plus the new positive/threat levers, is scoped
     // to A or B independently instead of hitting both at once. ──
