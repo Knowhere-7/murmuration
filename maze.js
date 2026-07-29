@@ -71,12 +71,27 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
 
   _id(c, r) { return c + ',' + r; }
 
+  /** Does this maze govern that agent? Unscoped mazes take everyone. */
+  _owns(a) { return !this.colony || a.colony === this.colony; }
+
   enable(opts = {}) {
-    const W = this.world.width, H = this.world.height;
     const diff = Math.max(1, Math.min(3, opts.difficulty || 2));
+
+    // A maze can own the whole canvas or a region of it. Two colonies of 60
+    // fit far better as two mazes than one crowd of 120 in a single grid —
+    // 120 agents jam a 12x12, spanning barely half its width. Bounds let each
+    // colony run its own arena, side by side, so the two can be compared.
+    this.colony = opts.colony || null;      // null = every agent, else 'A' | 'B'
+    const b = opts.bounds;
     const margin = 0.05;
-    this.ox = W * margin; this.oy = H * margin;
-    this.mazeW = W * (1 - 2 * margin); this.mazeH = H * (1 - 2 * margin);
+    if (b) {
+      this.ox = b.x + b.w * margin; this.oy = b.y + b.h * margin;
+      this.mazeW = b.w * (1 - 2 * margin); this.mazeH = b.h * (1 - 2 * margin);
+    } else {
+      const W = this.world.width, H = this.world.height;
+      this.ox = W * margin; this.oy = H * margin;
+      this.mazeW = W * (1 - 2 * margin); this.mazeH = H * (1 - 2 * margin);
+    }
 
     const maxC = this.MAX_COLS[diff];
     this.cols = Math.max(5, Math.min(maxC, Math.round(this.mazeW / this.TARGET_CELL)));
@@ -149,7 +164,10 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     const sId = this._id(this.start.c, this.start.r);
     const s = this._cellCenter(this.start.c, this.start.r);
     for (const a of this.world.agents) {
+      // singleColony is legacy and DESTRUCTIVE — it rewrites colony B out of
+      // existence. Prefer opts.colony, which claims agents without erasing them.
       if (opts.singleColony && a.colony !== 'U') { a.colony = 'A'; a.swarmTint = 0; }
+      if (!this._owns(a)) continue;
       a.x = s.x + (Math.random() - 0.5) * this.cw * 0.6;
       a.y = s.y + (Math.random() - 0.5) * this.ch * 0.6;
       a._mazeSeek = 'goal'; a._mazeCell = sId; a._mazeStart = this.world.time; a._mazeInGoal = false;
@@ -244,7 +262,7 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
 
   tick() {
     if (!this.active) return;
-    const agents = this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel);
+    const agents = this.world.agents.filter(a => !a.seppukuDone && !a.isSentinel && this._owns(a));
 
     for (const a of agents) {
       this._confine(a);

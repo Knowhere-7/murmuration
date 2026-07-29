@@ -119,8 +119,10 @@ window.MurmurationModules.K26 = class K26 {
     // Gauntlet tick — pads, gate, barrier collision, reward
     if (this.gauntlet) this.gauntlet.tick();
 
-    // Maze tick — confine agents to passages, score goal reaches
-    if (this.maze) this.maze.tick();
+    // Maze tick — confine agents to passages, score goal reaches.
+    // `mazes` (plural) lets a host run one arena per colony side by side.
+    if (this.mazes) { for (const m of this.mazes) m.tick(); }
+    else if (this.maze) this.maze.tick();
 
     // Mutations tick — sample engagement, crystallize genes, apply effects
     if (this.mutations) this.mutations.tick();
@@ -195,7 +197,8 @@ window.MurmurationModules.K26 = class K26 {
     // While the maze is armed it OWNS the canvas. Everything belonging to the
     // open-world scenario is suppressed — nothing is deleted, nothing changes
     // state, it simply is not painted. Disarming restores the full view.
-    const mazeMode = !!(this.maze && this.maze.active);
+    const mazeMode = !!((this.maze && this.maze.active) ||
+                        (this.mazes && this.mazes.some(m => m.active)));
 
     // Layer 1: vanta void + state-reactive nebula (see VISUAL-BIBLE.md)
     this.drawBackground(ctx, W, H);
@@ -218,7 +221,8 @@ window.MurmurationModules.K26 = class K26 {
     if (this.gauntlet) this.gauntlet.draw(ctx);
 
     // Layer 3.9: maze walls, reward, markers
-    if (this.maze) this.maze.draw(ctx);
+    if (this.mazes) { for (const m of this.mazes) m.draw(ctx); }
+    else if (this.maze) this.maze.draw(ctx);
 
     // Layer 3.95: mutation genome readout (per-colony progress + earned genes)
     if (this.mutations) this.mutations.draw(ctx);
@@ -288,7 +292,9 @@ window.MurmurationModules.K26 = class K26 {
     // Topographic contours are the open world's terrain. In maze mode they run
     // straight through the corridors and read as false passages, so the void
     // stays black and the only lines on screen are maze walls.
-    if (this.topoLayer && !(this.maze && this.maze.active)) {
+    const _mz = (this.maze && this.maze.active) ||
+                (this.mazes && this.mazes.some(m => m.active));
+    if (this.topoLayer && !_mz) {
       ctx.drawImage(this.topoLayer, 0, 0, W, H);
     }
 

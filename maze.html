@@ -97,7 +97,7 @@
         <option value="25">25&times;</option>
       </select>
     </label>
-    <span class="note">fresh cohort every run &middot; nothing saved</span>
+    <span class="note">two arenas &middot; 60 per colony &middot; fresh cohort every run</span>
   </footer>
 </div>
 
@@ -108,8 +108,8 @@
 <script src="evolution.js"></script>
 <script src="extractor.js"></script>
 <script src="slimeMoldCore.js?v=1"></script>
-<script src="maze.js?v=13"></script>
-<script src="k26.js?v=13"></script>
+<script src="maze.js?v=14"></script>
+<script src="k26.js?v=14"></script>
 <script>
 (function () {
   const canvas = document.getElementById('canvas');
@@ -136,10 +136,28 @@
     k26.init(count);
     window.k26 = k26;                      // console access, same as the main page
 
-    if (!k26.maze) { hud.innerHTML = '<b class="dgr">maze module failed to load</b>'; return; }
-    // Fresh world every run, so enable()'s destructive rewrite has nothing to
-    // destroy — that mutation is exactly why this page exists.
-    k26.maze.enable({ singleColony: true, difficulty: diff });
+    if (!window.MurmurationModules.MazeSystem) {
+      hud.innerHTML = '<b class="dgr">maze module failed to load</b>'; return;
+    }
+
+    // TWO ARENAS, ONE PER COLONY.
+    // 120 agents is two colonies of 60, and 120 in a single 12x12 grid jam —
+    // they span barely half its width. Split, each colony gets room to actually
+    // traverse, the two-colony structure survives (no singleColony rewrite),
+    // and the runs become comparable: same difficulty, same pellet rules, two
+    // independent swarms solving side by side.
+    const W = canvas.width, H = canvas.height;
+    const M = window.MurmurationModules.MazeSystem;
+    k26.maze = null;
+    k26.mazes = [
+      new M(k26.world),
+      new M(k26.world),
+    ];
+    k26.mazes[0].enable({ colony: 'A', difficulty: diff, bounds: { x: 0,     y: 0, w: W / 2, h: H } });
+    k26.mazes[1].enable({ colony: 'B', difficulty: diff, bounds: { x: W / 2, y: 0, w: W / 2, h: H } });
+    // agent.js reads this to suppress its cluster bloom inside corridors.
+    window.MurmurationModules.activeMaze = k26.mazes[0];
+    k26.world.maze = k26.mazes[0];
   }
 
   function frame() {
@@ -154,26 +172,27 @@
   }
 
   function drawHud() {
-    if (!k26 || !k26.maze) return;
-    const s = k26.maze.status();
-    const agents = k26.world.agents;
-    const alive  = agents.filter(a => !a.seppukuDone).length;
-    const inGoal = agents.filter(a => a._mazeInGoal).length;
-    const avg    = s.avgExitTicks == null ? '—' : Math.round(s.avgExitTicks) + 't';
-    hud.innerHTML =
-      `<div><b>${s.grid}</b> braided grid &middot; tick ${k26.world.time}</div>` +
-      `<div>shortest path <b>${s.trueShortest}</b> hops` +
-        ` &middot; solved <span class="gold">${s.bestPathLen}</span>` +
-        ` ${s.optimal ? '<span class="gold">(optimal)</span>' : ''}</div>` +
-      `<div>goal reaches <b>${s.goalReaches}</b> &middot; avg exit ${avg}` +
-        ` &middot; at goal ${inGoal}</div>` +
-      `<div>traps <span class="dgr">${s.traps}</span>` +
-        ` &middot; learned <b>${s.dangerLearned}</b>` +
-        ` &middot; fell <span class="dgr">${s.trapFalls}</span></div>` +
-      `<div>pellets <span class="gold">${s.pelletsRipe}</span>/${s.pellets}` +
-        ` ripe &middot; eaten <b>${s.pelletsEaten}</b></div>` +
-      `<div>alive <b>${alive}</b> / ${agents.length}` +
-        ` &middot; flow ${s.mold ? s.mold.totalFlow.toFixed(2) : '—'}</div>`;
+    if (!k26 || !k26.mazes) return;
+    const rows = k26.mazes.map((m, i) => {
+      const s = m.status();
+      if (!s.active) return '';
+      const col   = i === 0 ? 'A' : 'B';
+      const tint  = i === 0 ? '#40e8d0' : '#ff7fd0';
+      const live  = k26.world.agents.filter(a => a.colony === m.colony && !a.seppukuDone).length;
+      const total = k26.world.agents.filter(a => a.colony === m.colony).length;
+      return `<div style="margin-bottom:6px">` +
+        `<b style="color:${tint}">COLONY ${col}</b> &middot; ${s.grid} &middot; ` +
+        `alive <b>${live}</b>/${total}<br>` +
+        `path <span class="gold">${s.bestPathLen}</span>/${s.trueShortest}` +
+        `${s.optimal ? ' <span class="gold">(optimal)</span>' : ''} &middot; ` +
+        `reaches <b>${s.goalReaches}</b><br>` +
+        `traps <span class="dgr">${s.traps}</span> &middot; learned <b>${s.dangerLearned}</b> &middot; ` +
+        `fell <span class="dgr">${s.trapFalls}</span><br>` +
+        `pellets <span class="gold">${s.pelletsRipe}</span>/${s.pellets} ripe &middot; ` +
+        `eaten <b>${s.pelletsEaten}</b>` +
+        `</div>`;
+    }).join('');
+    hud.innerHTML = `<div style="margin-bottom:6px">tick ${k26.world.time}</div>` + rows;
   }
 
   runBtn.onclick = () => {
