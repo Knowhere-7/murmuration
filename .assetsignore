@@ -1,0 +1,24 @@
+# Paths excluded from the deployed static assets (gitignore syntax).
+#
+# Added 2026-07-28. Verified before this file existed:
+#   https://murmuration.knowhere-group.com/.git/config   -> HTTP 200
+#   https://murmuration.knowhere-group.com/.git/logs/HEAD -> HTTP 200
+# The whole .git directory was being served publicly. No credential was present
+# in the published config (remote is a clean HTTPS URL, checked), so this was
+# hygiene rather than an active leak — but it should not have been reachable.
+#
+# Deliberately conservative: only build artefacts, VCS internals, and config are
+# excluded. Documentation and every runtime asset are left exactly as they were,
+# so this does not change what the site serves.
+
+.git
+.github
+.wrangler
+node_modules
+_bc_backup
+
+# Config and ignore files are not site content.
+wrangler.jsonc
+.assetsignore
+.gitignore
+.nojekyll

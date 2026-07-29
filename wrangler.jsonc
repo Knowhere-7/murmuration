@@ -1,0 +1,22 @@
+{
+  // Static-assets Worker for murmuration.knowhere-group.com
+  //
+  // Committed 2026-07-28. Before this file existed, every build logged:
+  //   "Failed to match Worker name. Your config file is using the Worker name
+  //    'undefined', but the CI system expected 'super-murmuration'."
+  // Cloudflare kept auto-opening a PR to fix that (PR #1). That PR targeted
+  // `master` — which is 20 commits behind this branch and has no maze — so
+  // merging it would have deployed the pre-maze build over the live site. It
+  // was closed; this is the same fix on the correct branch.
+  //
+  // Values below intentionally mirror what was already deploying, so this
+  // commit changes provenance and hygiene, not site behaviour.
+  "name": "super-murmuration",
+  "compatibility_date": "2026-07-03",
+
+  // The site is served straight from the repo root — no build step, no bundler.
+  // Exclusions live in .assetsignore (notably .git, which was being published).
+  "assets": {
+    "directory": "./"
+  }
+}
