@@ -404,7 +404,17 @@ window.MurmurationModules.Agent = class Agent {
 
     // Cluster density glow — the bigger the group, the brighter and wider the bloom.
     // Additive, so overlapping glows in a dense flock stack into real radiance.
-    const cluster = this.clusterSize || 0;
+    //
+    // SUPPRESSED IN MAZE MODE. In open water this bloom IS the point — it makes
+    // a civilization legible at a glance. Inside a 114x57 corridor it is a
+    // light-flare: a packed group stacks additively into a white blob that
+    // erases the very walls the run is about, and makes 1.2px agents read as
+    // enormous. Bodies and rings still draw, so trust/grief/faith stay visible.
+    // Agents hold no world back-reference, so the flag is read from the module
+    // registry that agent.js already lives in.
+    const mz = window.MurmurationModules && window.MurmurationModules.activeMaze;
+    const mazeActive = !!(mz && mz.active);
+    const cluster = mazeActive ? 0 : (this.clusterSize || 0);
     if (cluster > 1) {
       const intensity  = Math.min(1, (cluster - 1) / 10);    // starts at a pair, full by ~11
       const glowRadius = this.radius + 5 + intensity * 18;   // scaled to smaller agent

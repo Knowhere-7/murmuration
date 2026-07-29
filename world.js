@@ -1316,6 +1316,13 @@ window.MurmurationModules.World = class World {
   /** Env overlay + sentinel label — called separately when K26 controls draw order */
   drawOverlay(ctx) {
     // ── COMMONS ZONES — territory-aware resource node rendering ──
+    // Suppressed in maze mode. These are open-world territory, and they are NOT
+    // drawn by economy.draw() — they live here in the overlay, which is why
+    // gating the economy layer alone left ten large red discs sitting on top of
+    // the corridors with their labels intact.
+    const mz = window.MurmurationModules && window.MurmurationModules.activeMaze;
+    if (mz && mz.active) return;
+
     const zones = this.getCommonsZones();
     const t = this.time;
     ctx.save();

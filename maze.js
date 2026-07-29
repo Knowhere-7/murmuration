@@ -112,6 +112,9 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     }
 
     this.active = true;
+    // Publish to the module registry so agent.js — which has no world
+    // back-reference — can suppress its cluster bloom while the maze is armed.
+    window.MurmurationModules.activeMaze = this;
     if (window.logLine) {
       window.logLine(`▦ MAZE ARMED — ${this.cols}×${this.rows} braided grid, solved by SLIME MOLD ` +
         `(#11). The swarm is the flow; the tubes thicken toward the goal. Shortest path = ${this.trueShortest} hops.`, 'emerge');
@@ -119,7 +122,12 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     return this.status();
   }
 
-  disable() { this.active = false; }
+  disable() {
+    this.active = false;
+    if (window.MurmurationModules && window.MurmurationModules.activeMaze === this) {
+      window.MurmurationModules.activeMaze = null;
+    }
+  }
 
   _cellCenter(c, r) { return { x: this.ox + (c + 0.5) * this.cw, y: this.oy + (r + 0.5) * this.ch }; }
 

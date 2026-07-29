@@ -185,20 +185,34 @@ window.MurmurationModules.K26 = class K26 {
 
     const W = this.world.width, H = this.world.height;
 
+    // ── MAZE MODE ─────────────────────────────────────────────────────
+    // The maze is a DIFFERENT EXPERIMENT, not an overlay on the open world.
+    // Drawn on top of the ordinary sim it is unreadable: topographic contours,
+    // ten commons zones, the wall, relic beacons and the bond web all compete
+    // for the same pixels as 114x57 corridors, and the additive cluster bloom
+    // of a packed swarm floods whichever corridor it occupies.
+    //
+    // While the maze is armed it OWNS the canvas. Everything belonging to the
+    // open-world scenario is suppressed — nothing is deleted, nothing changes
+    // state, it simply is not painted. Disarming restores the full view.
+    const mazeMode = !!(this.maze && this.maze.active);
+
     // Layer 1: vanta void + state-reactive nebula (see VISUAL-BIBLE.md)
     this.drawBackground(ctx, W, H);
 
     // Layer 2: resource zones UNDER agents (so agents stay crisp)
-    if (this.economy) this.economy.draw(ctx);
+    if (this.economy && !mazeMode) this.economy.draw(ctx);
 
     // Layer 3: connection strings — persistent neural web (additive light)
-    this.drawConnections(ctx);
+    // In the maze this web is the single worst offender: 120 agents in close
+    // quarters draw a near-solid sheet of light over the walls.
+    if (!mazeMode) this.drawConnections(ctx);
 
     // Layer 3.5: the wall + gates — above bonds, below agents
-    if (this.world.drawWall) this.world.drawWall(ctx);
+    if (this.world.drawWall && !mazeMode) this.world.drawWall(ctx);
 
     // Layer 3.7: relic beacons at the far points — above the wall, under agents
-    if (this.relicSystem) this.relicSystem.draw(ctx);
+    if (this.relicSystem && !mazeMode) this.relicSystem.draw(ctx);
 
     // Layer 3.8: gauntlet obstacle — barrier, gate, pads, reward
     if (this.gauntlet) this.gauntlet.draw(ctx);
@@ -271,7 +285,12 @@ window.MurmurationModules.K26 = class K26 {
       try { this.topoLayer = window.buildTopoMap(W, H); }
       catch (e) { console.warn('[topo build failed]', e); this.topoLayer = null; }
     }
-    if (this.topoLayer) ctx.drawImage(this.topoLayer, 0, 0, W, H);
+    // Topographic contours are the open world's terrain. In maze mode they run
+    // straight through the corridors and read as false passages, so the void
+    // stays black and the only lines on screen are maze walls.
+    if (this.topoLayer && !(this.maze && this.maze.active)) {
+      ctx.drawImage(this.topoLayer, 0, 0, W, H);
+    }
 
     const sat = this.computeMood();
     const hue = sat < 0.5 ? 35 + (sat / 0.5) * 85
