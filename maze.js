@@ -43,24 +43,27 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     this.DANGER_LEARN = 0.09;   // colony learns fast — a couple of passes mark a trap (less death needed)
     this.DANGER_EVAP  = 0.006;  // danger memory fades where no one suffers (a shunned trap dims)
     this.DANGER_AVOID = 0.9;    // how strongly learned danger repels steering
-    // ── SACRED GROUND — the fulfilment constraint (Ghost, 2026-07-29) ──
+    // ── PELLETS — the fulfilment constraint (Ghost, 2026-07-29) ──
     // The grief cascade is not a bug to damp; it is the maze's real difficulty.
     // Confined in corridors, one seppuku pushes grief into neighbours faster
-    // than it can heal, and the cohort grieves itself to death. Sacred ground
-    // is the relief: standing on it eases grief, the way pilgrimage does in the
-    // open world (economy.js DRIVE 5).
+    // than it can heal, and the cohort grieves itself to death.
     //
-    // Two rules make it a real problem instead of a hint:
-    //   1. It exists EVERYWHERE, not only along the solved route. Seeding it on
-    //      the path would paint the answer on the floor.
-    //   2. It DEPLETES. A cohort cannot camp one well — a region exhausts and
-    //      the swarm must spread to stay fulfilled.
-    // So fulfilment pulls the swarm APART while the goal pulls it TOGETHER.
-    this.WELL_FRAC   = 0.55;    // share of non-trap cells holding sacred ground
-    this.WELL_RELIEF = 0.010;   // grief eased per tick while standing on it
-    this.WELL_DRAW   = 0.020;   // strength consumed per agent per tick
-    this.WELL_REGEN  = 0.0016;  // strength recovered per tick when unoccupied
-    this.wells  = new Map();    // cellId -> strength 0..1
+    // The relief is the resource node — the same thing the WELL/HEARTH spheres
+    // are on the open map, but laid out the way Pac-Man lays out its dots: one
+    // pellet at every cell centre AND at the midpoint of every open edge, so
+    // they form a continuous trail through the entire traversable graph.
+    //
+    // That layout is the whole trick. Feeding the swarm only along the solved
+    // route would paint the answer on the floor; covering EVERY corridor —
+    // dead ends and wrong branches alike — means eating tells an agent nothing
+    // about where the exit is. Pellets regenerate slowly, like commons supply,
+    // so a stripped corridor recovers and the swarm keeps circulating.
+    this.PELLET_RELIEF = 0.055;   // grief eased by one pellet
+    this.PELLET_REGEN  = 0.0022;  // regrowth per tick once eaten
+    this.PELLET_R      = 0.17;    // eat radius, as a fraction of cell size
+    this.pellets = [];            // {x, y, v} — v is 0..1 ripeness
+    this.pelletsByCell = new Map();  // cellId -> pellets, so eating is O(1)
+    this.pelletsEaten = 0;
     this.traps  = new Set();    // cellIds that are physical traps (invisible until discovered)
     this.danger = new Map();    // cellId → learned danger 0..1 (the collective spatial memory)
     this.trapFalls = 0;
@@ -99,17 +102,30 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       this.traps.add(id);
     }
 
-    // Sacred ground — seeded across the WHOLE grid, deliberately including dead
-    // ends and wrong branches. Never on a trap (a cell is sanctuary or hazard,
-    // not both) and never on the goal (the goal is its own reward). Because the
-    // distribution ignores the solution entirely, following sanctuary tells an
-    // agent nothing about where the exit is.
-    this.wells = new Map();
+    // Pellets — one per cell centre, one per open edge. Full corridor coverage
+    // means the trail never hints at the route. Never on the goal (its own
+    // reward) and never on a trap (a cell is sanctuary or hazard, not both).
+    this.pellets = [];
+    this.pelletsEaten = 0;
+    this.pelletsByCell = new Map();
     for (let c = 0; c < this.cols; c++) {
       for (let r = 0; r < this.rows; r++) {
         const id = this._id(c, r);
         if (id === goalId || this.traps.has(id)) continue;
-        if (Math.random() < this.WELL_FRAC) this.wells.set(id, 1.0);
+        const p = this._cellCenter(c, r);
+        const bucket = [];
+        const add = (px, py) => { const pel = { x: px, y: py, v: 1 }; this.pellets.push(pel); bucket.push(pel); };
+        add(p.x, p.y);
+        const cell = this.cells[r][c];
+        // Edge pellets bridge adjacent cells so the trail is continuous.
+        if (!cell.E && c < this.cols - 1 && !this.traps.has(this._id(c + 1, r))) {
+          add(this.ox + (c + 1) * this.cw, p.y);
+        }
+        if (!cell.S && r < this.rows - 1 && !this.traps.has(this._id(c, r + 1))) {
+          add(p.x, this.oy + (r + 1) * this.ch);
+        }
+        // Bucket by cell so eating is O(pellets-in-this-cell), not O(all).
+        this.pelletsByCell.set(id, bucket);
       }
     }
 
@@ -265,18 +281,25 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
         }
       }
 
-      // ── SACRED GROUND — drink ──────────────────────────────────────
-      // Standing on unspent sanctuary eases grief and slows the cascade. It
-      // costs the well, so a packed group drains its refuge quickly and has to
-      // move on. This is the counter-pressure to the goal: staying alive wants
-      // the swarm spread across many wells, solving wants it converged on one
-      // route. Faith deepens the relief, exactly as pilgrimage does outside.
-      const wellStrength = this.wells.get(cellId);
-      if (wellStrength > 0) {
-        const faithBonus = 1 + (a.faith || 0) * 0.6;
-        a.griefLevel = Math.max(0, (a.griefLevel || 0) - this.WELL_RELIEF * faithBonus);
-        this.wells.set(cellId, Math.max(0, wellStrength - this.WELL_DRAW));
-        a._mazeFulfilled = this.world.time;
+      // ── EAT ────────────────────────────────────────────────────────
+      // Passing over a ripe pellet consumes it and eases grief. Faith deepens
+      // the relief, the way pilgrimage does on the open map. Because pellets
+      // blanket every corridor, an agent staying fed is wandering, not
+      // homing — which is exactly the counter-pressure to the goal.
+      if (this._eatR == null) this._eatR = Math.min(this.cw, this.ch) * this.PELLET_R;
+      const bucket = this.pelletsByCell.get(cellId);
+      if (bucket) {
+        for (let i = 0; i < bucket.length; i++) {
+          const pel = bucket[i];
+          if (pel.v < 0.9) continue;
+          if (Math.abs(pel.x - a.x) > this._eatR || Math.abs(pel.y - a.y) > this._eatR) continue;
+          pel.v = 0;
+          const faithBonus = 1 + (a.faith || 0) * 0.6;
+          a.griefLevel = Math.max(0, (a.griefLevel || 0) - this.PELLET_RELIEF * faithBonus);
+          a._mazeFed = this.world.time;
+          this.pelletsEaten++;
+          break;                                  // one pellet per tick per agent
+        }
       }
 
       // Attractor: seek the goal, then head home — the round trip is what reinforces short tubes.
@@ -307,12 +330,13 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       if ((this.world.time & 15) === 0) this._refreshBestPath();   // re-extract often (watch it hold/adapt)
     }
 
-    // Sacred ground recovers when nobody is drawing on it, so an exhausted
-    // region becomes viable again later and the swarm can re-occupy ground it
-    // abandoned. Cheap sweep, same cadence as the danger fade.
-    if ((this.world.time & 7) === 0 && this.wells.size) {
-      for (const [id, v] of this.wells) {
-        if (v < 1) this.wells.set(id, Math.min(1, v + this.WELL_REGEN * 8));
+    // Pellets regrow, so a stripped corridor becomes worth revisiting and the
+    // swarm keeps circulating instead of permanently exhausting the board.
+    if ((this.world.time & 3) === 0 && this.pellets.length) {
+      const step = this.PELLET_REGEN * 4;
+      for (let i = 0; i < this.pellets.length; i++) {
+        const pel = this.pellets[i];
+        if (pel.v < 1) pel.v = Math.min(1, pel.v + step);
       }
     }
 
@@ -396,22 +420,19 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     if (!this.active || !this.cells) return;
     ctx.save();
 
-    // Sacred ground — warm pools on the floor. Bright = unspent, dim = drawn
-    // down. Because sanctuary covers the whole grid it reads as terrain rather
-    // than a breadcrumb, so it never betrays the route. Drawn first, beneath
-    // the walls, so corridors stay the clearest thing on screen.
-    if (this.wells && this.wells.size) {
+    // Pellets — small discrete dots along every corridor, Pac-Man style. Ripe
+    // ones read bright; eaten ones fade out and grow back. Drawn beneath the
+    // walls so corridors stay the clearest thing on screen.
+    if (this.pellets && this.pellets.length) {
+      const rad = Math.max(1.1, Math.min(this.cw, this.ch) * 0.055);
       ctx.globalCompositeOperation = 'lighter';
-      for (const [id, v] of this.wells) {
-        if (v <= 0.02) continue;
-        const [c, r] = id.split(',').map(Number);
-        const p = this._cellCenter(c, r);
-        const rad = Math.min(this.cw, this.ch) * 0.30;
-        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad);
-        g.addColorStop(0, `rgba(240,205,120,${0.10 * v})`);
-        g.addColorStop(1, 'rgba(240,205,120,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, Math.PI * 2); ctx.fill();
+      for (let i = 0; i < this.pellets.length; i++) {
+        const pel = this.pellets[i];
+        if (pel.v <= 0.05) continue;
+        ctx.fillStyle = `rgba(245,215,140,${0.30 + 0.55 * pel.v})`;
+        ctx.beginPath();
+        ctx.arc(pel.x, pel.y, rad * (0.55 + 0.45 * pel.v), 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
     }
@@ -504,13 +525,11 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       avgExitTicks: avg,
       recentExitSamples: this.exitTimes.length,
       traps: this.traps.size,
-      wells: this.wells ? this.wells.size : 0,
-      wellsSpent: this.wells ? [...this.wells.values()].filter(v => v <= 0.02).length : 0,
-      wellCharge: this.wells && this.wells.size
-        ? +([...this.wells.values()].reduce((x, y) => x + y, 0) / this.wells.size).toFixed(3)
-        : null,
       dangerLearned: this.danger.size,
       trapFalls: this.trapFalls,
+      pellets: this.pellets ? this.pellets.length : 0,
+      pelletsRipe: this.pellets ? this.pellets.filter(p => p.v >= 0.9).length : 0,
+      pelletsEaten: this.pelletsEaten || 0,
       mold: this.mold ? this.mold.stats() : null
     };
   }

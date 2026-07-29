@@ -108,7 +108,7 @@
 <script src="evolution.js"></script>
 <script src="extractor.js"></script>
 <script src="slimeMoldCore.js?v=1"></script>
-<script src="maze.js?v=11"></script>
+<script src="maze.js?v=13"></script>
 <script src="k26.js?v=13"></script>
 <script>
 (function () {
@@ -170,9 +170,8 @@
       `<div>traps <span class="dgr">${s.traps}</span>` +
         ` &middot; learned <b>${s.dangerLearned}</b>` +
         ` &middot; fell <span class="dgr">${s.trapFalls}</span></div>` +
-      `<div>sacred ground <span class="gold">${s.wells}</span>` +
-        ` &middot; charge <span class="gold">${s.wellCharge == null ? '—' : Math.round(s.wellCharge*100)+'%'}</span>` +
-        ` &middot; spent ${s.wellsSpent}</div>` +
+      `<div>pellets <span class="gold">${s.pelletsRipe}</span>/${s.pellets}` +
+        ` ripe &middot; eaten <b>${s.pelletsEaten}</b></div>` +
       `<div>alive <b>${alive}</b> / ${agents.length}` +
         ` &middot; flow ${s.mold ? s.mold.totalFlow.toFixed(2) : '—'}</div>`;
   }
