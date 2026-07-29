@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Murmuration — Maze · Slime Mold (#11)</title>
+<!--
+  STANDALONE MAZE LAB.
+
+  This page exists because arming the maze inside the main simulation was
+  DESTRUCTIVE and irreversible: MazeSystem.enable() rewrites every agent's
+  colony to 'A', teleports every agent to the start cell, and forces both wall
+  gates open, re-centred and resized. disable() restores none of it, and the
+  main page then autosaves the wreckage to localStorage. One arm, ever, and the
+  two-colony civilisation was gone for good.
+
+  The maze is also a different KIND of question. The civilisation is an open
+  ended evolutionary run; the maze is a controlled experiment feeding the
+  pentest path-finding capability. An experiment needs a fixed starting cohort
+  so that when you change trap density or slime-mold parameters you are
+  measuring THAT, not yesterday's civil war.
+
+  So: own page, own canvas, own World, fresh cohort every run, and NO
+  localStorage. Nothing here can touch the civilisation.
+
+  Only the modules the maze actually needs are loaded. k26.step() and
+  k26.init() are fully guarded, so economy, wealth, predators, CTF, relics,
+  gauntlet, mutations and chronicle are simply never constructed and never
+  tick — no predator hunting agents through the corridors.
+-->
+<style>
+  :root{
+    --bg:#000; --ink:#cfe9dd; --dim:#5f7f73; --line:rgba(120,240,190,.22);
+    --accent:#8fe3c0; --gold:#f0cd78; --danger:#ff6040;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden}
+  #wrap{position:fixed;inset:0;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:16px;padding:8px 14px;
+    border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.06em;flex:0 0 auto}
+  header .t{color:var(--accent);font-weight:600}
+  header .sp{flex:1}
+  a.back{color:var(--dim);text-decoration:none;border:1px solid var(--line);
+    padding:4px 10px;border-radius:3px}
+  a.back:hover{color:var(--accent)}
+  #stage{position:relative;flex:1 1 auto;min-height:0}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;top:44px;left:12px;font-size:11px;line-height:1.7;
+    color:var(--dim);pointer-events:none;text-shadow:0 0 8px #000}
+  #hud b{color:var(--accent);font-weight:600}
+  #hud .gold{color:var(--gold)}
+  #hud .dgr{color:var(--danger)}
+  footer{display:flex;align-items:center;gap:10px;padding:9px 14px;
+    border-top:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+  button,select,input{
+    background:rgba(30,160,120,.10);border:1px solid var(--line);color:var(--accent);
+    font-family:inherit;font-size:11px;letter-spacing:.06em;padding:6px 12px;
+    border-radius:3px;cursor:pointer}
+  button:hover{background:rgba(30,200,150,.22)}
+  button.primary{background:rgba(30,200,150,.26)}
+  label{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px}
+  input[type=number]{width:64px;cursor:text}
+  .note{font-size:10.5px;color:var(--dim);opacity:.85}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <span class="t">&#9638; MAZE LAB</span>
+    <span class="note">slime mold (#11) &middot; isolated from the civilisation</span>
+    <span class="sp"></span>
+    <a class="back" href="index.html">&larr; MURMURATION</a>
+  </header>
+
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+    <div id="hud"></div>
+  </div>
+
+  <footer>
+    <button id="runBtn" class="primary">&#9208; PAUSE</button>
+    <button id="newBtn">&#8635; NEW MAZE</button>
+    <label>agents <input type="number" id="agents" value="120" min="10" max="300" step="10"></label>
+    <label>difficulty
+      <select id="diff">
+        <option value="1">1 — 8&times;8</option>
+        <option value="2" selected>2 — 12&times;12</option>
+        <option value="3">3 — 16&times;16</option>
+      </select>
+    </label>
+    <label>speed
+      <select id="speed">
+        <option value="1">1&times;</option>
+        <option value="4" selected>4&times;</option>
+        <option value="10">10&times;</option>
+        <option value="25">25&times;</option>
+      </select>
+    </label>
+    <span class="note">fresh cohort every run &middot; nothing saved</span>
+  </footer>
+</div>
+
+<script src="agent.js?v=5"></script>
+<script src="world.js?v=9"></script>
+<script src="seed.js"></script>
+<script src="interaction.js?v=3"></script>
+<script src="evolution.js"></script>
+<script src="extractor.js"></script>
+<script src="slimeMoldCore.js?v=1"></script>
+<script src="maze.js?v=11"></script>
+<script src="k26.js?v=13"></script>
+<script>
+(function () {
+  const canvas = document.getElementById('canvas');
+  const hud    = document.getElementById('hud');
+  const runBtn = document.getElementById('runBtn');
+  let k26 = null, running = true, raf = null;
+
+  // The main page's logLine writes into a console element that does not exist
+  // here. Stub it so maze.js can announce ARMED without throwing.
+  window.logLine = window.logLine || function (msg) { console.log('[maze]', msg); };
+
+  function sizeCanvas() {
+    const r = canvas.parentElement.getBoundingClientRect();
+    canvas.width  = Math.max(320, Math.floor(r.width));
+    canvas.height = Math.max(240, Math.floor(r.height));
+  }
+
+  function build() {
+    sizeCanvas();
+    const count = Math.max(10, Math.min(300, parseInt(document.getElementById('agents').value) || 120));
+    const diff  = parseInt(document.getElementById('diff').value) || 2;
+
+    k26 = new window.MurmurationModules.K26('canvas');
+    k26.init(count);
+    window.k26 = k26;                      // console access, same as the main page
+
+    if (!k26.maze) { hud.innerHTML = '<b class="dgr">maze module failed to load</b>'; return; }
+    // Fresh world every run, so enable()'s destructive rewrite has nothing to
+    // destroy — that mutation is exactly why this page exists.
+    k26.maze.enable({ singleColony: true, difficulty: diff });
+  }
+
+  function frame() {
+    if (!k26) return;
+    if (running) {
+      const mult = parseInt(document.getElementById('speed').value) || 1;
+      for (let i = 0; i < mult; i++) k26.step();
+    }
+    k26.draw();
+    drawHud();
+    raf = requestAnimationFrame(frame);
+  }
+
+  function drawHud() {
+    if (!k26 || !k26.maze) return;
+    const s = k26.maze.status();
+    const agents = k26.world.agents;
+    const alive  = agents.filter(a => !a.seppukuDone).length;
+    const inGoal = agents.filter(a => a._mazeInGoal).length;
+    const avg    = s.avgExitTicks == null ? '—' : Math.round(s.avgExitTicks) + 't';
+    hud.innerHTML =
+      `<div><b>${s.grid}</b> braided grid &middot; tick ${k26.world.time}</div>` +
+      `<div>shortest path <b>${s.trueShortest}</b> hops` +
+        ` &middot; solved <span class="gold">${s.bestPathLen}</span>` +
+        ` ${s.optimal ? '<span class="gold">(optimal)</span>' : ''}</div>` +
+      `<div>goal reaches <b>${s.goalReaches}</b> &middot; avg exit ${avg}` +
+        ` &middot; at goal ${inGoal}</div>` +
+      `<div>traps <span class="dgr">${s.traps}</span>` +
+        ` &middot; learned <b>${s.dangerLearned}</b>` +
+        ` &middot; fell <span class="dgr">${s.trapFalls}</span></div>` +
+      `<div>sacred ground <span class="gold">${s.wells}</span>` +
+        ` &middot; charge <span class="gold">${s.wellCharge == null ? '—' : Math.round(s.wellCharge*100)+'%'}</span>` +
+        ` &middot; spent ${s.wellsSpent}</div>` +
+      `<div>alive <b>${alive}</b> / ${agents.length}` +
+        ` &middot; flow ${s.mold ? s.mold.totalFlow.toFixed(2) : '—'}</div>`;
+  }
+
+  runBtn.onclick = () => {
+    running = !running;
+    runBtn.textContent = running ? '⏸ PAUSE' : '▶ RUN';
+    runBtn.classList.toggle('primary', running);
+  };
+  document.getElementById('newBtn').onclick = () => { build(); };
+  document.getElementById('diff').onchange  = () => { build(); };
+  document.getElementById('agents').onchange = () => { build(); };
+
+  let rt = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => { if (k26) { sizeCanvas(); k26.draw(); } }, 150);
+  });
+
+  build();
+  frame();
+})();
+</script>
+</body>
+</html>

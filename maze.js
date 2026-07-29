@@ -43,6 +43,24 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     this.DANGER_LEARN = 0.09;   // colony learns fast — a couple of passes mark a trap (less death needed)
     this.DANGER_EVAP  = 0.006;  // danger memory fades where no one suffers (a shunned trap dims)
     this.DANGER_AVOID = 0.9;    // how strongly learned danger repels steering
+    // ── SACRED GROUND — the fulfilment constraint (Ghost, 2026-07-29) ──
+    // The grief cascade is not a bug to damp; it is the maze's real difficulty.
+    // Confined in corridors, one seppuku pushes grief into neighbours faster
+    // than it can heal, and the cohort grieves itself to death. Sacred ground
+    // is the relief: standing on it eases grief, the way pilgrimage does in the
+    // open world (economy.js DRIVE 5).
+    //
+    // Two rules make it a real problem instead of a hint:
+    //   1. It exists EVERYWHERE, not only along the solved route. Seeding it on
+    //      the path would paint the answer on the floor.
+    //   2. It DEPLETES. A cohort cannot camp one well — a region exhausts and
+    //      the swarm must spread to stay fulfilled.
+    // So fulfilment pulls the swarm APART while the goal pulls it TOGETHER.
+    this.WELL_FRAC   = 0.55;    // share of non-trap cells holding sacred ground
+    this.WELL_RELIEF = 0.010;   // grief eased per tick while standing on it
+    this.WELL_DRAW   = 0.020;   // strength consumed per agent per tick
+    this.WELL_REGEN  = 0.0016;  // strength recovered per tick when unoccupied
+    this.wells  = new Map();    // cellId -> strength 0..1
     this.traps  = new Set();    // cellIds that are physical traps (invisible until discovered)
     this.danger = new Map();    // cellId → learned danger 0..1 (the collective spatial memory)
     this.trapFalls = 0;
@@ -79,6 +97,20 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       const id = this._id(c, r);
       if (id === startId || id === goalId) continue;
       this.traps.add(id);
+    }
+
+    // Sacred ground — seeded across the WHOLE grid, deliberately including dead
+    // ends and wrong branches. Never on a trap (a cell is sanctuary or hazard,
+    // not both) and never on the goal (the goal is its own reward). Because the
+    // distribution ignores the solution entirely, following sanctuary tells an
+    // agent nothing about where the exit is.
+    this.wells = new Map();
+    for (let c = 0; c < this.cols; c++) {
+      for (let r = 0; r < this.rows; r++) {
+        const id = this._id(c, r);
+        if (id === goalId || this.traps.has(id)) continue;
+        if (Math.random() < this.WELL_FRAC) this.wells.set(id, 1.0);
+      }
     }
 
     // Phase C — slime mold network (trait #11) over the maze-as-graph
@@ -233,6 +265,20 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
         }
       }
 
+      // ── SACRED GROUND — drink ──────────────────────────────────────
+      // Standing on unspent sanctuary eases grief and slows the cascade. It
+      // costs the well, so a packed group drains its refuge quickly and has to
+      // move on. This is the counter-pressure to the goal: staying alive wants
+      // the swarm spread across many wells, solving wants it converged on one
+      // route. Faith deepens the relief, exactly as pilgrimage does outside.
+      const wellStrength = this.wells.get(cellId);
+      if (wellStrength > 0) {
+        const faithBonus = 1 + (a.faith || 0) * 0.6;
+        a.griefLevel = Math.max(0, (a.griefLevel || 0) - this.WELL_RELIEF * faithBonus);
+        this.wells.set(cellId, Math.max(0, wellStrength - this.WELL_DRAW));
+        a._mazeFulfilled = this.world.time;
+      }
+
       // Attractor: seek the goal, then head home — the round trip is what reinforces short tubes.
       const target = a._mazeSeek === 'home' ? this.start : this.goal;
 
@@ -259,6 +305,15 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       // the route to the goal thickens. The swarm then follows the solved gradient.
       this.mold.step();
       if ((this.world.time & 15) === 0) this._refreshBestPath();   // re-extract often (watch it hold/adapt)
+    }
+
+    // Sacred ground recovers when nobody is drawing on it, so an exhausted
+    // region becomes viable again later and the swarm can re-occupy ground it
+    // abandoned. Cheap sweep, same cadence as the danger fade.
+    if ((this.world.time & 7) === 0 && this.wells.size) {
+      for (const [id, v] of this.wells) {
+        if (v < 1) this.wells.set(id, Math.min(1, v + this.WELL_REGEN * 8));
+      }
     }
 
     // Phase D — danger memory fades where no one is suffering (a truly-shunned trap dims, so
@@ -340,6 +395,26 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
   draw(ctx) {
     if (!this.active || !this.cells) return;
     ctx.save();
+
+    // Sacred ground — warm pools on the floor. Bright = unspent, dim = drawn
+    // down. Because sanctuary covers the whole grid it reads as terrain rather
+    // than a breadcrumb, so it never betrays the route. Drawn first, beneath
+    // the walls, so corridors stay the clearest thing on screen.
+    if (this.wells && this.wells.size) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [id, v] of this.wells) {
+        if (v <= 0.02) continue;
+        const [c, r] = id.split(',').map(Number);
+        const p = this._cellCenter(c, r);
+        const rad = Math.min(this.cw, this.ch) * 0.30;
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad);
+        g.addColorStop(0, `rgba(240,205,120,${0.10 * v})`);
+        g.addColorStop(1, 'rgba(240,205,120,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
 
     // Reward glow at the goal
     ctx.globalCompositeOperation = 'lighter';
@@ -429,6 +504,11 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
       avgExitTicks: avg,
       recentExitSamples: this.exitTimes.length,
       traps: this.traps.size,
+      wells: this.wells ? this.wells.size : 0,
+      wellsSpent: this.wells ? [...this.wells.values()].filter(v => v <= 0.02).length : 0,
+      wellCharge: this.wells && this.wells.size
+        ? +([...this.wells.values()].reduce((x, y) => x + y, 0) / this.wells.size).toFixed(3)
+        : null,
       dangerLearned: this.danger.size,
       trapFalls: this.trapFalls,
       mold: this.mold ? this.mold.stats() : null

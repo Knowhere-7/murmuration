@@ -664,13 +664,15 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
         <div class="seed-desc" id="unalignedTierDesc" style="margin-top:6px;color:#ff8060">Next: TIER 1 — SCOUTS</div>
       </div>
 
-      <!-- MAZE — the slime-mold pathfinding experiment. Previously reachable
-           only from the browser console, which meant nobody ever saw it run. -->
+      <!-- MAZE — moved to its own page (maze.html).
+           Arming it in-place was destructive: enable() rewrites every agent's
+           colony to 'A', teleports them all to the start cell, and forces both
+           wall gates open/re-centred/resized. disable() restores none of it and
+           the autosave persists the damage. The lab runs its own World. -->
       <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
-        <div class="seed-label" style="color:#8fe3c0">▦ MAZE — SLIME MOLD (#11)</div>
-        <button class="btn-inject" id="mazeBtn" onclick="toggleMaze()"
-          style="background:rgba(30,160,120,0.12);border-color:rgba(120,240,190,0.4);color:#8fe3c0;margin-top:8px">ARM MAZE</button>
-        <div class="seed-desc" id="mazeDesc" style="margin-top:6px;color:#7fcfae">Braided grid. The swarm is the flow; tubes thicken toward the goal.</div>
+        <div class="seed-label" style="color:#8fe3c0">&#9638; MAZE — SLIME MOLD (#11)</div>
+        <a href="maze.html" class="btn-inject" style="display:block;text-align:center;text-decoration:none;background:rgba(30,160,120,0.12);border-color:rgba(120,240,190,0.4);color:#8fe3c0;margin-top:8px">OPEN MAZE LAB &rarr;</a>
+        <div class="seed-desc" style="margin-top:6px;color:#7fcfae">Runs in isolation. This civilisation is never touched.</div>
       </div>
 
       <div class="seed-signal" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
@@ -1108,7 +1110,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="extractor.js"></script>
 <script src="gauntlet.js?v=1"></script>
 <script src="slimeMoldCore.js?v=1"></script>
-<script src="maze.js?v=10"></script>
+<script src="maze.js?v=11"></script>
 <script src="mutations.js?v=2"></script>
 <script src="chronicle.js?v=1"></script>
 <script src="relics.js?v=2"></script>
@@ -1547,32 +1549,6 @@ function setUnalignedTarget(target) {
 }
 setUnalignedTarget('both'); // reflect world.js's default on load
 
-// ── MAZE toggle ──────────────────────────────────────────────────────
-// Arms the slime-mold maze and hands the canvas over to it. Suppressing the
-// open-world layers is handled in k26.draw(); this only flips the switch.
-function toggleMaze() {
-  const btn  = document.getElementById('mazeBtn');
-  const desc = document.getElementById('mazeDesc');
-  if (!window.k26 || !k26.maze) {
-    if (desc) desc.textContent = 'Maze module not loaded.';
-    return;
-  }
-  if (k26.maze.active) {
-    k26.maze.disable();
-    btn.textContent = 'ARM MAZE';
-    btn.style.background = 'rgba(30,160,120,0.12)';
-    if (desc) desc.textContent = 'Disarmed — open world restored.';
-    return;
-  }
-  const st = k26.maze.enable({ singleColony: true });
-  btn.textContent = 'DISARM MAZE';
-  btn.style.background = 'rgba(30,200,150,0.3)';
-  if (desc) {
-    desc.textContent = st.grid + ' braided grid · shortest path ' +
-      st.trueShortest + ' hops · ' + st.traps + ' hidden traps.';
-  }
-}
-window.toggleMaze = toggleMaze;
 
 function spawnUnaligned() {
   if (!k26 || !k26.world) {
