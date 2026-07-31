@@ -98,7 +98,18 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     this.rows = Math.max(5, Math.min(maxC, Math.round(this.mazeH / this.TARGET_CELL)));
     this.cw = this.mazeW / this.cols; this.ch = this.mazeH / this.rows;
 
-    this._generate();
+    // A controlled comparison needs both colonies in the SAME maze. cloneFrom
+    // copies another arena's topology and traps verbatim, so the only thing that
+    // differs between arenas is which swarm is in it — any divergence in the
+    // result is the colony, not the map. Falls back to generating if the grids
+    // do not match.
+    const src = opts.cloneFrom;
+    const cloneable = src && src.cells && src.cols === this.cols && src.rows === this.rows;
+    if (cloneable) {
+      this.cells = src.cells.map(row => row.map(cell => ({ ...cell })));
+    } else {
+      this._generate();
+    }
     this.start = { c: 0, r: 0 };
     this.goal  = { c: this.cols - 1, r: this.rows - 1 };
     this.reward = { ...this._cellCenter(this.goal.c, this.goal.r), r: Math.min(this.cw, this.ch) * 0.42 };
@@ -110,7 +121,12 @@ window.MurmurationModules.MazeSystem = class MazeSystem {
     const trapN = Math.round(this.cols * this.rows * this.TRAP_FRAC * (0.5 + diff * 0.35));
     const startId = this._id(this.start.c, this.start.r), goalId = this._id(this.goal.c, this.goal.r);
     let guard = 0;
-    while (this.traps.size < trapN && guard++ < trapN * 25) {
+    // Cloned arenas inherit the same hazards. Identical walls with different
+    // traps would still be an unfair race.
+    if (cloneable) {
+      for (const id of src.traps) this.traps.add(id);
+    }
+    while (!cloneable && this.traps.size < trapN && guard++ < trapN * 25) {
       const c = (Math.random() * this.cols) | 0, r = (Math.random() * this.rows) | 0;
       const id = this._id(c, r);
       if (id === startId || id === goalId) continue;

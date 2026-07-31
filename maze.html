@@ -97,7 +97,7 @@
         <option value="25">25&times;</option>
       </select>
     </label>
-    <span class="note">two arenas &middot; 60 per colony &middot; fresh cohort every run</span>
+    <span class="note">identical mazes &middot; 60 per colony &middot; fresh cohort every run</span>
   </footer>
 </div>
 
@@ -108,7 +108,7 @@
 <script src="evolution.js"></script>
 <script src="extractor.js"></script>
 <script src="slimeMoldCore.js?v=1"></script>
-<script src="maze.js?v=14"></script>
+<script src="maze.js?v=15"></script>
 <script src="k26.js?v=14"></script>
 <script>
 (function () {
@@ -153,8 +153,15 @@
       new M(k26.world),
       new M(k26.world),
     ];
+    // IDENTICAL MAZES. Arena B clones A's walls AND trap placement, so the only
+    // variable between the two runs is which swarm is in it. With independent
+    // mazes the comparison is confounded — an easier 24-hop grid beats a 30-hop
+    // one regardless of colony, and observed run-to-run variance is large enough
+    // (one B cohort collapsed 1/60, an identical rerun finished 48/60) that a
+    // difficulty difference would drown the signal entirely.
     k26.mazes[0].enable({ colony: 'A', difficulty: diff, bounds: { x: 0,     y: 0, w: W / 2, h: H } });
-    k26.mazes[1].enable({ colony: 'B', difficulty: diff, bounds: { x: W / 2, y: 0, w: W / 2, h: H } });
+    k26.mazes[1].enable({ colony: 'B', difficulty: diff, bounds: { x: W / 2, y: 0, w: W / 2, h: H },
+                          cloneFrom: k26.mazes[0] });
     // agent.js reads this to suppress its cluster bloom inside corridors.
     window.MurmurationModules.activeMaze = k26.mazes[0];
     k26.world.maze = k26.mazes[0];
