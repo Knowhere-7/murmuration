@@ -105,46 +105,72 @@ own answer. **Ghost's call:** it changes what the cautionary tale means.
 
 ---
 
-## 5. THE TWO AXES — Ghost, 2026-08-09
+## 5. THE PANEL — settled 2026-08-09
 
-### Nature — APPLIED to them
-heat · cold · flooding · fire · earthquakes · hurricanes · tornadoes · hail · etc
+    INPUTS — act on the WORLD            OUTPUTS — read the SWARM
+    ─────────────────────────            ────────────────────────
+    heat        intensity                kindness        gauge
+    cold        intensity                honesty         gauge
+    flood       ┐                        loyalty         gauge
+    fire        │                        aggression      gauge
+    earthquake  │ localized              cunning         gauge
+    hurricane   │ RANDOM PATH            giving / taking gauge
+    tornado     │ temporary denial       selfish/selfless gauge
+    hail        ┘                        antisocial      gauge
+                                         mobs / cliques  gauge
+    scarcity      ┐
+    crowding      │ condition levers
+    volatility    │ — set the PRICE
+    visibility    │   of a disposition,
+    reputation    │   never the
+    mobility      ┘   disposition
 
-### The human condition — EXPRESSED by them
-paranoia · grouping / clicking-up / mobs · honesty · loyalty · kindness · giving ·
-taking · aggression · selfish vs selfless · cunning · antisocial
+    dispositions live PER AGENT — distributed, never dialled
 
-### These are not the same kind of thing, and that is the point
+### The rule that decides where a control belongs
+**Controls on the WORLD are fine at any number. Controls on BEHAVIOUR collapse
+the option space.** Weather is the former. A "kindness" slider would have been the
+latter. This is what §6 is about.
 
-**Nature is a control surface.** External forces dialled at the world. These are
-sliders. ~8 of them, replacing the current abstraction sliders.
+### Nature — 8 dials, and why not 3
+Ghost's pushback, and it corrects an error of mine. I proposed collapsing eight to
+three (season + severity + type). Wrong:
+- **Heat/cold are not redundant with seasons.** A season is a baseline; a heat
+  wave is an event *inside* it. Both are needed to build a winter with a killing
+  week in it.
+- **The other six wreck TERRAIN, not numbers.** Region unusable, short duration,
+  spun up any time. Six different **shapes** of denial, not six labels on one
+  severity dial — tornado is a narrow path, hurricane a huge sustained field,
+  flood slow and wide, fire *spreads*, quake instant and broad, hail brief damage
+  without denial.
 
-**The human condition is not a control surface.** A slider that sets a colony's
-"kindness" to 0.7 is not the human condition — it is a puppet string, and it makes
-§6 worse. These are **dispositions agents hold and act from.**
+### THE PATH IS RANDOM
+Ghost: *"the path of disaster is random."* You trigger it; you never aim it.
 
-Current agent model has **four** dimensions (`agent.js:19-23`):
-`riskTolerance · trustBaseline · reactivity · memoryWeight`. Ghost's list names
-eleven. Nine are absent.
+- Deliberate contrast with the **Unaligned**, which has `TARGET A / BOTH /
+  TARGET B`. A nomadic force can be pointed. Weather cannot. The UI must say so.
+- **"Path" means it MOVES** — disasters track across the map, they are not a
+  struck circle.
+- Therefore the storm radar (§3.2) is **required, not decorative**: with moving,
+  random, terrain-denying events, the map is unplayable without seeing where the
+  hazard is and where it is heading.
 
-**And the list contains two layers, not one:**
-- **Held per agent** — honesty, loyalty, kindness, giving, taking, aggression,
-  selfish/selfless, cunning, antisocial, paranoia
-- **Emergent from those under pressure** — grouping, clicking-up, mobs. Nobody
-  sets a mob. A mob is what a set of dispositions does when weather arrives.
+### Dispositions become gauges — Ghost's call
+Ghost: *"then add kindness as a gauge."* You dial **scarcity** and watch
+**kindness** fall. You drop **visibility** and watch **honesty** collapse — or
+hold, which is the more interesting result.
 
-### The structural consequence
-Fewer controls, wider option space — the exact inverse of the current state
-(§6: many controls, option space collapsed to one).
+Every named behaviour moves from the control side to the readout side. Same
+eleven names, other end of the machine. *(Ghost named kindness; extending it to
+the rest is Ghost²'s proposal, not his instruction.)*
 
-    weather        = what happens TO them        → dialled
-    dispositions   = what they ARE               → distributed, not dialled
-    mobs, cliques  = what they DO about it       → emergent, never set
+This closes `DESIGN_INTENT` gap #3 — *"the observer needs instrumentation or
+observation becomes investigation."* The gauges are that instrumentation.
 
-**Open, Ghost's to rule:** paranoia. He said *"we should keep market instability
-aka paranoia"* — which places it on the control surface. But it also reads as a
-disposition. It may be both: a dialled global climate that individual paranoia
-responds to. Not decided.
+### Still open
+The six **condition levers** have not been challenged the way the weather dials
+were. Visibility and reputation are the ones Ghost² would defend hardest —
+honesty and loyalty have no other honest handle — but they have not been ruled on.
 
 ---
 
