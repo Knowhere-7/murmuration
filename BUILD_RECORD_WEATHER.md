@@ -246,4 +246,60 @@ Each step lands as its own commit and appends to §8.
 
 *Appended as built. Date · what changed · file:line · how it was verified.*
 
-_(nothing built yet)_
+### 2026-08-09 · STEP 1 — disasters kill and travel · `weather.js` (new)
+
+**Built.** Six shapes, random path, death budget, ground denial.
+
+- `spawn(kind, intensity)` — travelling fronts enter from a **random edge** on a
+  **random heading**; earthquakes strike a random interior point and do not move.
+  You trigger it, you never aim it.
+- `update()` — advances fronts, grows FIRE only, retires on age or once fully off
+  the map, leaves a decaying **scar** if the type denies ground.
+- `_strike()` — `struck` Set means one agent is taken at most once per event, so a
+  900-tick hurricane cannot grind the same agent every tick.
+- `denialAt(x,y)` → 0–1, read by the economy and the radar.
+- `getHazards()` → `{fronts, scars}` for step 2.
+- **Environmental death is a fourth exit.** `deathCause = 'disaster:TYPE'`, and
+  `seppukuDone = true` only because that is the flag every system reads as gone.
+  Not honored, not dishonored, not NEMESIS. ⚠️ The UI still prints *"Honored the
+  collective"* for anything with `seppukuDone` — **fix in step 2.**
+
+**Shape table** — differences are footprint, speed and denial. Not deadliness.
+
+| | radius | speed | life | denial |
+|---|---|---|---|---|
+| TORNADO | 38 | 3.4 | 420 | 120 |
+| HURRICANE | 190 | 0.9 | 900 | 600 |
+| FLOOD | 150 | 0.6 | 780 | 1400 |
+| FIRE | 55 | 1.4 | 700 | 900 (grows 0.09/tick) |
+| EARTHQUAKE | 240 | 0 | 90 | 300 |
+| HAIL | 170 | 2.0 | 300 | 0 |
+
+**Measured, 30 runs each, 200 agents.** Target 8–17%.
+
+| | pop toll | killed / caught |
+|---|---|---|
+| TORNADO | 7.7% | **95%** |
+| HURRICANE | 9.3% | 38% |
+| FLOOD | 9.1% | 81% |
+| FIRE | 11.8% | 72% |
+| EARTHQUAKE | 11.9% | 62% |
+| HAIL | 10.0% | 56% |
+
+Range **7.7–11.9%**. Tornado sits at the floor because a 38-radius corridor
+cannot reach 17% of a dispersed population — geometry, not a tuned exception. Its
+95% killed-of-caught is the shape working: lethal where it touches.
+
+**Two corrections during the build, both caught by measuring rather than
+assuming:**
+1. First pass applied the 8–17% band **per agent caught** → 0.5–2.7% population
+   toll, 4–10× light. Replaced with a **death budget**: the band is the toll on the
+   population, spread across those the front catches.
+2. The catch estimate used the **map diagonal** as path length. Actual reach is
+   `speed × life` — a flood crosses 468 of 1442 units. Slow and short-lived fronts
+   were over-estimated, their per-agent chance came out too low, and the budget went
+   unspent (flood and hail ~3%). Fixed → all six in band.
+
+**Not yet wired into the tick loop.** `weather.js` is standalone and tested
+headless; integration lands with step 2 so the radar and the death text arrive
+together.
