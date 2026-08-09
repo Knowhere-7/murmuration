@@ -71,19 +71,61 @@ my earlier design."* In earlier builds he personally witnessed the swarm:
 2. ignore/avoid them **while still nourishing** them, or
 3. attempt to remove them themselves.
 
-**None of the three exist in this build.** Verified: every `isSentinel` reference
-outside `installSentinel` is an exclusion — `continue`, `filter(!isSentinel)`,
-`return` — across `interaction · evolution · economy · wealth · feed · ctf ·
-predator · terrain · seasons · extractor · world` (voting, belief, wall collision,
-commons) and `k26` (connection strings). Plus `world.js:622-623` sets
-`vx = 0; vy = 0`.
+**These were never code. They were swarm decisions.** Ghost: *"those arent
+programmed behaviors so they wouldnt be kept anywhere... it seems as if the option
+has been removed."*
 
-No code approaches, nourishes, avoids, or removes a sentinel. **Not tracked in
-this build — recorded so it is not mistaken for a weather task.**
+So the behaviours are not missing — **the option space is.** Verified:
+
+- The sentinel is still **perceived**. `getNeighbors` (`world.js:599`) does not
+  filter it, and `interaction.js:37` strips only `seppukuDone` and `DISHONORED`.
+  A sentinel's state is `GRIEF_SENTINEL`, so it appears in neighbour lists.
+- But every action a neighbour could take **lands on nothing**:
+  - approach → `world.js:622-623` sets `vx = 0; vy = 0`
+  - nourish → `feed.js:160,187` skips it
+  - restore → grief pinned at 1.0; `agent.js:90` returns early from `updateGrief`
+  - remove → no mechanism exists
+  - **avoid** → the only branch that still works, because avoidance asks nothing
+    of the target
+
+**The option space collapsed to one.** Not three behaviours deleted — the ability
+to *choose between* them, because every branch except avoidance terminates in a
+no-op. Exile is what remains when care has nowhere to land.
+
+It was not one deletion. It is ~40 independent `continue` / `filter` guards across
+`interaction · evolution · economy · wealth · feed · ctf · predator · terrain ·
+seasons · extractor · world · k26`, each defensible alone — *don't let a frozen
+agent vote, don't feed a dead thing* — that together removed a decision the swarm
+used to make.
+
+**Candidate experiment, not a defect:** relax only the guards that gate CARE
+(nourishment, grief relief) and leave voting/evolution/economy gated. If the
+option space is the cause, the swarm resumes choosing — and what it chooses is its
+own answer. **Ghost's call:** it changes what the cautionary tale means.
 
 ---
 
-## 5. BUILD ORDER
+## 5. PARKED — TOO MANY CONTROLLING VARIABLES
+
+Ghost, 2026-08-09: *"we are giving them to many controlling variables. make note
+and we will circle back."*
+
+The sentinel case is the evidence: ~40 individually-reasonable guards removed a
+swarm decision, and nobody decided that. Same shape as the slider surface — each
+control was added for a reason, and the total is a swarm with less room to choose
+than it had.
+
+**Do not build weather until the whole control surface is mapped.** Ghost:
+*"[we] want the entire package mapped out first so we dont fall down a rabbit hole
+of drift."* Adding six weather variables to an already over-controlled system
+without seeing the total is how the next §4 gets written.
+
+**Next action: map every controlling variable. Then decide what weather replaces
+rather than what it adds.**
+
+---
+
+## 6. BUILD ORDER — BLOCKED ON §5
 
 1. Disaster deaths + region targeting (`economy.js`)
 2. Nebula → hazard map (`k26.js`)
@@ -92,11 +134,11 @@ this build — recorded so it is not mistaken for a weather task.**
 5. Topo gradient by season (`terrain.js`)
 6. Slider replacement (UI + wiring)
 
-Each step lands as its own commit and appends to §6.
+Each step lands as its own commit and appends to §7.
 
 ---
 
-## 6. CONSTRUCTION LOG
+## 7. CONSTRUCTION LOG
 
 *Appended as built. Date · what changed · file:line · how it was verified.*
 
