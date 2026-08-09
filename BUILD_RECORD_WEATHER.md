@@ -167,10 +167,45 @@ the rest is Ghost²'s proposal, not his instruction.)*
 This closes `DESIGN_INTENT` gap #3 — *"the observer needs instrumentation or
 observation becomes investigation."* The gauges are that instrumentation.
 
+### Temperament is SEEDING, not steering — and it is the point
+
+Ghost: *"the purpose of the temperment sliders is to put the swarm in a mood
+before anything begins... my goal is to make a swarm itself part of the pressure.
+i dont intent to set and forget, im using a swarm to provoke a response. its by
+far the best tool we could implement."*
+
+Ghost²'s objection was to **steering** — riding a kindness dial mid-run so the
+outcome belongs to the operator. That is not this. **Seeding sets the starting
+population and then hands off**, which is how every experiment works: breed the
+strain, then watch.
+
+**This is what LOBO already is.** `loboSwarm.js:4-8` — *"not one adversary: a
+POPULATION of divergently-activated attackers. Same genome, different activation
+per agent — so their blind spots DO NOT CORRELATE."* Swarm-as-instrument was
+built once, to attack the immune system. This generalises it: seed a temperament,
+point it at something, the response is the finding.
+
+**The swarm is a provocation instrument, not only a subject.** Recorded because it
+changes what the whole thing is for and was written down nowhere.
+
+### THREE TIERS — the boundary must be structural, not voluntary
+
+| Tier | When | Acts on |
+|---|---|---|
+| **Temperament** | t=0 only, **locked after start** | the population you begin with |
+| **Weather + conditions** | live | the world |
+| **Gauges** | live | readout only |
+
+**Seed controls and run controls must not share a panel.** If temperament dials
+sit beside weather dials, someone rides them mid-run, the distinction collapses,
+and it is steering again. A setup phase that locks on start is the only version
+that holds — otherwise the design is correct and the discipline is voluntary,
+which is the §4 failure exactly: individually reasonable, collectively fatal.
+
 ### Still open
 The six **condition levers** have not been challenged the way the weather dials
-were. Visibility and reputation are the ones Ghost² would defend hardest —
-honesty and loyalty have no other honest handle — but they have not been ruled on.
+were. Visibility and reputation are the ones Ghost² would defend hardest — honesty
+and loyalty have no other honest handle — but they have not been ruled on.
 
 ---
 
