@@ -859,7 +859,8 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
       </div>
 
       <div class="controls-row" style="margin-top:4px">
-        <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em">⚡ TRIGGER DISASTER</button>
+        <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em">⚡ MARKET CRASH</button>
+        <button class="btn btn-reset" onclick="if(k26 && k26.weather) k26.weather.spawn()" style="font-size:.65em">🌪 SUMMON STORM</button>
       </div>
     </div>
 
@@ -1108,13 +1109,15 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
 <script src="extractor.js"></script>
+<script src="weather.js?v=1"></script>
+<script src="lineage.js?v=1"></script>
 <script src="gauntlet.js?v=1"></script>
 <script src="slimeMoldCore.js?v=1"></script>
 <script src="maze.js?v=15"></script>
 <script src="mutations.js?v=2"></script>
 <script src="chronicle.js?v=1"></script>
 <script src="relics.js?v=2"></script>
-<script src="k26.js?v=14"></script>
+<script src="k26.js?v=15"></script>
 <script src="economy.js?v=5"></script>
 <script src="wealth.js"></script>
 <script src="predator.js"></script>
@@ -1139,6 +1142,8 @@ const MAX_EVENTS = 80;
 
   // Badge class + label for each state
   function getBadge(a) {
+    if (a.deathCause && a.deathCause.startsWith('disaster:'))
+                                          return { cls: 'ghost',      label: 'LOST TO WEATHER' };
     if (a.seppukuDone)                    return { cls: 'ghost',      label: 'DECEASED' };
     if (a.isSentinel)                     return { cls: 'sentinel',   label: 'SENTINEL' };
     if (a.griefState === 'DISHONORED')    return { cls: 'dishonored', label: 'DISHONORED' };
@@ -1149,6 +1154,15 @@ const MAX_EVENTS = 80;
 
   // The footer — short thematic line for each state
   function getVerdict(a) {
+    // Weather is checked FIRST. `deathCause` is set alongside `seppukuDone`,
+    // which every system reads as "gone" — so without this an agent drowned by
+    // a flood is eulogised as having honored the collective. It chose nothing.
+    if (a.deathCause && a.deathCause.startsWith('disaster:')) {
+      const kind = a.deathCause.split(':')[1];
+      return a.fallenRank
+        ? `Taken by ${kind}. Remembered as ${a.fallenRank} — the storm could not take what was earned.`
+        : `Taken by ${kind}. No honor, no dishonor — weather.`;
+    }
     if (a.seppukuDone)                    return 'Honored the collective. Wisdom preserved in memory.';
     if (a.isSentinel)                     return 'Living cost of selfishness. A warning to all.';
     if (a.griefState === 'DISHONORED')    return 'Chose self over collective. Papers revoked.';

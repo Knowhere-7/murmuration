@@ -42,6 +42,20 @@ window.MurmurationModules.Weather = class Weather {
     this.scars  = [];   // ground denied after one passed; decays
     this.log    = [];   // append-only: what struck, where, who it took
 
+    // CADENCE. Weather arrives on its own or it is not weather — an operator
+    // pressing a button is a scenario, and a scenario the swarm can wait out is
+    // not pressure. Ghost: "there is no better source for applying pressure than
+    // mother nature." So this runs unattended.
+    //
+    // `concurrent` is the real safety rail, not the interval: three fronts on a
+    // 1442-unit map at 8-17% each is an extinction event, and a dead colony
+    // teaches nothing. Storms queue rather than stack.
+    this.enabled    = opts.enabled ?? true;
+    this.cadence    = opts.cadence ?? 2400;   // mean ticks between events
+    this.concurrent = opts.concurrent ?? 2;   // hard ceiling on simultaneous fronts
+    this.ticks      = 0;
+    this.nextAt     = this._reschedule();
+
     // Shape table. radius/speed in world units, life in ticks.
     // `denial` is how long the ground stays unusable after the front passes.
     this.KINDS = {
@@ -55,6 +69,15 @@ window.MurmurationModules.Weather = class Weather {
   }
 
   get kinds() { return Object.keys(this.KINDS); }
+
+  /**
+   * Next arrival, spread 0.5x-1.5x around the cadence.
+   *
+   * Deliberately NOT a fixed interval. A metronome is learnable — the swarm
+   * would settle into the gaps and the pressure would stop being pressure. The
+   * spread is what keeps it from becoming a schedule.
+   */
+  _reschedule() { return this.ticks + Math.round(this.cadence * (0.5 + Math.random())); }
 
   /**
    * Spawn a disaster. Type may be named; PATH IS ALWAYS RANDOM.
@@ -134,6 +157,18 @@ window.MurmurationModules.Weather = class Weather {
   /** Advance every active disaster one tick. Call from the sim step. */
   update() {
     const W = this.world.width, H = this.world.height;
+
+    // Arrival. Held back rather than skipped when the map is already full, so a
+    // busy sky delays the next front instead of silently dropping it.
+    this.ticks++;
+    if (this.enabled && this.ticks >= this.nextAt) {
+      if (this.active.length < this.concurrent) {
+        this.spawn();
+        this.nextAt = this._reschedule();
+      } else {
+        this.nextAt = this.ticks + 120;   // sky is full — try again shortly
+      }
+    }
 
     for (let i = this.active.length - 1; i >= 0; i--) {
       const d = this.active[i];
