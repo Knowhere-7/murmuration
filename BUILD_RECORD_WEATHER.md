@@ -105,7 +105,50 @@ own answer. **Ghost's call:** it changes what the cautionary tale means.
 
 ---
 
-## 5. PARKED — TOO MANY CONTROLLING VARIABLES
+## 5. THE TWO AXES — Ghost, 2026-08-09
+
+### Nature — APPLIED to them
+heat · cold · flooding · fire · earthquakes · hurricanes · tornadoes · hail · etc
+
+### The human condition — EXPRESSED by them
+paranoia · grouping / clicking-up / mobs · honesty · loyalty · kindness · giving ·
+taking · aggression · selfish vs selfless · cunning · antisocial
+
+### These are not the same kind of thing, and that is the point
+
+**Nature is a control surface.** External forces dialled at the world. These are
+sliders. ~8 of them, replacing the current abstraction sliders.
+
+**The human condition is not a control surface.** A slider that sets a colony's
+"kindness" to 0.7 is not the human condition — it is a puppet string, and it makes
+§6 worse. These are **dispositions agents hold and act from.**
+
+Current agent model has **four** dimensions (`agent.js:19-23`):
+`riskTolerance · trustBaseline · reactivity · memoryWeight`. Ghost's list names
+eleven. Nine are absent.
+
+**And the list contains two layers, not one:**
+- **Held per agent** — honesty, loyalty, kindness, giving, taking, aggression,
+  selfish/selfless, cunning, antisocial, paranoia
+- **Emergent from those under pressure** — grouping, clicking-up, mobs. Nobody
+  sets a mob. A mob is what a set of dispositions does when weather arrives.
+
+### The structural consequence
+Fewer controls, wider option space — the exact inverse of the current state
+(§6: many controls, option space collapsed to one).
+
+    weather        = what happens TO them        → dialled
+    dispositions   = what they ARE               → distributed, not dialled
+    mobs, cliques  = what they DO about it       → emergent, never set
+
+**Open, Ghost's to rule:** paranoia. He said *"we should keep market instability
+aka paranoia"* — which places it on the control surface. But it also reads as a
+disposition. It may be both: a dialled global climate that individual paranoia
+responds to. Not decided.
+
+---
+
+## 6. PARKED — TOO MANY CONTROLLING VARIABLES
 
 Ghost, 2026-08-09: *"we are giving them to many controlling variables. make note
 and we will circle back."*
@@ -125,7 +168,7 @@ rather than what it adds.**
 
 ---
 
-## 6. BUILD ORDER — BLOCKED ON §5
+## 7. BUILD ORDER — BLOCKED ON §6
 
 1. Disaster deaths + region targeting (`economy.js`)
 2. Nebula → hazard map (`k26.js`)
@@ -134,11 +177,11 @@ rather than what it adds.**
 5. Topo gradient by season (`terrain.js`)
 6. Slider replacement (UI + wiring)
 
-Each step lands as its own commit and appends to §7.
+Each step lands as its own commit and appends to §8.
 
 ---
 
-## 7. CONSTRUCTION LOG
+## 8. CONSTRUCTION LOG
 
 *Appended as built. Date · what changed · file:line · how it was verified.*
 
