@@ -369,6 +369,48 @@ The cap costs deep history, which is the right trade: NEMESIS asks who was touch
 **Hooks identified, not yet wired:** influence at `interaction.js:98`
 (`propStrength`), births at `economy.js:607` (`new Agent(childId…)`).
 
-**Not yet wired into the tick loop.** `weather.js` is standalone and tested
+### 2026-08-09 · STEP 2 — storm radar, wiring, and the death text
+
+**Radar** — `k26.drawStormRadar()`, new **Layer 2.5**, between resource zones and
+connection strings. Scars first (denied ground, the lasting consequence), then
+fronts (the moment). Colour by type so six shapes are distinguishable; alpha
+carries intensity; an expanding sweep ring and a **dashed heading vector**, because
+with random paths the only warning available is watching where it points.
+
+Drawn **under** the bonds deliberately — you need to see whether the neural web
+survives the crossing.
+
+**Its own layer, NOT a repurposing of the mood nebula.** The existing nebula
+follows the centroid of live agents and relays swarm state. Reusing it would have
+destroyed a working signal to add a new one, which is the §4 failure in miniature.
+⚠️ **Ghost to rule:** two nebula-like signals now share the screen — keep both, or
+merge.
+
+**Wiring** — `weather.update()` after `evolve()`; `lineage.setTick()` before
+interactions; both instantiated in `k26.init` from `window.MurmurationModules`.
+
+**Death text fixed** (`murmuration-public.html:960, 1026`). `deathCause` is checked
+**before** `seppukuDone`, or a drowned agent is eulogised as *"Honored the
+collective."* Weather deaths now read *"Taken by FLOOD. No honor, no dishonor —
+weather."* — or, for the eligible, *"…the storm could not take what was earned."*
+Residue ring turns amber for storm deaths.
+
+**Integration bug caught before shipping:** both new modules were written as ES
+modules (`export class`), but the page loads plain `<script src>` and everything
+registers as `window.MurmurationModules.X = class X`. **Neither file could have
+loaded.** Converted to the existing pattern and added to the page at lines 928-929.
+
+**Verified — 3,000 ticks, 5 disasters, 200 agents:**
+
+| | |
+|---|---|
+| deaths | **88** across 5 events (~9%/event, compounding) |
+| causes recorded | EARTHQUAKE · TORNADO · FLOOD · FIRE · HAIL |
+| influence edges | **2,374** / cap 2,400 — bounded under live load |
+| radar feed | fronts + scars streaming |
+
+⚠️ **`maxDepth: 0`** — every agent is still a founder. **Births are not wired**
+(`economy.js:607`), so descent has no depth yet and monument eligibility falls back
+on `generation`. That is the next hook, not a defect. `weather.js` is standalone and tested
 headless; integration lands with step 2 so the radar and the death text arrive
 together.

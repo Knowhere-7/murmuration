@@ -29,7 +29,8 @@
  * is never displayed as "Honored the collective."
  */
 
-export class Weather {
+window.MurmurationModules = window.MurmurationModules || {};
+window.MurmurationModules.Weather = class Weather {
   constructor(world, opts = {}) {
     this.world = world;
 
@@ -277,5 +278,4 @@ export class Weather {
   }
 }
 
-Weather._seq = 0;
-export default Weather;
+window.MurmurationModules.Weather._seq = 0;

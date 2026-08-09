@@ -43,7 +43,8 @@
 const MAX_EDGES = 12;      // influence edges retained per agent
 const MIN_WEIGHT = 0.002;  // below this an influence is noise, not contact
 
-export class Lineage {
+window.MurmurationModules = window.MurmurationModules || {};
+window.MurmurationModules.Lineage = class Lineage {
   constructor(opts = {}) {
     this.maxEdges = opts.maxEdges ?? MAX_EDGES;
     this.minWeight = opts.minWeight ?? MIN_WEIGHT;
@@ -219,5 +220,3 @@ export class Lineage {
              maxDepth, cap: this.nodes.size * this.maxEdges };
   }
 }
-
-export default Lineage;

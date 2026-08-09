@@ -25,7 +25,7 @@ window.MurmurationModules = window.MurmurationModules || {};
 
 window.MurmurationModules.InteractionEngine = class InteractionEngine {
 
-  computeInteractions(world) {
+  computeInteractions(world, lineage = null) {
     const interactions = [];
 
     for (let i = 0; i < world.agents.length; i++) {
@@ -96,6 +96,13 @@ window.MurmurationModules.InteractionEngine = class InteractionEngine {
           // ── INFLUENCE — belief drift toward agent ─────────────────────
           const direction    = agentBelief > neighborBelief ? 1 : -1;
           const propStrength = influence * (1 - beliefDiff);
+
+        // LINEAGE — belief moving between two agents IS the influence edge.
+        // Recorded here rather than inferred later because "who learned from whom"
+        // has to be captured at the moment it happens; k26 computed bonds at
+        // render time from proximity and threw them away, which is why NEMESIS had
+        // nothing to trace.
+        if (lineage) lineage.influence(agent.id, neighbor.id, propStrength);
           const prevBelief   = neighborBelief;
           const raw = prevBelief + propStrength * direction;
           neighbor.beliefState.current = Math.max(-1, Math.min(1, raw));

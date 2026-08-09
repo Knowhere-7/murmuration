@@ -34,6 +34,18 @@ window.MurmurationModules.K26 = class K26 {
       });
     }
 
+    // Weather — localized disasters with random paths that kill and deny ground
+    if (window.MurmurationModules.Weather) {
+      this.weather = new window.MurmurationModules.Weather(this.world);
+    }
+
+    // Lineage — descent + influence overlaid. Live, and bounded by construction.
+    if (window.MurmurationModules.Lineage) {
+      this.lineage = new window.MurmurationModules.Lineage();
+      // Founders: every agent present at genesis has no parent and depth 0.
+      for (const a of this.world.agents) this.lineage.birth(a.id, null, a.colony);
+    }
+
     // Wealth & Social Class — inequality emerges from nothing
     if (window.MurmurationModules.WealthEngine && this.economy) {
       const taxEl = document.getElementById('taxSlider');
@@ -100,9 +112,11 @@ window.MurmurationModules.K26 = class K26 {
 
   step() {
     // Orchestrate
-    this.interactionEngine.computeInteractions(this.world);
+    if (this.lineage) this.lineage.setTick(this.world.tick || 0);
+    this.interactionEngine.computeInteractions(this.world, this.lineage);
     this.world.advanceStep();
     this.evolutionEngine.evolve(this.world);
+    if (this.weather) this.weather.update();
 
     // Economy tick — energy drain, harvesting, cooperation bonuses, phase cycle
     if (this.economy) this.economy.tick();
@@ -205,6 +219,13 @@ window.MurmurationModules.K26 = class K26 {
 
     // Layer 2: resource zones UNDER agents (so agents stay crisp)
     if (this.economy && !mazeMode) this.economy.draw(ctx);
+
+    // Layer 2.5: STORM RADAR — hazard fronts + denied ground, under the bonds.
+    // Ghost: "use the nebula cloud like a stormtracker radar map to show the
+    // worst hit uninhabitable zones." Its own layer rather than a repurposing of
+    // the mood nebula, which already relays swarm state and would have been
+    // destroyed by reuse. See drawStormRadar.
+    if (this.weather) this.drawStormRadar(ctx, W, H);
 
     // Layer 3: connection strings — persistent neural web (additive light)
     // In the maze this web is the single worst offender: 120 agents in close
@@ -350,6 +371,95 @@ window.MurmurationModules.K26 = class K26 {
    * toward amber as it nears the break — a tendon going taut. Drawn ONCE per pair (n.id > a.id),
    * additive. See VISUAL-BIBLE.md §4.
    */
+  /**
+   * STORM RADAR — where the hazard is, where it has been, and where it is going.
+   *
+   * Ghost: "give it a color gradient to indicate the level of stress the
+   * environment is experiencing... show the worst hit uninhabitable zones."
+   *
+   * Required, not decorative. Disaster paths are RANDOM and they MOVE, so without
+   * a readout the player cannot see what is coming or which ground is dead — the
+   * mechanic would be invisible, which is the state weather.js was built to end.
+   *
+   * SCARS FIRST, then fronts. Denied ground is the lasting consequence; the front
+   * is the moment. Drawn under the connection strings so bonds stay readable
+   * across a storm — you need to see whether the web survives the crossing.
+   *
+   * Colour is by TYPE, so six shapes are distinguishable at a glance, and alpha
+   * carries intensity. Deliberately NOT the mood-nebula palette: this is the
+   * environment's stress, not the swarm's.
+   */
+  drawStormRadar(ctx, W, H) {
+    const hz = this.weather.getHazards();
+    const HUE = { TORNADO: 275, HURRICANE: 200, FLOOD: 215, FIRE: 20, EARTHQUAKE: 35, HAIL: 185 };
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // ── DENIED GROUND — uninhabitable, fading as it recovers ──
+    for (const s of hz.scars) {
+      const hue = HUE[s.type] ?? 0;
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.radius);
+      g.addColorStop(0,   `hsla(${hue}, 70%, 40%, ${0.20 * s.fade})`);
+      g.addColorStop(0.7, `hsla(${hue}, 60%, 28%, ${0.09 * s.fade})`);
+      g.addColorStop(1,   'hsla(0,0%,0%,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill();
+
+      // Hatched rim — reads as "ground", not as weather still happening
+      ctx.setLineDash([5, 7]);
+      ctx.strokeStyle = `hsla(${hue}, 65%, 45%, ${0.30 * s.fade})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.radius * 0.92, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // ── ACTIVE FRONTS — the thing currently killing ──
+    for (const f of hz.fronts) {
+      const hue = HUE[f.type] ?? 0;
+      const a = 0.16 + 0.30 * f.intensity;
+      const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.radius);
+      g.addColorStop(0,    `hsla(${hue}, 95%, 62%, ${a})`);
+      g.addColorStop(0.45, `hsla(${hue}, 90%, 50%, ${a * 0.55})`);
+      g.addColorStop(1,    'hsla(0,0%,0%,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2); ctx.fill();
+
+      // Eye — the core, brightest and unmistakable
+      ctx.fillStyle = `hsla(${hue}, 100%, 78%, ${0.5 * f.fade})`;
+      ctx.beginPath(); ctx.arc(f.x, f.y, Math.max(3, f.radius * 0.06), 0, Math.PI * 2); ctx.fill();
+
+      // Sweep ring, expanding with age — a radar return, not a static circle
+      const sweep = ((this._radarPhase = (this._radarPhase || 0) + 0.004) % 1);
+      ctx.strokeStyle = `hsla(${hue}, 100%, 70%, ${0.34 * (1 - sweep)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.radius * (0.25 + sweep * 0.85), 0, Math.PI * 2); ctx.stroke();
+
+      // HEADING — where it is going. The whole point of a tracker: the path is
+      // random, so the only warning available is watching the vector.
+      if (f.dx || f.dy) {
+        const L = f.radius * 1.7;
+        ctx.strokeStyle = `hsla(${hue}, 100%, 72%, 0.42)`;
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([9, 6]);
+        ctx.beginPath();
+        ctx.moveTo(f.x, f.y);
+        ctx.lineTo(f.x + f.dx * L, f.y + f.dy * L);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `hsla(${hue}, 100%, 85%, 0.85)`;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(f.type, f.x, f.y - f.radius - 7);
+      ctx.globalCompositeOperation = 'lighter';
+    }
+
+    ctx.restore();
+  }
+
   drawConnections(ctx) {
     const MAXLEN = 220;                                      // sever distance — spider silk, quarter-screen reach before snap
     const ok = a => a && !a.seppukuDone && !a.isSentinel && a.griefState !== 'DISHONORED';
