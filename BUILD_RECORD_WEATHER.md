@@ -323,6 +323,52 @@ death"* (`agent.js:53`); this is the second door, and it is narrow on purpose.
 is not enough, old alone is not enough, the rule names both. The alternative is a
 single ranking with lineage as tiebreak, which is more permissive.
 
+### 2026-08-09 · STEP 1c — live lineage tree · `lineage.js` (new)
+
+Ghost: *"we also need to create a live lineage tree"* — and on which kind:
+*"both and they need to be overlapping/overlaying."*
+
+**Two edge types, one node set.**
+- **DESCENT** — who came from whom. Tree, one parent each, permanent, O(agents).
+- **INFLUENCE** — who learned from whom, and **when**. Directed, many-to-many.
+
+**It is load-bearing, not a visualisation:**
+1. `weather.js` ranks "longest lineage" for monument eligibility. `generation` was
+   a bare integer with nothing behind it — `depth` is now derived from actual
+   descent.
+2. **NEMESIS.** `carriers(id, sinceTick, hops)` is Ghost's excision set: *"any
+   agent gaining knowledge from that agent at the time of corruption has to go."*
+   Nothing stored this — bonds were computed in `k26.drawConnections` at render
+   time and discarded, and the sentinel is excluded from them anyway, so the
+   evidence was erased exactly when it mattered.
+
+**Memory was the design constraint, not an afterthought.** This repo has already
+lost a 26M-entry `interactionLog` and a 25M event log to unbounded growth.
+Influence fires many times per tick per agent; kept whole it is that leak again.
+So influence is capped at **12 edges per agent**, evicting weakest-then-oldest, and
+a repeat pair **reinforces one edge** rather than appending a new one — a pair that
+keeps influencing each other is one strengthening relationship, not ten thousand
+events.
+
+**Verified — 50,000 influence events, 62 nodes:**
+
+| | |
+|---|---|
+| influence edges after | **744** |
+| hard cap (62 × 12) | **744** |
+| bounded | **true** |
+| descent maxDepth | 4 |
+| `ancestors(29)` | `[13, 5, 1]` |
+| `descendants(0)` | 30 |
+| `carriers(5)` 1 hop / 2 hops | 4 / 16 |
+| overlay graph | 62 nodes · 60 descent · 236 influence |
+
+The cap costs deep history, which is the right trade: NEMESIS asks who was touched
+**at the time of corruption**, not who was ever touched.
+
+**Hooks identified, not yet wired:** influence at `interaction.js:98`
+(`propStrength`), births at `economy.js:607` (`new Agent(childId…)`).
+
 **Not yet wired into the tick loop.** `weather.js` is standalone and tested
 headless; integration lands with step 2 so the radar and the death text arrive
 together.
