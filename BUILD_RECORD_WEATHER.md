@@ -300,6 +300,29 @@ assuming:**
    were over-estimated, their per-agent chance came out too low, and the budget went
    unspent (flood and hail ~3%). Fixed → all six in band.
 
+### 2026-08-09 · STEP 1b — monument eligibility on weather deaths
+
+Ghost: *"environmental deaths only give honor to the agents with the top 10
+highest holding honor spots with the longest lineage."*
+
+`_eligibleForMonument(agent)` — **intersection of two top-tens**: among the ten
+highest lifetime-`honor` holders AND among the ten longest `generation` lineages.
+Eligible deaths take the existing ladder (`≥20 GOD · ≥10 LEGEND · else HERO`),
+same thresholds as `ctf.js:344`. Everyone else the storm takes goes **unmarked**.
+
+Weather creates no honor — nothing was chosen, so nothing can be earned. The rule
+stops the **manner** of death erasing what was already earned, and only for the
+greatest and longest-persisting. `fallenRank` was previously *"set only on battle
+death"* (`agent.js:53`); this is the second door, and it is narrow on purpose.
+
+**Verified:** 200 agents clustered, 3 seeded elites, one earthquake → 24 deaths,
+**1 monument, 23 unmarked**. `⚔ Colony A #1 taken by EARTHQUAKE — LEGEND, gen 8,
+17.00 honor.`
+
+⚠️ **Reading to confirm with Ghost.** Taken as an intersection — decorated alone
+is not enough, old alone is not enough, the rule names both. The alternative is a
+single ranking with lineage as tiebreak, which is more permissive.
+
 **Not yet wired into the tick loop.** `weather.js` is standalone and tested
 headless; integration lands with step 2 so the radar and the death text arrive
 together.

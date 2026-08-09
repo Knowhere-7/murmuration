@@ -195,10 +195,46 @@ export class Weather {
       a.vx = 0; a.vy = 0;
       d.deaths++;
 
-      if (window.logLine) {
+      // Ghost, 2026-08-09: "environmental deaths only give honor to the agents
+      // with the top 10 highest holding honor spots with the longest lineage."
+      //
+      // Weather creates no honor — it cannot, nothing was chosen. What this does
+      // is stop the MANNER of death erasing what was already earned, and only for
+      // the greatest and longest-persisting. Everyone else the storm takes goes
+      // unmarked, which is what makes the exception mean anything.
+      if (this._eligibleForMonument(a)) {
+        const lifetime = a.honor || 0;
+        a.fallenRank = lifetime >= 20 ? 'GOD' : lifetime >= 10 ? 'LEGEND' : 'HERO';
+        const icon = a.fallenRank === 'GOD' ? '☀' : a.fallenRank === 'LEGEND' ? '⚔' : '★';
+        if (window.addEvent) {
+          window.addEvent(`${icon} Colony ${a.colony} #${a.id} taken by ${d.type} — ` +
+            `${a.fallenRank}, gen ${a.generation || 1}, ${lifetime.toFixed(2)} honor. ` +
+            `The storm did not earn this; it could not take it either.`, 'emerge');
+        }
+      } else if (window.logLine) {
         window.logLine(`☠ ${d.type} took Agent #${a.id} — no honor, no dishonor, weather`, 'crisis');
       }
     }
+  }
+
+  /**
+   * Monument eligibility for a weather death.
+   *
+   * Read as an INTERSECTION of two top-tens: the agent must be among the ten
+   * highest lifetime-honor holders AND among the ten longest lineages. Being
+   * decorated is not enough, and neither is merely being old — the rule names
+   * both, so both are required.
+   *
+   * ⚠️ Ghost should confirm the reading. The alternative is a single ranking with
+   * lineage as tiebreak, which is more permissive.
+   */
+  _eligibleForMonument(agent) {
+    const pool = this.world.agents.filter(a => !a.isSentinel);
+    const byHonor = [...pool].sort((x, y) => (y.honor || 0) - (x.honor || 0)).slice(0, 10);
+    if (!byHonor.includes(agent)) return false;
+    const byLineage = [...pool]
+      .sort((x, y) => (y.generation || 1) - (x.generation || 1)).slice(0, 10);
+    return byLineage.includes(agent);
   }
 
   /** Denial: 0 = clear, 1 = fully unusable. Read by the economy and the radar. */
