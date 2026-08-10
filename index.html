@@ -2658,6 +2658,10 @@ function restoreCivilization(snapshot) {
       wealth:k26.wealthEngine?k26.wealthEngine.serialize():null
     };
   }
+    // Exposed so the rewind ring uses THIS snapshot builder rather than a second
+    // copy of it. Two builders would drift, which is the failure this file has
+    // already had three times with subsystem construction.
+    window.civSnapshot = civSnapshot;
   function autoSave(){ try{ const s=civSnapshot(); if(s) localStorage.setItem(CIV_KEY,JSON.stringify(s)); }catch(e){} }
   setInterval(autoSave,3000); window.addEventListener('beforeunload',autoSave);
   if(typeof window.resetSim==='function'){ const _r=window.resetSim; window.resetSim=function(){ try{localStorage.removeItem(CIV_KEY);}catch(e){} return _r.apply(this,arguments); }; }
@@ -2693,6 +2697,93 @@ document.addEventListener('click', function(e){
   togglePanel(false);
 });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape') togglePanel(false); });
+
+// ── KEYBOARD: REACH THE CONTROLS WITHOUT THE PANEL ──────────────────────────
+//
+// Ghost, 2026-08-09, watching the swarm fold itself into a 4D cube: "i tried
+// and everything changed shape and fell apart because the panel wont open when
+// the screen is shrunk and i cant talk to you and expand it at the same time."
+//
+// Widening the window is the WORST thing to do — k26.draw() rescales every
+// agent's x/y when the canvas dimensions change, so resizing to reach SAVE is
+// what destroyed the formation he was trying to save.
+//
+// Every emergent event in this project has been caught by Ghost watching. The
+// controls for capturing one must therefore be reachable in the second he sees
+// it, with no panel, no mouse, and no resize.
+//
+//   S  save now          F  freeze / resume        R  rewind-save (~60s ago)
+//
+// R exists because by the time anyone reacts, the moment is usually over. The
+// on-disk autosave keeps ONE slot and overwrites it every 3s, so a formation is
+// gone three seconds after it breaks. The ring below keeps the last 20 in
+// memory instead — a minute of history to reach back into.
+(function () {
+  const RING_MAX = 20;                      // 20 x 3s = ~60s of history
+  const ring = [];
+
+  function ringPush() {
+    try {
+      if (typeof civSnapshot !== 'function') return;
+      const s = civSnapshot();
+      if (!s) return;
+      ring.push({ at: Date.now(), snap: s });
+      if (ring.length > RING_MAX) ring.shift();
+    } catch (err) { /* never let capture break the sim */ }
+  }
+  setInterval(ringPush, 3000);
+
+  function download(snap, tag) {
+    const blob = new Blob([JSON.stringify(snap)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'murmuration-' + tag + '-' + Date.now() + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function flash(msg) {
+    let el = document.getElementById('keyFlash');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'keyFlash';
+      el.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99999;' +
+        'padding:8px 16px;border-radius:6px;font:600 13px ui-monospace,monospace;' +
+        'background:rgba(8,10,14,.94);color:#8ef2b0;border:1px solid #8ef2b0;pointer-events:none';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.opacity = '0'; }, 2200);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+
+    const k = (e.key || '').toLowerCase();
+    if (k === 's') {
+      e.preventDefault();
+      if (typeof saveCivilization === 'function') { saveCivilization(); flash('SAVED — this moment'); }
+    } else if (k === 'f') {
+      e.preventDefault();
+      // Freeze holds the shape still, so it can be studied instead of chased.
+      if (k26 && k26.isRunning && typeof stopSim === 'function') { stopSim(); flash('FROZEN'); }
+      else if (typeof startSim === 'function') { startSim(); flash('RESUMED'); }
+      else if (k26) { k26.isRunning ? k26.stop() : k26.start(); flash(k26.isRunning ? 'RESUMED' : 'FROZEN'); }
+    } else if (k === 'r') {
+      e.preventDefault();
+      if (!ring.length) { flash('REWIND — nothing buffered yet'); return; }
+      const oldest = ring[0];
+      const ago = Math.round((Date.now() - oldest.at) / 1000);
+      download(oldest.snap, 'rewind-' + ago + 's-ago');
+      flash('REWIND SAVED — state from ' + ago + 's ago');
+    }
+  });
+})();
 </script>
 <!-- ── CINEMA MODE — full-bleed swarm for viewing and clean capture ────────── -->
 <style>
