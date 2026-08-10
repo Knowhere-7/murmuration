@@ -1167,7 +1167,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="mutations.js?v=2"></script>
 <script src="chronicle.js?v=1"></script>
 <script src="relics.js?v=2"></script>
-<script src="k26.js?v=16"></script>
+<script src="k26.js?v=17"></script>
 <script src="economy.js?v=5"></script>
 <script src="wealth.js"></script>
 <script src="predator.js"></script>
@@ -2486,46 +2486,22 @@ function restoreCivilization(snapshot) {
     }
   }
 
-  if (window.MurmurationModules.WarningLog) {
-    k26.warningLog = new window.MurmurationModules.WarningLog();
-  }
-
-  // Apex predators + Capture the Flag — not part of the legacy snapshot schema,
-  // so every restore gets a fresh, dormant instance instead of being stuck
-  // permanently missing these systems.
-  if (window.MurmurationModules.PredatorSystem) {
-    k26.predatorSystem = new window.MurmurationModules.PredatorSystem(k26.world);
-  }
-  if (window.MurmurationModules.CTFSystem) {
-    k26.ctf = new window.MurmurationModules.CTFSystem(k26.world);
-    k26.world.ctf = k26.ctf;
-  }
-
-  // Relics + Gauntlet — same story as predators/CTF: not in the legacy snapshot
-  // schema, and both are instantiated in init() which restore deliberately skips.
-  // Without this, a restored session (the default auto-load path) silently runs
-  // with neither system attached. Fresh dormant instances; Gauntlet stays off
-  // until armed via k26.gauntlet.enable().
-  if (window.MurmurationModules.RelicSystem) {
-    k26.relicSystem = new window.MurmurationModules.RelicSystem(k26.world);
-    k26.world.relicSystem = k26.relicSystem;
-  }
-  if (window.MurmurationModules.GauntletSystem) {
-    k26.gauntlet = new window.MurmurationModules.GauntletSystem(k26.world);
-    k26.world.gauntlet = k26.gauntlet;
-  }
-  if (window.MurmurationModules.MazeSystem) {
-    k26.maze = new window.MurmurationModules.MazeSystem(k26.world);
-    k26.world.maze = k26.maze;
-  }
-  if (window.MurmurationModules.MutationSystem) {
-    k26.mutations = new window.MurmurationModules.MutationSystem(k26.world);
-    k26.world.mutations = k26.mutations;
-  }
-  if (window.MurmurationModules.Chronicle) {
-    k26.chronicle = new window.MurmurationModules.Chronicle(k26.world);
-    k26.world.chronicle = k26.chronicle;
-  }
+  // EVERY OTHER SUBSYSTEM — one call, shared with init(). See
+  // K26.attachWorldSystems.
+  //
+  // This block used to hand-rebuild each system, and it drifted from init()
+  // three times. The comment that stood here recorded the first two: predators
+  // and CTF, then relics and gauntlet, each "instantiated in init() which
+  // restore deliberately skips", each silently absent from every restored
+  // session until someone noticed. Weather and Lineage were the third — Ghost
+  // pressed all six storm buttons and got nothing, because `k26.weather` did
+  // not exist on this path and every control is guarded by `if (k26 &&
+  // k26.weather)`.
+  //
+  // Restore is the DEFAULT path: the page auto-loads a saved colony on boot.
+  // So a system missing here is a system missing for the actual user, while
+  // working perfectly for anyone who presses RESTART. There is now one list.
+  k26.attachWorldSystems();
 
   // Reconnect sentinel
   if (snapshot.sentinel != null) {

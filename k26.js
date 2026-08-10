@@ -1,7 +1,28 @@
 /**
- * K2.6 Integration Layer for Murmuration
+ * K3.0 Integration Layer for Murmuration
  * Local orchestration: seed → sim → emergence → Gnosquam output.
  * LLM at edges only (future hook).
+ *
+ * ── K2.6 → K3.0 ──────────────────────────────────────────────────────────────
+ * Ghost, 2026-08-09: "k 3.0 has been released now i do believe 😁"
+ *
+ * The bump is not for the feature count. It is for the change in how this layer
+ * is built. K2.6 constructed its subsystems inline, and a second construction
+ * site in restoreCivilization() copied that list by hand — so the two drifted
+ * three separate times, and each time a whole system was silently absent for
+ * anyone who LOADED a civilization rather than starting a fresh one. That is
+ * the default path. Predators and CTF went missing, then relics and gauntlet,
+ * then weather and lineage.
+ *
+ * K3.0 has ONE construction site: attachWorldSystems(). Both paths call it.
+ *
+ * Also new in 3.0:
+ *   - WEATHER as a pressure source — six disaster kinds, random paths, a death
+ *     budget, denied ground, and monuments for the greatest taken by it.
+ *   - LINEAGE — descent and influence overlaid on one bounded graph, which is
+ *     what NEMESIS needs to trace carriers at the time of corruption.
+ *   - Storms render as OCCLUSION on their own layer above the swarm, because
+ *     additive light under the bond web is invisible no matter how bright.
  */
 
 window.MurmurationModules = window.MurmurationModules || {};
@@ -49,18 +70,6 @@ window.MurmurationModules.K26 = class K26 {
       });
     }
 
-    // Weather — localized disasters with random paths that kill and deny ground
-    if (window.MurmurationModules.Weather) {
-      this.weather = new window.MurmurationModules.Weather(this.world);
-    }
-
-    // Lineage — descent + influence overlaid. Live, and bounded by construction.
-    if (window.MurmurationModules.Lineage) {
-      this.lineage = new window.MurmurationModules.Lineage();
-      // Founders: every agent present at genesis has no parent and depth 0.
-      for (const a of this.world.agents) this.lineage.birth(a.id, null, a.colony);
-    }
-
     // Wealth & Social Class — inequality emerges from nothing
     if (window.MurmurationModules.WealthEngine && this.economy) {
       const taxEl = document.getElementById('taxSlider');
@@ -69,53 +78,62 @@ window.MurmurationModules.K26 = class K26 {
       });
     }
 
-    // Apex predators — per-colony Predator Pressure hunting mechanic
-    if (window.MurmurationModules.PredatorSystem) {
-      this.predatorSystem = new window.MurmurationModules.PredatorSystem(this.world);
-    }
-
-    // Capture the Flag — war games, off by default
-    if (window.MurmurationModules.CTFSystem) {
-      this.ctf = new window.MurmurationModules.CTFSystem(this.world);
-      this.world.ctf = this.ctf;
-    }
-
-    // Warning Log — cascade risk tracking
-    if (window.MurmurationModules.WarningLog) {
-      this.warningLog = new window.MurmurationModules.WarningLog();
-    }
-
-    // Relics — heritable abilities at the far points (Phase 1: claim/charge/reload)
-    if (window.MurmurationModules.RelicSystem) {
-      this.relicSystem = new window.MurmurationModules.RelicSystem(this.world);
-      this.world.relicSystem = this.relicSystem;
-    }
-
-    // Gauntlet — team obstacle (pressure gate). Off until enabled.
-    if (window.MurmurationModules.GauntletSystem) {
-      this.gauntlet = new window.MurmurationModules.GauntletSystem(this.world);
-      this.world.gauntlet = this.gauntlet;
-    }
-
-    // Maze — navigation test rig (Phase A geometry). Off until enabled.
-    if (window.MurmurationModules.MazeSystem) {
-      this.maze = new window.MurmurationModules.MazeSystem(this.world);
-      this.world.maze = this.maze;
-    }
-
-    // Mutations — the evolution meter reborn as a living genome. Active by default.
-    if (window.MurmurationModules.MutationSystem) {
-      this.mutations = new window.MurmurationModules.MutationSystem(this.world);
-      this.world.mutations = this.mutations;
-    }
-
-    // Chronicle — flight recorder for emergent events (passive, active by default).
-    if (window.MurmurationModules.Chronicle) {
-      this.chronicle = new window.MurmurationModules.Chronicle(this.world);
-      this.world.chronicle = this.chronicle;
-    }
-
+    this.attachWorldSystems();
     this.draw();
+  }
+
+  /**
+   * EVERY SUBSYSTEM THAT IS JUST `new X(world)`, BUILT IN ONE PLACE.
+   *
+   * Ghost, 2026-08-09, after pressing all six storm buttons: "they arent
+   * working... no death, not hurricane, no anything."
+   *
+   * The cause was structural, not a missing feature. Subsystems were being
+   * constructed in TWO places — here in init(), and again by hand inside
+   * restoreCivilization() in index.html, which builds a fresh K26 and
+   * deliberately never calls init(). Weather and Lineage were added to init()
+   * only, so anyone who LOADED a civilization had `k26.weather === undefined`.
+   * Every control is guarded by `if (k26 && k26.weather)`, so all six buttons
+   * were silent no-ops. The page auto-restores a saved colony on boot, so for
+   * Ghost that was every single session — while I tested by pressing RESTART,
+   * which runs init(). We were running two different programs.
+   *
+   * Nothing detected the drift, and nothing would have. So there is now one
+   * construction site: add a system here and BOTH paths get it. Economy and
+   * WealthEngine stay with their callers — they take snapshot state and
+   * constructor options, and are genuinely different on the two paths.
+   */
+  attachWorldSystems() {
+    const M = window.MurmurationModules, w = this.world;
+    if (!w) return;
+
+    // `bind` names the property the world exposes back to the subsystem, for
+    // the ones that need to be reachable from inside the sim.
+    const SYSTEMS = [
+      { key: 'weather',        mod: 'Weather'         },
+      { key: 'lineage',        mod: 'Lineage',        noWorld: true },
+      { key: 'predatorSystem', mod: 'PredatorSystem'  },
+      { key: 'ctf',            mod: 'CTFSystem',      bind: 'ctf' },
+      { key: 'warningLog',     mod: 'WarningLog',     noWorld: true },
+      { key: 'relicSystem',    mod: 'RelicSystem',    bind: 'relicSystem' },
+      { key: 'gauntlet',       mod: 'GauntletSystem', bind: 'gauntlet' },
+      { key: 'maze',           mod: 'MazeSystem',     bind: 'maze' },
+      { key: 'mutations',      mod: 'MutationSystem', bind: 'mutations' },
+      { key: 'chronicle',      mod: 'Chronicle',      bind: 'chronicle' },
+    ];
+
+    for (const s of SYSTEMS) {
+      if (!M[s.mod]) continue;
+      this[s.key] = s.noWorld ? new M[s.mod]() : new M[s.mod](w);
+      if (s.bind) w[s.bind] = this[s.key];
+    }
+
+    // Founders. On a restored colony these are not genesis agents, but their
+    // descent genuinely is unknown — the snapshot format carries no parent
+    // links, so depth 0 is the honest value rather than an invented one.
+    if (this.lineage) {
+      for (const a of w.agents) this.lineage.birth(a.id, null, a.colony);
+    }
   }
 
   injectSeeds() {
