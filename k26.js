@@ -6,6 +6,21 @@
 
 window.MurmurationModules = window.MurmurationModules || {};
 
+// STORM PALETTE — Ghost, 2026-08-09: "make the storm a grayish deep purple and
+// green mix."
+//
+// One palette for every kind, not a hue per type. That is the point: a storm
+// should read as WEATHER first and as its particular type second, and the type
+// is already named on the label. It also fixes the legibility failure directly
+// — the swarm's own palette is cyan and magenta, so the first version's blues
+// (200/215/185) were competing with the bond web in the bond web's own colour.
+// Desaturated purple and green sit outside that range entirely.
+const STORM_PURPLE = { h: 279, s: 22 };   // grayish deep purple — the body
+const STORM_GREEN  = { h: 142, s: 46 };   // the rim, the sweep, the heading
+// Slight per-type shift so a tornado is not literally the same object as a
+// flood, kept small enough that all six still read as one weather system.
+const STORM_SHIFT = { TORNADO: -6, HURRICANE: 0, FLOOD: 4, FIRE: -12, EARTHQUAKE: 8, HAIL: 2 };
+
 window.MurmurationModules.K26 = class K26 {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
@@ -220,12 +235,14 @@ window.MurmurationModules.K26 = class K26 {
     // Layer 2: resource zones UNDER agents (so agents stay crisp)
     if (this.economy && !mazeMode) this.economy.draw(ctx);
 
-    // Layer 2.5: STORM RADAR — hazard fronts + denied ground, under the bonds.
+    // Layer 2.5: DENIED GROUND — where a storm has already been. This is
+    // terrain, so it belongs under the bond web with the resource zones.
     // Ghost: "use the nebula cloud like a stormtracker radar map to show the
     // worst hit uninhabitable zones." Its own layer rather than a repurposing of
     // the mood nebula, which already relays swarm state and would have been
-    // destroyed by reuse. See drawStormRadar.
-    if (this.weather) this.drawStormRadar(ctx, W, H);
+    // destroyed by reuse. The ACTIVE fronts are drawn much later — see
+    // drawStormFronts for why they cannot live down here.
+    if (this.weather) this.drawStormGround(ctx, W, H);
 
     // Layer 3: connection strings — persistent neural web (additive light)
     // In the maze this web is the single worst offender: 120 agents in close
@@ -269,6 +286,11 @@ window.MurmurationModules.K26 = class K26 {
 
     // Layer 5: class indicators (wealth rings, crowns)
     if (this.wealthEngine) this.wealthEngine.draw(ctx);
+
+    // Layer 5.5: ACTIVE STORM FRONTS — above the bond web AND above the agents.
+    // Weather is the one thing on this canvas that is physically ON TOP of the
+    // world rather than in it. Drawn underneath, it was invisible.
+    if (this.weather) this.drawStormFronts(ctx, W, H);
 
     // Layer 6: env overlay + sentinel label
     this.world.drawOverlay(ctx);
@@ -389,74 +411,138 @@ window.MurmurationModules.K26 = class K26 {
    * carries intensity. Deliberately NOT the mood-nebula palette: this is the
    * environment's stress, not the swarm's.
    */
-  drawStormRadar(ctx, W, H) {
+  /**
+   * DENIED GROUND — the lasting consequence. Terrain-like, so it belongs down
+   * here with the resource zones, under the bond web.
+   */
+  drawStormGround(ctx, W, H) {
     const hz = this.weather.getHazards();
-    const HUE = { TORNADO: 275, HURRICANE: 200, FLOOD: 215, FIRE: 20, EARTHQUAKE: 35, HAIL: 185 };
+    const P = STORM_PURPLE.h, G = STORM_GREEN.h;
 
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // ── DENIED GROUND — uninhabitable, fading as it recovers ──
     for (const s of hz.scars) {
-      const hue = HUE[s.type] ?? 0;
+      const sh = STORM_SHIFT[s.type] ?? 0;
       const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.radius);
-      g.addColorStop(0,   `hsla(${hue}, 70%, 40%, ${0.20 * s.fade})`);
-      g.addColorStop(0.7, `hsla(${hue}, 60%, 28%, ${0.09 * s.fade})`);
+      g.addColorStop(0,   `hsla(${P+sh}, 26%, 34%, ${0.26 * s.fade})`);
+      g.addColorStop(0.7, `hsla(${G+sh}, 30%, 24%, ${0.13 * s.fade})`);
       g.addColorStop(1,   'hsla(0,0%,0%,0)');
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill();
 
       // Hatched rim — reads as "ground", not as weather still happening
       ctx.setLineDash([5, 7]);
-      ctx.strokeStyle = `hsla(${hue}, 65%, 45%, ${0.30 * s.fade})`;
+      ctx.strokeStyle = `hsla(${G+sh}, 48%, 46%, ${0.40 * s.fade})`;
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(s.x, s.y, s.radius * 0.92, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
     }
 
-    // ── ACTIVE FRONTS — the thing currently killing ──
+    ctx.restore();
+  }
+
+  /**
+   * ACTIVE FRONTS — the thing currently killing. Drawn ABOVE the bond web and
+   * above the agents.
+   *
+   * Ghost, 2026-08-09: "there were zero visual indicators that anything
+   * happened. the only reason i knew anyone died was because you told me."
+   *
+   * The first version failed three ways at once, and they compounded. It used
+   * additive blending, at alpha 0.16-0.46, in hues (200/215/185) sitting in the
+   * same cyan family as the bond web and the terrain contours — and it was
+   * drawn UNDERNEATH that web. So it could only ever ADD light to the brightest
+   * object on screen, in that object's own colour. A 190-radius hurricane
+   * parked dead centre of a 720px canvas was invisible.
+   *
+   * A storm OCCLUDES. That is how weather reads in the world and it is what
+   * makes it legible here: the interior is veiled dark so whatever is beneath
+   * it dims, and the boundary is a hard bright rim. Something is covering the
+   * swarm, and you can see exactly where its edge falls.
+   */
+  drawStormFronts(ctx, W, H) {
+    const hz = this.weather.getHazards();
+    if (!hz.fronts.length) return;
+
+    ctx.save();
     for (const f of hz.fronts) {
-      const hue = HUE[f.type] ?? 0;
-      const a = 0.16 + 0.30 * f.intensity;
-      const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.radius);
-      g.addColorStop(0,    `hsla(${hue}, 95%, 62%, ${a})`);
-      g.addColorStop(0.45, `hsla(${hue}, 90%, 50%, ${a * 0.55})`);
-      g.addColorStop(1,    'hsla(0,0%,0%,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2); ctx.fill();
+      const sh = STORM_SHIFT[f.type] ?? 0;
+      const P = STORM_PURPLE.h + sh, G = STORM_GREEN.h + sh;
+      const R = f.radius;
 
-      // Eye — the core, brightest and unmistakable
-      ctx.fillStyle = `hsla(${hue}, 100%, 78%, ${0.5 * f.fade})`;
-      ctx.beginPath(); ctx.arc(f.x, f.y, Math.max(3, f.radius * 0.06), 0, Math.PI * 2); ctx.fill();
+      // `fade` runs 1 -> 0 across the storm's life, but a front at 90% of its
+      // life still kills at full rate. Floored so a lethal storm can never
+      // render as almost-gone — the visual must not lie about the danger.
+      const vis = 0.55 + 0.45 * f.fade;
 
-      // Sweep ring, expanding with age — a radar return, not a static circle
-      const sweep = ((this._radarPhase = (this._radarPhase || 0) + 0.004) % 1);
-      ctx.strokeStyle = `hsla(${hue}, 100%, 70%, ${0.34 * (1 - sweep)})`;
+      // ── THE VEIL — source-over, so it DARKENS instead of adding. This is the
+      // single change that makes a storm visible over the bond web.
+      ctx.globalCompositeOperation = 'source-over';
+      const veil = ctx.createRadialGradient(f.x, f.y, R * 0.15, f.x, f.y, R);
+      veil.addColorStop(0,    `hsla(${P}, ${STORM_PURPLE.s}%, 9%,  ${0.86 * vis})`);
+      veil.addColorStop(0.62, `hsla(${P}, ${STORM_PURPLE.s+6}%, 14%, ${0.62 * vis})`);
+      veil.addColorStop(0.88, `hsla(${G}, ${STORM_GREEN.s-18}%, 13%, ${0.34 * vis})`);
+      veil.addColorStop(1,    'hsla(0,0%,0%,0)');
+      ctx.fillStyle = veil;
+      ctx.beginPath(); ctx.arc(f.x, f.y, R, 0, Math.PI * 2); ctx.fill();
+
+      // ── THE RIM — hard, bright, unambiguous. The edge is the information:
+      // inside it you die, outside it you do not.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `hsla(${G}, ${STORM_GREEN.s+22}%, 62%, ${0.95 * vis})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(f.x, f.y, R, 0, Math.PI * 2); ctx.stroke();
+
+      ctx.strokeStyle = `hsla(${G}, ${STORM_GREEN.s+10}%, 52%, ${0.32 * vis})`;
+      ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.arc(f.x, f.y, R, 0, Math.PI * 2); ctx.stroke();
+
+      // Eye
+      ctx.fillStyle = `hsla(${G}, ${STORM_GREEN.s+30}%, 78%, ${0.92 * vis})`;
+      ctx.beginPath(); ctx.arc(f.x, f.y, Math.max(4, R * 0.07), 0, Math.PI * 2); ctx.fill();
+
+      // Sweep — a radar return, expanding out to the rim
+      const sweep = ((this._radarPhase = (this._radarPhase || 0) + 0.006) % 1);
+      ctx.strokeStyle = `hsla(${G}, ${STORM_GREEN.s+25}%, 68%, ${0.55 * (1 - sweep) * vis})`;
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(f.x, f.y, f.radius * (0.25 + sweep * 0.85), 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(f.x, f.y, R * (0.1 + sweep * 0.9), 0, Math.PI * 2); ctx.stroke();
 
-      // HEADING — where it is going. The whole point of a tracker: the path is
-      // random, so the only warning available is watching the vector.
+      // HEADING — the path is random, so watching the vector is the only
+      // warning anyone gets.
       if (f.dx || f.dy) {
-        const L = f.radius * 1.7;
-        ctx.strokeStyle = `hsla(${hue}, 100%, 72%, 0.42)`;
-        ctx.lineWidth = 1.4;
-        ctx.setLineDash([9, 6]);
+        const L = R * 1.8;
+        ctx.strokeStyle = `hsla(${G}, ${STORM_GREEN.s+20}%, 66%, ${0.78 * vis})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 7]);
         ctx.beginPath();
         ctx.moveTo(f.x, f.y);
         ctx.lineTo(f.x + f.dx * L, f.y + f.dy * L);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        // Arrowhead, so the vector reads as direction and not as a stray bond
+        const hx = f.x + f.dx * L, hy = f.y + f.dy * L, ang = Math.atan2(f.dy, f.dx);
+        ctx.fillStyle = `hsla(${G}, ${STORM_GREEN.s+25}%, 70%, ${0.88 * vis})`;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx - 11 * Math.cos(ang - 0.4), hy - 11 * Math.sin(ang - 0.4));
+        ctx.lineTo(hx - 11 * Math.cos(ang + 0.4), hy - 11 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
       }
 
+      // Label + running toll. Ghost knew agents died only because I told him;
+      // the count belongs on the storm that is taking them.
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = `hsla(${hue}, 100%, 85%, 0.85)`;
-      ctx.font = '10px ui-monospace, monospace';
+      ctx.font = 'bold 12px ui-monospace, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(f.type, f.x, f.y - f.radius - 7);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      const label = f.deaths ? `${f.type} — ${f.deaths} TAKEN` : f.type;
+      ctx.strokeText(label, f.x, f.y - R - 10);
+      ctx.fillStyle = `hsla(${G}, ${STORM_GREEN.s-6}%, 86%, 0.98)`;
+      ctx.fillText(label, f.x, f.y - R - 10);
     }
-
     ctx.restore();
   }
 

@@ -295,6 +295,7 @@ window.MurmurationModules.Weather = class Weather {
       fronts: this.active.map(d => ({
         x: d.x, y: d.y, radius: d.radius, type: d.type,
         dx: d.dx, dy: d.dy, intensity: d.intensity,
+        deaths: d.deaths,
         fade: 1 - d.age / d.life,
       })),
       scars: this.scars.map(s => ({
