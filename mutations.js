@@ -172,7 +172,36 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
       // per-gene tier map → each gene's effect scales with ITS OWN tier (deepening mastery)
       const tierOf = {};
       for (const g of genes) tierOf[g.id] = Math.max(tierOf[g.id] || 0, g.tier || 1);
-      const K = (id) => tierOf[id] ? 1 + Math.min(2.5, (tierOf[id] - 1) * 0.6) : 0;   // 0 = gene absent
+      // TIER SCALING — flat to tier 6, then a slow logarithmic tail.
+      //
+      // Ghost, 2026-08-09, on learning his SYMBIOSIS sat at tier 92 while the
+      // effect stopped growing at tier 6: "soften slightly...incrimentally.
+      // thats a sensitive part you're messing around with now. we cant make
+      // dramatic changes here."
+      //
+      // WHY IT NEEDED SOFTENING AT ALL. He had already corrected the framing
+      // that produced this: "faith has ALWAYS had that effect...may be
+      // different variations of how but faith has that effect." Compounding
+      // belief is the design, not a runaway to be broken — economy.js:406 says
+      // it in his words, "Faith grows in community — you believe because others
+      // believe." A hard ceiling at tier 6 contradicts that: eighty-six further
+      // tiers of accumulated belief paying exactly nothing.
+      //
+      // WHY IT IS BUILT THIS WAY. Everything at or below the old cap is
+      // BIT-IDENTICAL — tiers 1-6 return 1.00/1.60/2.20/2.80/3.40/3.50 exactly
+      // as before, so no existing balance moves. Only past the cap does the
+      // tail appear, and it is deliberately small: +0.4% at tier 7, +9.8% at
+      // tier 92, +20% at tier 1000. Logarithmic, so it never stops paying and
+      // never accelerates. CEIL is a backstop that should not be reachable in
+      // any real run.
+      const CAP_TIER = 6, TAIL = 0.35, CEIL = 5.0;
+      const K = (id) => {
+        const t = tierOf[id];
+        if (!t) return 0;                                   // 0 = gene absent
+        const base = 1 + Math.min(2.5, (t - 1) * 0.6);
+        if (t <= CAP_TIER) return base;                     // unchanged, exactly
+        return Math.min(CEIL, base + TAIL * Math.log10(1 + (t - CAP_TIER) / 10));
+      };
       const mine = this.world.agents.filter(a => a.colony === c && !a.seppukuDone && !a.isSentinel);
       for (const a of mine) {
         let k;
