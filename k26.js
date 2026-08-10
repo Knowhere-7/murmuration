@@ -442,6 +442,31 @@ window.MurmurationModules.K26 = class K26 {
 
     for (const s of hz.scars) {
       const sh = STORM_SHIFT[s.type] ?? 0;
+
+      // THE CORRIDOR — every point the storm passed through, so the damage maps
+      // the path rather than the exit. This is the part that survives the storm:
+      // at 4x sim speed a front is on screen for under four seconds, but the
+      // ground it ruined stays for as long as its denial lasts.
+      if (s.track && s.track.length > 1) {
+        for (const p of s.track) {
+          const r = p.r || s.radius;
+          const gg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+          gg.addColorStop(0,   `hsla(${STORM_PURPLE.h + sh}, 26%, 30%, ${0.10 * s.fade})`);
+          gg.addColorStop(0.7, `hsla(${STORM_GREEN.h + sh}, 30%, 22%, ${0.05 * s.fade})`);
+          gg.addColorStop(1,   'hsla(0,0%,0%,0)');
+          ctx.fillStyle = gg;
+          ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        // Centre line of the corridor — makes the direction of travel readable
+        // after the fact, which is the whole job of a tracker.
+        ctx.strokeStyle = `hsla(${STORM_GREEN.h + sh}, 44%, 44%, ${0.34 * s.fade})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([7, 6]);
+        ctx.beginPath();
+        s.track.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.radius);
       g.addColorStop(0,   `hsla(${P+sh}, 26%, 34%, ${0.26 * s.fade})`);
       g.addColorStop(0.7, `hsla(${G+sh}, 30%, 24%, ${0.13 * s.fade})`);
@@ -493,6 +518,23 @@ window.MurmurationModules.K26 = class K26 {
       // life still kills at full rate. Floored so a lethal storm can never
       // render as almost-gone — the visual must not lie about the danger.
       const vis = 0.55 + 0.45 * f.fade;
+
+      // ── THE WAKE — where it has already been, drawn before the storm itself.
+      // At 4x sim speed the front alone is on screen for 0.38s (EARTHQUAKE) to
+      // 3.75s (HURRICANE); the wake gives it a shape you can catch in a glance
+      // and shows the direction of travel without waiting for the next frame.
+      ctx.globalCompositeOperation = 'source-over';
+      if (f.track && f.track.length > 1) {
+        f.track.forEach((p, i) => {
+          const age = i / f.track.length;             // 0 = oldest, 1 = newest
+          const rr = (p.r || R) * (0.55 + 0.45 * age);
+          const gw = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
+          gw.addColorStop(0, `hsla(${P}, ${STORM_PURPLE.s}%, 10%, ${0.30 * age * vis})`);
+          gw.addColorStop(1, 'hsla(0,0%,0%,0)');
+          ctx.fillStyle = gw;
+          ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
+        });
+      }
 
       // ── THE VEIL — source-over, so it DARKENS instead of adding. This is the
       // single change that makes a storm visible over the bond web.

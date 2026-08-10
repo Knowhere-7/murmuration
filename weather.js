@@ -29,6 +29,12 @@
  * is never displayed as "Honored the collective."
  */
 
+// Track sampling. Bounded on purpose — this repo has already lost a 26M-entry
+// interactionLog and a 25M event log to unbounded accumulation, and a storm
+// path is exactly the shape of thing that quietly becomes one.
+const TRACK_EVERY = 6;    // ticks between breadcrumbs
+const TRACK_MAX   = 180;  // hard ceiling per storm
+
 window.MurmurationModules = window.MurmurationModules || {};
 window.MurmurationModules.Weather = class Weather {
   constructor(world, opts = {}) {
@@ -159,6 +165,17 @@ window.MurmurationModules.Weather = class Weather {
       radius: K.radius, speed: K.speed * intensity, life: K.life,
       age: 0, intensity, struck: new Set(), deaths: 0,
       budget, perAgent: Math.min(1, budget / expected),
+      // THE TRACK — where this storm has actually been.
+      //
+      // Ghost, 2026-08-09: "still no storm tracker." He runs at 3-4x sim speed,
+      // where a storm's whole life is 0.38s (EARTHQUAKE) to 3.75s (HURRICANE)
+      // of wall clock, with ~10s of nothing between. Lifetime is counted in
+      // TICKS, so the faster the world runs the less weather can be seen.
+      //
+      // A tracker shows where a storm HAS BEEN, not only where it is. The track
+      // outlives the storm as the denied corridor, so a 0.38s earthquake still
+      // leaves something on the map to find.
+      track: [{ x, y, r: K.radius }],
     };
     this.active.push(d);
 
@@ -193,6 +210,13 @@ window.MurmurationModules.Weather = class Weather {
       const K = this.KINDS[d.type];
       if (K.grows) d.radius += K.grows;              // FIRE is the one that expands
 
+      // Breadcrumb the path. Sampled, not per-tick: a 900-tick hurricane would
+      // otherwise carry 900 points, and TRACK_MAX caps it regardless.
+      if (d.age % TRACK_EVERY === 0) {
+        d.track.push({ x: d.x, y: d.y, r: d.radius });
+        if (d.track.length > TRACK_MAX) d.track.shift();
+      }
+
       this._strike(d);
 
       // Retire when spent, or once a travelling front has fully left the map
@@ -201,8 +225,17 @@ window.MurmurationModules.Weather = class Weather {
                        d.y < -d.radius * 2 || d.y > H + d.radius * 2));
       if (gone) {
         if (K.denial > 0) {
-          this.scars.push({ x: d.x, y: d.y, radius: d.radius, type: d.type,
-                            ttl: K.denial, max: K.denial });
+          // THE SCAR IS THE CORRIDOR, NOT THE EXIT POINT. Previously this
+          // recorded a single circle at d.x/d.y — wherever the storm happened
+          // to stop, which for a travelling front is OFF THE MAP EDGE. So a
+          // hurricane that crossed the whole world denied a dot in the margin
+          // and left the ground it actually destroyed untouched and unmarked.
+          this.scars.push({
+            x: d.x, y: d.y, radius: d.radius, type: d.type,
+            track: d.track.filter(p => p.x > -d.radius && p.x < W + d.radius &&
+                                       p.y > -d.radius && p.y < H + d.radius),
+            ttl: K.denial, max: K.denial,
+          });
         }
         this.log.push({ id: d.id, type: d.type, deaths: d.deaths, age: d.age });
         this.active.splice(i, 1);
@@ -279,6 +312,17 @@ window.MurmurationModules.Weather = class Weather {
    * lineage as tiebreak, which is more permissive.
    */
   _eligibleForMonument(agent) {
+    // AN AGENT WITH NO HONOR HOLDS NO HONOR SPOT.
+    //
+    // Ghost's run produced: "★ Colony A #8 taken by HAIL — HERO, gen 1, 0.00
+    // honor." A first-generation agent that had earned nothing was given a
+    // monument, because when the whole colony sits at 0.00 the "top ten by
+    // honor" is just the first ten in sort order — every one of them tied at
+    // nothing. The rule says "the top 10 highest holding honor spots"; holding
+    // zero is not holding a spot. War games in SKIRMISH mode award no attrition
+    // honor at all, so this is the NORMAL state, not an edge case.
+    if (!(agent.honor > 0)) return false;
+
     const pool = this.world.agents.filter(a => !a.isSentinel);
     const byHonor = [...pool].sort((x, y) => (y.honor || 0) - (x.honor || 0)).slice(0, 10);
     if (!byHonor.includes(agent)) return false;
@@ -297,8 +341,19 @@ window.MurmurationModules.Weather = class Weather {
       if (t > 0) worst = Math.max(worst, t);
     }
     for (const s of this.scars) {
-      const t = (1 - Math.hypot(x - s.x, y - s.y) / s.radius) * (s.ttl / s.max);
-      if (t > 0) worst = Math.max(worst, t);
+      // Walk the corridor, not just the endpoint. A scar is now the whole path
+      // the storm swept; checking only s.x/s.y would deny one circle at the map
+      // edge and leave the destroyed ground fully usable.
+      const fade = s.ttl / s.max;
+      if (s.track && s.track.length) {
+        for (const p of s.track) {
+          const t = (1 - Math.hypot(x - p.x, y - p.y) / (p.r || s.radius)) * fade;
+          if (t > worst) worst = t;
+        }
+      } else {
+        const t = (1 - Math.hypot(x - s.x, y - s.y) / s.radius) * fade;
+        if (t > worst) worst = t;
+      }
     }
     return Math.min(1, worst);
   }
@@ -309,11 +364,12 @@ window.MurmurationModules.Weather = class Weather {
       fronts: this.active.map(d => ({
         x: d.x, y: d.y, radius: d.radius, type: d.type,
         dx: d.dx, dy: d.dy, intensity: d.intensity,
-        deaths: d.deaths,
+        deaths: d.deaths, track: d.track,
         fade: 1 - d.age / d.life,
       })),
       scars: this.scars.map(s => ({
-        x: s.x, y: s.y, radius: s.radius, type: s.type, fade: s.ttl / s.max,
+        x: s.x, y: s.y, radius: s.radius, type: s.type, track: s.track,
+        fade: s.ttl / s.max,
       })),
     };
   }
