@@ -1158,8 +1158,8 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="seed.js"></script>
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
-<script src="extractor.js"></script>
-<script src="weather.js?v=3"></script>
+<script src="extractor.js?v=2"></script>
+<script src="weather.js?v=4"></script>
 <script src="lineage.js?v=1"></script>
 <script src="gauntlet.js?v=1"></script>
 <script src="slimeMoldCore.js?v=1"></script>
@@ -2161,6 +2161,10 @@ function updatePresentation(e) {
     if (e.avgGrief > 0.4) lines.push('Grief is heavy. The swarm remembers what it lost.');
     if (e.cascadeVelocity > 0.4) lines.push('Ideas moving at wildfire speed — one voice is reshaping the whole swarm.');
     if (e.clusters === 'polarized') lines.push('Polarized. Two camps, no bridge. Sound familiar?');
+    // `unified` is new — one pole holding the whole swarm. It used to be reported
+    // as "polarized", which said the opposite of what was happening. Without a
+    // line of its own the state would simply go unnarrated.
+    if (e.clusters === 'unified') lines.push('One mind, and it is committed. Agreement this total is either wisdom or a cliff.');
     if (e.stability > 0.85) lines.push('Rock solid. This swarm has figured itself out — for now.');
     if (e.stability < 0.3) lines.push('Unstable. The whole thing could flip in 10 ticks.');
 

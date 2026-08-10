@@ -34,9 +34,23 @@ window.MurmurationModules.Weather = class Weather {
   constructor(world, opts = {}) {
     this.world = world;
 
-    // Per-hit death toll. Ghost: "Varying 8-17% death toll on every hit."
-    this.killMin = opts.killMin ?? 0.08;
-    this.killMax = opts.killMax ?? 0.17;
+    // Per-hit death toll. Ghost's original spec: "Varying 8-17% death toll on
+    // every hit." Lowered to 4-9% on evidence from his 29,613-tick run.
+    //
+    // WHY, and it is not just "313 was a lot". The toll was suppressing an
+    // entire evolutionary lineage. mutations.js earns the GROWTH gene from
+    // `births = max(0, n - lastAlive)` — the NET rise in living agents between
+    // samples. Weather taking 8-17% of the living on every event meant the net
+    // never rose, so growth pressure read 0 permanently and the gene could not
+    // crystallize. Combined with abundance pinning energy at 1.00 (no scarcity
+    // pressure) and near-zero grief (no faith pressure), four of six lineages
+    // were unreachable and APEX — which needs four distinct ones — was
+    // impossible by construction.
+    //
+    // 8-17% is still the right feel for a SINGLE catastrophe. It was never
+    // costed against a storm arriving every ~2400 ticks forever.
+    this.killMin = opts.killMin ?? 0.04;
+    this.killMax = opts.killMax ?? 0.09;
 
     this.active = [];   // disasters currently crossing the map
     this.scars  = [];   // ground denied after one passed; decays

@@ -18,7 +18,19 @@ window.MurmurationModules.EmergenceExtractor = class EmergenceExtractor {
     // Clustering
     const highBelief = beliefs.filter(b => b >  0.3).length / Math.max(1, active.length);
     const lowBelief  = beliefs.filter(b => b < -0.3).length / Math.max(1, active.length);
-    const clusters   = highBelief > 0.4 || lowBelief > 0.4 ? 'polarized' : 'diffuse';
+
+    // POLARIZED REQUIRES TWO CAMPS. This was `||`, so a swarm in TOTAL agreement
+    // at one pole reported "Polarized. Two camps, no bridge." — Ghost's run sat
+    // at consensus 1.00 (standard deviation zero: one camp, unanimous) and the
+    // readout still called it polarization. Opposite reading of the same state.
+    //
+    // Three states now, because "not polarized" was hiding two different worlds:
+    //   polarized  both poles populated — the genuine split
+    //   unified    one pole holds the swarm — agreement, and at strength
+    //   diffuse    nobody committed either way
+    const clusters = (highBelief > 0.4 && lowBelief > 0.4) ? 'polarized'
+                   : (highBelief > 0.4 || lowBelief > 0.4) ? 'unified'
+                   : 'diffuse';
 
     const recentCascades = world.interactionLog
       .slice(-20).filter(l => Math.abs(l.belief || 0) > 0.6).length / 20;
