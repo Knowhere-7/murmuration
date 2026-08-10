@@ -552,6 +552,55 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
       </div>
     </div>
 
+    <!-- ── SECTION: WEATHER ──
+         Ghost, 2026-08-09: "there is no 'summon storm' just the same old
+         controls" — while the button was in the panel text he pasted back to
+         me. It was buried at the bottom of ECONOMY, under the Gini coefficient
+         and crystallization strength. Weather is not economy. It belongs up
+         here with the wall and the terrain: things that act on the world. -->
+    <div class="sb-section">
+      <div class="sb-title">Weather</div>
+      <div class="sb-subtitle">
+        Storms arrive on their own, and the path is always random — no side is safe and
+        no one can aim them. Each takes a share of whoever it catches and leaves the
+        ground denied behind it. Summon one early if you don't want to wait.
+      </div>
+
+      <div class="controls-row" style="margin-top:6px">
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn()" style="font-size:.65em">🌪 SUMMON STORM</button>
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather){k26.weather.enabled=!k26.weather.enabled;this.textContent=k26.weather.enabled?'⛅ WEATHER: ON':'⛅ WEATHER: OFF';}" style="font-size:.65em">⛅ WEATHER: ON</button>
+      </div>
+
+      <div class="controls-row" style="margin-top:4px;flex-wrap:wrap;gap:3px">
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('TORNADO')"    style="font-size:.6em">TORNADO</button>
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('HURRICANE')"  style="font-size:.6em">HURRICANE</button>
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('FLOOD')"      style="font-size:.6em">FLOOD</button>
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('FIRE')"       style="font-size:.6em">FIRE</button>
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('EARTHQUAKE')" style="font-size:.6em">EARTHQUAKE</button>
+        <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('HAIL')"       style="font-size:.6em">HAIL</button>
+      </div>
+
+      <div class="metric" style="margin-top:8px">
+        <div class="metric-header">
+          <span class="metric-name">Storms active</span>
+          <span class="metric-val" id="wxActive">0</span>
+        </div>
+        <div class="metric-header">
+          <span class="metric-name">Denied ground</span>
+          <span class="metric-val" id="wxScars">0</span>
+        </div>
+        <div class="metric-header">
+          <span class="metric-name">Taken by weather</span>
+          <span class="metric-val" id="wxDeaths">0</span>
+        </div>
+        <div class="metric-explain">
+          Denied ground is where a storm has already passed — unusable until it recovers.
+          Deaths here are neither honored nor dishonored: weather is not a choice. Only the
+          very greatest earn a monument through it.
+        </div>
+      </div>
+    </div>
+
     <!-- ── SECTION: BREAK THE SWARM ── -->
     <div class="sb-section">
       <div class="sb-title">Break the swarm</div>
@@ -859,8 +908,9 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
       </div>
 
       <div class="controls-row" style="margin-top:4px">
+        <!-- Weather lives in its own section near the top, with the wall and the
+             terrain. It was here, and being here is why it could not be found. -->
         <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em">⚡ MARKET CRASH</button>
-        <button class="btn btn-reset" onclick="if(k26 && k26.weather) k26.weather.spawn()" style="font-size:.65em">🌪 SUMMON STORM</button>
       </div>
     </div>
 
@@ -1109,7 +1159,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
 <script src="extractor.js"></script>
-<script src="weather.js?v=2"></script>
+<script src="weather.js?v=3"></script>
 <script src="lineage.js?v=1"></script>
 <script src="gauntlet.js?v=1"></script>
 <script src="slimeMoldCore.js?v=1"></script>
@@ -2161,6 +2211,16 @@ function updatePresentation(e) {
     // Starvation deaths
     const cyclesEl = document.getElementById('m-cycles');
     if (cyclesEl) cyclesEl.textContent = econ.totalBirths;
+
+    // Weather readout. Ghost knew agents had died only because I told him — the
+    // toll belongs on the panel, not in a collapsed feed or in my message.
+    if (k26.weather) {
+      const wx = k26.weather.getStatus();
+      const setWx = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setWx('wxActive', wx.active);
+      setWx('wxScars',  wx.scars);
+      setWx('wxDeaths', wx.totalDeaths);
+    }
 
     // Faith & Evolution
     if (liveAgents.length > 0) {

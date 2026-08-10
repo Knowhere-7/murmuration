@@ -308,7 +308,10 @@ window.MurmurationModules.Weather = class Weather {
     return {
       active: this.active.length,
       scars: this.scars.length,
-      totalDeaths: this.log.reduce((n, e) => n + e.deaths, 0),
+      // Retired storms AND the ones still on the map. Counting only the log
+      // meant a storm mid-crossing showed a toll of zero while it was killing.
+      totalDeaths: this.log.reduce((n, e) => n + e.deaths, 0) +
+                   this.active.reduce((n, d) => n + d.deaths, 0),
       lastEvent: this.log[this.log.length - 1] || null,
     };
   }
