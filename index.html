@@ -571,6 +571,20 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
         <button class="btn btn-reset" onclick="if(k26&&k26.weather){k26.weather.enabled=!k26.weather.enabled;this.textContent=k26.weather.enabled?'⛅ WEATHER: ON':'⛅ WEATHER: OFF';}" style="font-size:.65em">⛅ WEATHER: ON</button>
       </div>
 
+      <div class="seed-signal" style="margin-top:8px">
+        <div class="seed-header">
+          <span class="seed-name" style="color:#8ef2b0">Storm Frequency</span>
+          <span class="seed-value" id="stormFreqVal" style="color:#8ef2b0">0.40</span>
+        </div>
+        <div class="seed-desc" style="color:rgba(142,242,176,0.5)">
+          How often weather arrives. Higher = more storms, and the gap between them is
+          always jittered so the cadence can never be learned and waited out.
+        </div>
+        <input type="range" id="stormFreqSlider" min="0" max="1" step="0.01" value="0.40"
+          oninput="updateVal(this,'stormFreqVal'); if(k26&&k26.weather) k26.weather.setFrequency(parseFloat(this.value));"
+          style="accent-color:#8ef2b0">
+      </div>
+
       <div class="controls-row" style="margin-top:4px;flex-wrap:wrap;gap:3px">
         <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('TORNADO')"    style="font-size:.6em">TORNADO</button>
         <button class="btn btn-reset" onclick="if(k26&&k26.weather) k26.weather.spawn('HURRICANE')"  style="font-size:.6em">HURRICANE</button>
@@ -911,6 +925,9 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
         <!-- Weather lives in its own section near the top, with the wall and the
              terrain. It was here, and being here is why it could not be found. -->
         <button class="btn btn-reset" onclick="if(k26 && k26.economy) k26.economy.triggerDisaster()" style="font-size:.65em">⚡ MARKET CRASH</button>
+        <!-- Gives each colony the gene its OWN history has earned — a tool, not a
+             direction. See MutationSystem.forceEvolve. -->
+        <button class="btn btn-reset" onclick="if(k26 && k26.mutations) k26.mutations.forceEvolve()" style="font-size:.65em">⚗ FORCE EVOLVE</button>
       </div>
     </div>
 
@@ -1159,18 +1176,18 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
 <script src="extractor.js?v=2"></script>
-<script src="weather.js?v=5"></script>
+<script src="weather.js?v=6"></script>
 <script src="lineage.js?v=1"></script>
 <script src="gauntlet.js?v=1"></script>
 <script src="slimeMoldCore.js?v=1"></script>
 <script src="maze.js?v=15"></script>
-<script src="mutations.js?v=4"></script>
+<script src="mutations.js?v=5"></script>
 <script src="chronicle.js?v=1"></script>
 <script src="relics.js?v=2"></script>
 <script src="k26.js?v=18"></script>
 <script src="economy.js?v=7"></script>
 <script src="wealth.js"></script>
-<script src="predator.js"></script>
+<script src="predator.js?v=2"></script>
 <script src="ctf.js"></script>
 <script src="warninglog.js"></script>
 <script src="murmuration.js"></script>
@@ -1461,6 +1478,10 @@ function runSim() {
   const _predB = document.getElementById('predatorSliderB');
   if (k26.world && _predA) k26.world.envA.predatorPressure = parseFloat(_predA.value);
   if (k26.world && _predB) k26.world.envB.predatorPressure = parseFloat(_predB.value);
+  // Storm frequency — synced here too, so a restored session or a reload honours
+  // where the dial is sitting instead of silently reverting to the constructor default.
+  const _stormF = document.getElementById('stormFreqSlider');
+  if (k26.weather && _stormF) k26.weather.setFrequency(parseFloat(_stormF.value));
   const _scarA = document.getElementById('scarcitySliderA');
   const _scarB = document.getElementById('scarcitySliderB');
   const _abunA = document.getElementById('abundanceSliderA');

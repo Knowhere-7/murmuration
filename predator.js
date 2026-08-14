@@ -78,11 +78,34 @@ window.MurmurationModules.PredatorSystem = class PredatorSystem {
 
       // Stay confined to the hunted colony's own half — it's a territorial
       // threat, not a free-roaming one.
-      const wx = w.width / 2;
+      //
+      // A RETREATING PREDATOR IS EXEMPT, and that exemption is the whole fix.
+      // Ghost, 2026-08-14: "the predators arent attacking."
+      //
+      // Retreat aims at an off-map edge (-40, or width+40) and despawns when it
+      // gets within 30 of it. This clamp held it at x >= 30 (or <= width-30),
+      // so the closest it could ever get was 70 — the 'gone' test could never
+      // fire. The predator then patrolled the edge forever, and because
+      // _activeFor() counts every predator whose state is not 'gone', THAT
+      // COLONY COULD NEVER SPAWN ANOTHER ONE.
+      //
+      // So each colony got exactly one predator per session: it hunted for 640
+      // ticks, failed to find a straggler, retreated, and became a permanent
+      // ghost that blocked the mechanic for the rest of the run. Measured
+      // before the fix: two predators stuck in 'retreating' at life 3330 and
+      // 2897 — thousands of ticks trying to leave a map that would not let go.
       const margin = 30;
-      if (p.colony === 'A') p.x = Math.max(margin, Math.min(wx - margin, p.x));
-      else                  p.x = Math.max(wx + margin, Math.min(w.width - margin, p.x));
+      if (p.state !== 'retreating') {
+        const wx = w.width / 2;
+        if (p.colony === 'A') p.x = Math.max(margin, Math.min(wx - margin, p.x));
+        else                  p.x = Math.max(wx + margin, Math.min(w.width - margin, p.x));
+      }
       p.y = Math.max(margin, Math.min(w.height - margin, p.y));
+
+      // Failsafe: a retreat that somehow still cannot complete must not become
+      // a permanent block on the mechanic. Retiring one predator is cheap; a
+      // silently dead subsystem is what we just spent an hour finding.
+      if (p.state === 'retreating' && p.life > 900) p.state = 'gone';
     }
 
     // Drop fully-gone predators

@@ -100,6 +100,31 @@ window.MurmurationModules.Weather = class Weather {
   _reschedule() { return this.ticks + Math.round(this.cadence * (0.5 + Math.random())); }
 
   /**
+   * FREQUENCY CONTROL — Ghost, 2026-08-14: "we need a slider for the storm
+   * frequency... i think it should be controllable."
+   *
+   * Takes 0..1 where higher means MORE storms, and maps it exponentially onto
+   * the cadence, because frequency is felt on a ratio scale — the step from
+   * one storm every 6000 ticks to one every 3000 reads the same as 3000 to
+   * 1500, and a linear dial would waste most of its travel in the rare end.
+   *
+   *   0.00 -> 6000 ticks between storms (rare)
+   *   0.40 -> 2389                      (the shipped default of 2400, near enough)
+   *   0.70 -> 1197
+   *   1.00 ->  600                      (relentless)
+   *
+   * Rescheduling on change is the point: without it a storm already queued at
+   * the old cadence keeps its old arrival time, and moving the dial appears to
+   * do nothing until after the next storm.
+   */
+  setFrequency(f) {
+    const freq = Math.max(0, Math.min(1, f));
+    this.cadence = Math.round(6000 * Math.pow(0.1, freq));
+    this.nextAt = this._reschedule();
+    return this.cadence;
+  }
+
+  /**
    * Spawn a disaster. Type may be named; PATH IS ALWAYS RANDOM.
    *
    * Travelling events enter from a random edge and cross at a random heading, so

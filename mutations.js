@@ -157,6 +157,43 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
     return s;
   }
 
+  /**
+   * FORCE EVOLVE — hand them a tool, not a direction.
+   *
+   * Ghost, 2026-08-14: "that could offer them tools that upgrade, or advance
+   * with every evolution. this way we can force it without giving them any new
+   * instruction."
+   *
+   * That constraint is the entire design. This does NOT set a goal, steer
+   * behaviour, or inject a signal — it crystallizes a gene, and _crystallize
+   * picks that gene from `C.exp`, the colony's own accumulated lived pressure.
+   * A colony that has been at war gets PACK SINEW; one that has been at peace
+   * gets SYMBIOSIS; one already deep in a gene deepens it further. The wildcard
+   * roll still applies, so CHIMERA and APEX remain possible.
+   *
+   * So the button accelerates whatever they were already becoming. It is the
+   * difference between handing someone a better tool and telling them what to
+   * build — which is the line Ghost drew, and the reason this is safe to press
+   * without corrupting what the run is measuring.
+   */
+  forceEvolve() {
+    const earned = [];
+    for (const c of ['A', 'B']) {
+      const mine = this.world.agents.filter(a => a.colony === c && !a.seppukuDone && !a.isSentinel);
+      if (!mine.length) continue;                 // an extinct colony evolves nothing
+      const before = this.col[c].genome.length;
+      this._crystallize(c);
+      const g = this.col[c].genome[this.col[c].genome.length - 1];
+      earned.push({ colony: c, gene: g ? g.name : null, tier: g ? g.tier : null,
+                    isNew: this.col[c].genome.length > before });
+    }
+    if (window.logLine) {
+      window.logLine('⚗ FORCED EVOLUTION — a tool offered, not an instruction. ' +
+                     'Each colony took what its own history had earned.', 'evolve');
+    }
+    return earned;
+  }
+
   /** Total mastery held by a colony — every gene's tier, summed. */
   _depth(c) {
     return this.col[c].genome.reduce((s, g) => s + (g.tier || 1), 0);
