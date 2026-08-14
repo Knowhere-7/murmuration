@@ -211,6 +211,43 @@ window.MurmurationModules.Economy = class Economy {
     const scarcityModA = 1 + this.scarcityLevelA * 0.4;
     const scarcityModB = 1 + this.scarcityLevelB * 0.4;
 
+    // ── SCARCITY HAS TO MAKE RESOURCES SCARCE ─────────────────────────────
+    //
+    // It didn't. `scarcityMod` appeared in exactly ONE place — the drain — and
+    // harvest never referenced scarcity at all. So the "Resource Scarcity"
+    // lever made EXISTING 40% more expensive and left the resources untouched.
+    //
+    // Measured, GOLDEN phase, at a zone with six allies: harvest 7.78e-4
+    // against drain 3.49e-5 at scarcity 0.99 — harvest is 22x the drain. The
+    // slider would need to read 75 on a 0-1 control for the two to balance.
+    // That is why Ghost could set Scarcity 0.99 with Abundance 0.00 and still
+    // watch Avg Energy sit at 0.99, and why DEEP_RESERVE — which needs average
+    // energy under 0.6 — has never once crystallized, taking APEX with it.
+    //
+    // CUBIC, so the range he has actually tuned against barely moves: at the
+    // 0.50 default the harvest/drain ratio goes 25.9x -> 23.0x. The bite is all
+    // at the top, which is where he reaches when he wants it to hurt. His own
+    // framing of these dials: individuate the times when it is unbearable.
+    const harvestScarceA = 1 - 0.9 * Math.pow(this.scarcityLevelA, 3);
+    const harvestScarceB = 1 - 0.9 * Math.pow(this.scarcityLevelB, 3);
+
+    // ── AND IT HAS TO TIGHTEN THE REACH, OR THE GEOMETRY WINS ─────────────
+    //
+    // Thinning the yield alone was not enough, and measuring showed why: with
+    // ten zones of radius ~40 and a harvestRadius of 80, the summed harvest
+    // area is 468,097 against a map of 149,040 — the zones BLANKET THE MAP
+    // 3.14x OVER. Every living agent was within reach of 2.8 zones on average
+    // (minimum two, never zero), and the harvest loop sums across every zone in
+    // range rather than the best one. There was nowhere on the map to be
+    // hungry, so no yield multiplier could ever produce hunger.
+    //
+    // Scarce resources mean you have to be ON the patch, not merely near one.
+    // Quadratic, so the tuned mid-range is spared: at 0.50 the reach goes 80 ->
+    // 65 and the map stays comfortably blanketed; at 0.99 it drops to 21, the
+    // coverage ratio falls under 1.0, and gaps open between the zones.
+    const reachScarceA = 1 - 0.75 * Math.pow(this.scarcityLevelA, 2);
+    const reachScarceB = 1 - 0.75 * Math.pow(this.scarcityLevelB, 2);
+
     // Phase timer — only non-GOLDEN phases count down back toward golden
     if (this.phase !== 'GOLDEN') {
       this.phaseTimer++;
@@ -281,13 +318,17 @@ window.MurmurationModules.Economy = class Economy {
       // ── HARVEST ──
       let harvested = 0;
       let atZone = false;
+      const reach = this.harvestRadius *
+        (agent.colony === 'B' ? reachScarceB : reachScarceA);
       for (const zone of this.zones) {
         const dist = Math.hypot(agent.x - zone.x, agent.y - zone.y);
-        if (dist < zone.radius + this.harvestRadius) {
+        if (dist < zone.radius + reach) {
           atZone = true;
-          const proximity = 1 - (dist / (zone.radius + this.harvestRadius));
+          const proximity = 1 - (dist / (zone.radius + reach));
           const effective = zone.richness * (1 - zone.depleted) * proximity;
-          let gain = this.soloHarvest * effective * mult.harvest;
+          // Scarcity thins the yield itself — see harvestScarceA/B above.
+          const scarceYield = agent.colony === 'B' ? harvestScarceB : harvestScarceA;
+          let gain = this.soloHarvest * effective * mult.harvest * scarceYield;
 
           // Cooperation bonus
           const allies = this.world.getNeighbors(agent, this.coopRadius)
