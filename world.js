@@ -727,6 +727,22 @@ window.MurmurationModules.World = class World {
       swirlCxB = this.width * 0.75 + Math.cos(phaseB) * this.width * 0.09;
       swirlCyB = this.height * 0.5 + Math.sin(phaseB * 0.8) * this.height * 0.14;
     }
+    // Displaced fraction per colony — how much of each side is on the wrong
+    // side of the wall right now. Computed once per tick and read by the
+    // homeward pull below, so the tug home scales with the size of the problem
+    // instead of being the same constant for one stray and for ninety.
+    {
+      const wx0 = this.width / 2;
+      let strayA = 0, totA = 0, strayB = 0, totB = 0;
+      for (const a of active) {
+        if (a.isSentinel) continue;
+        if (a.colony === 'B') { totB++; if (a.x < wx0) strayB++; }
+        else                  { totA++; if (a.x > wx0) strayA++; }
+      }
+      this._dispA = totA ? strayA / totA : 0;
+      this._dispB = totB ? strayB / totB : 0;
+    }
+
     for (const a of active) {
       a._wx = a.x;
       if (a.isSentinel) continue;
@@ -771,7 +787,31 @@ window.MurmurationModules.World = class World {
       const wallX = this.width / 2;
       const stray = (a.colony === 'B') ? (a.x < wallX) : (a.x > wallX);
       if (stray) {
-        a.vx += (a.colony === 'B' ? 1 : -1) * 0.06;
+        // HOMEWARD PULL, SCALED BY HOW MUCH OF THE COLONY IS DISPLACED.
+        //
+        // Ghost, 2026-08-14: "we need to figure out how to consistently get 60
+        // agents per side upon startup. it always has all or nearly all 120 on
+        // one side."
+        //
+        // Genesis was never the problem — it places exactly 60/60 and holds
+        // with the gates shut. The collapse happens once they open, and the
+        // cause is TWO COMPETING DRIFTS with nothing balancing them:
+        //   swirl    +0.084 mean x-impulse x 0.19 = ~0.016/tick, every agent
+        //   terrain  at pull 2 it overcomes the swirl and reverses the flow
+        // Measured: terrain OFF -> 36/84 (pools RIGHT); terrain 2.0 -> 87/33
+        // (pools LEFT). The direction is simply whichever drift is winning.
+        //
+        // This pull was meant to be the balance, but it was a FIXED 0.06 — the
+        // same tug whether one agent had wandered or ninety had. So it corrected
+        // strays at exactly the rate it corrected a collapse, and a steady drift
+        // outran it.
+        //
+        // Now it scales with the fraction of the colony that is displaced. Mild
+        // mixing is left almost untouched (that crossing is the point of opening
+        // a gate); a colony that has lost most of its side pulls hard enough to
+        // come home. Self-balancing, and it never forbids the crossing.
+        const disp = a.colony === 'B' ? this._dispB : this._dispA;
+        a.vx += (a.colony === 'B' ? 1 : -1) * 0.06 * (1 + 2.5 * (disp || 0));
       }
     }
 
