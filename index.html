@@ -519,7 +519,8 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
       <div class="sb-subtitle" style="margin-bottom:10px">A barrier splits the map. Two gates you control — open them to let the colonies mix, raid the far zones, or make peace across the seam.</div>
       <div class="controls-row">
         <button class="btn btn-reset" id="gate0Btn" onclick="toggleGate(0)" style="font-size:.62em">NORTH GATE: SHUT</button>
-        <button class="btn btn-reset" id="gate1Btn" onclick="toggleGate(1)" style="font-size:.62em">SOUTH GATE: SHUT</button>
+        <button class="btn btn-reset" id="gate1Btn" onclick="toggleGate(1)" style="font-size:.62em">CENTRE GATE: SHUT</button>
+        <button class="btn btn-reset" id="gate2Btn" onclick="toggleGate(2)" style="font-size:.62em">SOUTH GATE: SHUT</button>
       </div>
 
       <div class="seed-signal" style="margin-top:16px">
@@ -1171,7 +1172,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <!-- ═══════════ ENGINE ═══════════ -->
 <script src="topomap.js?v=5"></script>
 <script src="agent.js?v=5"></script>
-<script src="world.js?v=9"></script>
+<script src="world.js?v=10"></script>
 <script src="seed.js?v=2"></script>
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
@@ -1525,7 +1526,12 @@ function toggleGate(i) {
   if (!k26 || !k26.world) { narrate('Start the swarm first.'); return; }
   const open = k26.world.toggleGate(i);
   const btn = document.getElementById('gate' + i + 'Btn');
-  const name = i === 0 ? 'NORTH' : 'SOUTH';
+  // Read the label off the gate itself. This was `i === 0 ? 'NORTH' : 'SOUTH'`,
+  // which silently mislabels gates the moment a third exists — inserting CENTRE
+  // at index 1 pushes SOUTH to index 2, and the UI would have gone on calling it
+  // SOUTH with no error anywhere.
+  const _g = k26.world.wall && k26.world.wall.gates[i];
+  const name = (_g && _g.name) ? _g.name.replace(/ GATE$/, '') : ('GATE ' + i);
   if (btn) {
     btn.textContent = name + ' GATE: ' + (open ? 'OPEN' : 'SHUT');
     btn.style.color = open ? 'rgba(100,220,150,0.95)' : '';

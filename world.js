@@ -91,7 +91,22 @@ window.MurmurationModules.World = class World {
       // hf unchanged, so a real indentation/margin (~6.5% of height) still
       // separates each gate from the canvas edge — it never touches the corner.
       gates: [
+        // CENTRE GATE — Ghost, 2026-08-14: "i was thinking of adding a third,
+        // central gate just to throw a little more confusion in for them."
+        //
+        // Not a third copy of the same thing. North and South sit at the far
+        // edges, so crossing there is a committed detour: an agent leaves its
+        // group, travels the length of its territory, and arrives alone. The
+        // centre gate sits on the shortest line between the two swirl centres,
+        // where both colonies already circulate closest to the seam — the one
+        // crossing that costs nothing to take by accident.
+        //
+        // Deliberately the narrowest of the three (hf 0.055 against 0.075), so
+        // it is a needle rather than a door: heavy traffic through a gap only a
+        // body or two wide, which is where jams, standoffs and queueing have
+        // somewhere to appear.
         { yf: 0.14, hf: 0.075, open: false, name: 'NORTH GATE' },
+        { yf: 0.50, hf: 0.055, open: false, name: 'CENTRE GATE' },
         { yf: 0.86, hf: 0.075, open: false, name: 'SOUTH GATE' }
       ]
     };
