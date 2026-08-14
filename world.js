@@ -733,14 +733,47 @@ window.MurmurationModules.World = class World {
     // instead of being the same constant for one stray and for ninety.
     {
       const wx0 = this.width / 2;
-      let strayA = 0, totA = 0, strayB = 0, totB = 0;
+      let strayA = 0, totA = 0, strayB = 0, totB = 0, cxA = 0, cxB = 0;
       for (const a of active) {
         if (a.isSentinel) continue;
-        if (a.colony === 'B') { totB++; if (a.x < wx0) strayB++; }
-        else                  { totA++; if (a.x > wx0) strayA++; }
+        if (a.colony === 'B') { totB++; cxB += a.x; if (a.x < wx0) strayB++; }
+        else                  { totA++; cxA += a.x; if (a.x > wx0) strayA++; }
       }
       this._dispA = totA ? strayA / totA : 0;
       this._dispB = totB ? strayB / totB : 0;
+
+      // ── FLOCK ANCHOR — pull the COLONY, not its members ──────────────────
+      //
+      // Ghost, 2026-08-14: "we need to consistently get 60 agents per side."
+      //
+      // The per-agent homeward pull could not do this, and the neighbour census
+      // showed why: a displaced colony is surrounded 426-to-146 by ITS OWN
+      // members. It did not dissolve into the other crowd — it MIGRATED AS ONE
+      // INTACT FLOCK. Pulling individuals home means pulling them out of a group
+      // that is moving together, and cohesion rightly wins. Nine times the swirl
+      // bias still left 48 agents abroad.
+      //
+      // So the force is applied UNIFORMLY to every member instead. A uniform
+      // acceleration translates a flock without deforming it — internal spacing,
+      // bonds and structure are untouched, and the whole colony drifts home
+      // together. It is the difference between towing a boat and grabbing at the
+      // people standing on it.
+      //
+      // A deadband lets each colony roam freely around its own territory; only a
+      // centroid that has genuinely left home pulls, and it pulls harder the
+      // further out it is. This never closes a gate and never forbids a
+      // crossing — it restores the resting balance the wall used to guarantee.
+      const DEAD = this.width * 0.10;    // free roaming radius for the centroid
+      const ANCHOR = 0.030;              // uniform, so it accumulates across the flock
+      const anchorFor = (cxSum, tot, homeX) => {
+        if (!tot) return 0;
+        const off = homeX - (cxSum / tot);
+        if (Math.abs(off) < DEAD) return 0;
+        const over = (Math.abs(off) - DEAD) / (this.width * 0.25);
+        return Math.sign(off) * Math.min(1, over) * ANCHOR;
+      };
+      this._anchorA = anchorFor(cxA, totA, this.width * 0.25);
+      this._anchorB = anchorFor(cxB, totB, this.width * 0.75);
     }
 
     for (const a of active) {
@@ -813,6 +846,11 @@ window.MurmurationModules.World = class World {
         const disp = a.colony === 'B' ? this._dispB : this._dispA;
         a.vx += (a.colony === 'B' ? 1 : -1) * 0.06 * (1 + 2.5 * (disp || 0));
       }
+
+      // Flock anchor — applied to EVERY member, stray or not. This is what
+      // actually moves a migrated colony home; the stray pull above only ever
+      // caught individuals who had come loose.
+      a.vx += (a.colony === 'B' ? this._anchorB : this._anchorA) || 0;
     }
 
     for (const agent of active) {
