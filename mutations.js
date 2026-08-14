@@ -27,6 +27,11 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
     this.SAMPLE_EVERY = 16;      // ticks between engagement samples (cheap)
     this.FILL = 0.0045;          // engagement → progress; higher = genes crystallize faster
     this.WILDCARD_CHANCE = 0.09; // chance a crystal comes out rare instead of lineage-matched
+    // APEX gate — "depth across time" (Ghost, 2026-08-14). At full engagement a
+    // crystal lands every ~224 ticks, so depth 40 arrives around T9,000; the
+    // span is what holds the crown back to a run that has genuinely endured.
+    this.APEX_DEPTH = 40;        // summed tiers across the genome
+    this.APEX_SPAN  = 12000;     // ticks since this colony's first gene
     this.col = { A: this._newColony(), B: this._newColony() };
     this.CATALOG = this._catalog();
   }
@@ -36,7 +41,8 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
       progress: 0,
       exp: { war: 0, peace: 0, scarcity: 0, exploration: 0, faith: 0, growth: 0 },
       genome: [],           // [{id,name,icon,lineage,flavor}]
-      _lastAlive: null
+      _lastAlive: null,
+      firstGeneTick: null   // when this colony first crystallized anything — APEX measures from here
     };
   }
 
@@ -125,6 +131,11 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
 
     // TIER REPEATS: earning a gene you already hold DEEPENS it (I→II→III…) instead of
     // stacking a duplicate. A one-note life grows a mastery, not a pile of copies.
+    // Start the clock at the colony's FIRST crystallization, not at world
+    // genesis — a colony seeded late, or restored from a snapshot, should be
+    // measured on how long IT has been deepening.
+    if (C.firstGeneTick == null) C.firstGeneTick = this.world.time || 0;
+
     const existing = C.genome.find(g => g.id === gene.id);
     if (existing) {
       existing.tier = (existing.tier || 1) + 1;
@@ -146,20 +157,51 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
     return s;
   }
 
+  /** Total mastery held by a colony — every gene's tier, summed. */
+  _depth(c) {
+    return this.col[c].genome.reduce((s, g) => s + (g.tier || 1), 0);
+  }
+
   _wildcard(c) {
-    const other = c === 'A' ? 'B' : 'A';
-    const rival = this.col[other].genome;
+    const C = this.col[c];
+
+    // ── APEX — DEPTH ACROSS TIME ──────────────────────────────────────────
+    //
+    // Ghost's ruling, 2026-08-14: "depth across time."
+    //
+    // APEX used to require FOUR DISTINCT LINEAGES — breadth. That made it
+    // unreachable by construction, and the reason is the most interesting
+    // thing this build has produced. A colony that masters SYMBIOSIS earns
+    // `energy += 0.0003 * K`, which at tier 92 pays 0.00115/tick against a
+    // drain of 0.0000349 — THIRTY-THREE TIMES the cost of living. Measured:
+    // turn harvest off completely and energy stays at 1.000; turn the genome
+    // off and it falls to 0.844. The swarm evolves its way out of scarcity.
+    //
+    // So scarcity pressure goes to zero, DEEP_RESERVE can never crystallize,
+    // and the fourth lineage never arrives. Under the old rule, EXCELLENCE AT
+    // ONE THING FORECLOSED THE CROWN FOR EVERYTHING THAT GOT GOOD AT ANYTHING.
+    // Ghost's words on watching it: "theyve basically been starved into keeping
+    // their energy up. it may be something learned by the swarm."
+    //
+    // Depth across time instead: total mastery held, sustained for long enough
+    // that it cannot be a burst. A specialist can be crowned for going deep and
+    // staying deep — which is what these colonies actually do.
+    const span = C.firstGeneTick == null ? 0 : (this.world.time || 0) - C.firstGeneTick;
+    const holdsApex = C.genome.some(g => g.id === 'APEX');
+    if (!holdsApex && this._depth(c) >= this.APEX_DEPTH && span >= this.APEX_SPAN) {
+      // Checked BEFORE chimera. The crown is rarer than a gene theft, and at a
+      // 9% wildcard roll it would otherwise wait behind a 60% chimera coin flip
+      // indefinitely.
+      return { id: 'APEX', name: 'APEX', icon: '👑', lineage: 'apex',
+               flavor: 'depth across time — mastery held long enough to become nature' };
+    }
+
     // CHIMERA — seize a gene from the rival lineage
+    const rival = this.col[c === 'A' ? 'B' : 'A'].genome;
     if (rival.length && Math.random() < 0.6) {
       const g = rival[(Math.random() * rival.length) | 0];
       return { id: g.id, name: 'CHIMERA · ' + g.name, icon: '⚗', lineage: g.lineage, chimeric: true,
                flavor: 'horizontal gene transfer — seized from the rival lineage' };
-    }
-    // APEX — only for a true generalist that has survived every kind of pressure
-    const distinct = new Set(this.col[c].genome.map(g => g.lineage));
-    if (distinct.size >= 4) {
-      return { id: 'APEX', name: 'APEX', icon: '👑', lineage: 'apex',
-               flavor: 'survived every pressure — a generalist crowned' };
     }
     return null; // fall through to lineage-matched
   }
