@@ -112,6 +112,24 @@ window.MurmurationModules.World = class World {
     };
 
     // Environmental control knobs (wired to sliders) — per-colony now.
+    // EASY CORNERS — ON by default as of 2026-08-14, by Ghost's ruling.
+    //
+    // This was gated OFF for a long time on good grounds: the hard corners were
+    // the crucible that taught the swarm orbital-slingshot navigation, and the
+    // note read "removing the friction removes the reason to invent."
+    //
+    // Ghost reversed it: "the reasoning has shifted. there are more variables at
+    // play now so the benefit of keeping it out has been out weighed by all the
+    // new system settings."
+    //
+    // The old argument assumed corner friction was the swarm's main source of
+    // pressure. It no longer is — weather, predators that actually hunt, scarcity
+    // that bites, three gates, storm frequency and a figure-eight current now all
+    // apply pressure the corners once supplied alone. Keeping a movement handicap
+    // to preserve one historical invention costs more than it protects.
+    // Recorded as SR-006 in SOVEREIGN_RULINGS.md.
+    this.easyCorners = true;
+
     this.terrainPullA = 1.0;   // how strongly the topography channels colony A's movement
     this.terrainPullB = 1.0;   // same, for colony B — independent evolutionary path
 
@@ -732,6 +750,14 @@ window.MurmurationModules.World = class World {
     // homeward pull below, so the tug home scales with the size of the problem
     // instead of being the same constant for one stray and for ninety.
     {
+      // Is the centre gate the ONLY way through? That is the one configuration
+      // where a single crossing point exists, which is what makes a figure eight
+      // a figure eight rather than a pair of loops with several leaks.
+      const openGates = this.wall.gates.filter(g => g.open);
+      const centre = this.wall.gates.find(g => g.name === 'CENTRE GATE');
+      this._centreOnly = openGates.length === 1 && centre && centre.open;
+      this._centreGateY = centre ? centre.yf * this.height : this.height * 0.5;
+
       const wx0 = this.width / 2;
       let strayA = 0, totA = 0, strayB = 0, totB = 0, cxA = 0, cxB = 0;
       for (const a of active) {
@@ -790,8 +816,51 @@ window.MurmurationModules.World = class World {
       const swirlCy = a.colony === 'B' ? swirlCyB : swirlCyA;
       const cdx = a.x - swirlCx, cdy = a.y - swirlCy;
       const cdist = Math.hypot(cdx, cdy) || 1;
-      a.vx += (-cdy / cdist) * CURRENT_STRENGTH;
-      a.vy += ( cdx / cdist) * CURRENT_STRENGTH;
+      // ── REALISTIC CURRENT — a closed loop, not an endless outward spiral ──
+      //
+      // Ghost, 2026-08-14: "the current should have realistic behaviors, meaning
+      // full loop with a slight pull towards center."
+      //
+      // A purely tangential force has no radius-holding term, so anything with
+      // outward momentum keeps widening until a wall stops it — the flow spirals
+      // out and piles on the boundary instead of circulating. Real eddies hold a
+      // radius: the tangential push is balanced by a centripetal one.
+      //
+      // INWARD_BIAS supplies that. It is deliberately weak (about a seventh of
+      // the tangential term) so it closes the loop without collapsing the flock
+      // onto the eye — enough to make the circulation return on itself.
+      const INWARD_BIAS = 0.14;
+      a.vx += (-cdy / cdist) * CURRENT_STRENGTH - (cdx / cdist) * CURRENT_STRENGTH * INWARD_BIAS;
+      a.vy += ( cdx / cdist) * CURRENT_STRENGTH - (cdy / cdist) * CURRENT_STRENGTH * INWARD_BIAS;
+
+      // ── FIGURE-EIGHT — the centre gate as the crossing point of the loop ──
+      //
+      // Ghost: "if only centergate is open the current should carry a more
+      // figure 8 style of drift with the current going up the center wall giving
+      // a slight push towards center gate. enough of a pull that maybe 17% gets
+      // pulled through per pass."
+      //
+      // Two counter-rotating loops that meet at one point ARE a figure eight, and
+      // the seam is where they meet. Along the wall the flow runs upward toward
+      // the gate's latitude; at that latitude it turns through the gap. An agent
+      // riding its colony's loop is delivered to the opening rather than having
+      // to seek it — the crossing becomes something the current does to you.
+      //
+      // Only when the centre gate is the ONLY one open. With several ways
+      // through there is no single crossing point and no figure to trace.
+      if (this._centreOnly) {
+        const gy = this._centreGateY;
+        const dxw2 = a.x - this.width / 2, adx2 = Math.abs(dxw2);
+        const REACH = this.width * 0.22;
+        if (adx2 < REACH) {
+          const prox = 1 - adx2 / REACH;              // 1 at the seam, 0 at reach
+          // Up the wall toward the gate's latitude, then through it.
+          a.vy += Math.sign(gy - a.y) * prox * 0.042;
+          // Sideways nudge into the gap, strongest once level with it.
+          const aligned = 1 - Math.min(1, Math.abs(a.y - gy) / (this.height * 0.16));
+          a.vx += (dxw2 >= 0 ? -1 : 1) * prox * aligned * 0.030;
+        }
+      }
       // Boundary layer — an OPTIONAL assist that eases agents along the edges and around the
       // corners. GATED OFF BY DEFAULT: the "hard corners" it removes are the CRUCIBLE that taught
       // the swarm its emergent orbital-slingshot navigation (2026-07-24, THE-SWARM). Removing the

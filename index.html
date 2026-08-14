@@ -523,6 +523,26 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
         <button class="btn btn-reset" id="gate2Btn" onclick="toggleGate(2)" style="font-size:.62em">SOUTH GATE: SHUT</button>
       </div>
 
+      <!-- EASY CORNERS — Ghost asked for this, and it is OFF by default on
+           purpose. The hard corners are the crucible that taught the swarm its
+           orbital-slingshot navigation (2026-07-24, THE-SWARM): "the hard-corner
+           constraint IS the crucible... must never die." Enabling this trades
+           that emergence for smooth corner access. One click, fully reversible,
+           and never on unless Ghost chooses it. -->
+      <div class="controls-row" style="margin-top:4px">
+        <button class="btn btn-reset" id="easyCornersBtn" style="font-size:.62em"
+          onclick="if(k26&&k26.world){k26.world.easyCorners=!k26.world.easyCorners;
+            this.textContent='EASY CORNERS: '+(k26.world.easyCorners?'ON':'OFF');
+            this.style.color=k26.world.easyCorners?'rgba(255,180,80,0.95)':'';
+            narrate(k26.world.easyCorners
+              ? 'Corners eased. Movement flows around the edges — and the constraint that taught them to slingshot is gone.'
+              : 'Hard corners restored. The friction is the reason to invent.');}">EASY CORNERS: ON</button>
+      </div>
+      <div class="sb-subtitle" style="margin-top:2px;font-size:.62em;color:rgba(255,180,80,0.55)">
+        Eases movement around the map edges. The hard corners are what taught the swarm
+        orbital-slingshot travel — turning this on trades that pressure for easier flow.
+      </div>
+
       <div class="seed-signal" style="margin-top:16px">
         <div class="seed-header">
           <span class="seed-name">Simulation Speed</span>
@@ -1172,7 +1192,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <!-- ═══════════ ENGINE ═══════════ -->
 <script src="topomap.js?v=5"></script>
 <script src="agent.js?v=5"></script>
-<script src="world.js?v=13"></script>
+<script src="world.js?v=16"></script>
 <script src="seed.js?v=2"></script>
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
@@ -1483,6 +1503,13 @@ function runSim() {
   // where the dial is sitting instead of silently reverting to the constructor default.
   const _stormF = document.getElementById('stormFreqSlider');
   if (k26.weather && _stormF) k26.weather.setFrequency(parseFloat(_stormF.value));
+  // Easy-corners label reads from world state, never assumed. A hardcoded label
+  // is how the gate buttons ended up able to lie about which gate they toggled.
+  const _ec = document.getElementById('easyCornersBtn');
+  if (k26.world && _ec) {
+    _ec.textContent = 'EASY CORNERS: ' + (k26.world.easyCorners ? 'ON' : 'OFF');
+    _ec.style.color = k26.world.easyCorners ? 'rgba(255,180,80,0.95)' : '';
+  }
   const _scarA = document.getElementById('scarcitySliderA');
   const _scarB = document.getElementById('scarcitySliderB');
   const _abunA = document.getElementById('abundanceSliderA');
