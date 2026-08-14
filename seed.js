@@ -53,9 +53,25 @@ window.MurmurationModules.SeedInjector = class SeedInjector {
         a.updateGrief(str * 0.15);
         if (world.markHit) world.markHit(a, '200,90,255');
       });
-      // The electricity itself — violet arcs solo, white-blue when the
-      // detonation carried multiple sliders
-      if (world.strikeLightning) world.strikeLightning(colony, str, { compound: activeCount >= 2 });
+      // PARANOIA IS ALWAYS STATIC. Ghost, 2026-08-14: "it used to be little
+      // small static looking electric shock visuals and now theres large
+      // lightning bolts... the smaller, local to each agent static looking
+      // shock should be for paranoia as it was."
+      //
+      // This read `compound: activeCount >= 2`, so any detonation carrying two
+      // or more sliders upgraded paranoia to long white-blue arcs. Ghost runs
+      // with several sliders up as a matter of course, so the condition was
+      // effectively always true and the violet static had not been seen in a
+      // long time.
+      //
+      // It cost information, not only character. Static is LOCAL — it crackles
+      // off the individual afflicted agent (reach 34), so you can see WHO is
+      // paranoid. Compound arcs jump 130 units between bodies and smear that
+      // across the whole colony. The small version tells you more.
+      //
+      // Large bolts are now reserved for events that ARE colony-wide: the
+      // world's own objection below, and FORCE EVOLVE.
+      if (world.strikeLightning) world.strikeLightning(colony, str, { compound: false });
     }
 
     // ═══ TICKING BOMB (LateralLinePressure) ═══

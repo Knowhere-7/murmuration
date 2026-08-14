@@ -187,6 +187,17 @@ window.MurmurationModules.MutationSystem = class MutationSystem {
       earned.push({ colony: c, gene: g ? g.name : null, tier: g ? g.tier : null,
                     isNew: this.col[c].genome.length > before });
     }
+    // THE BIG BOLTS LIVE HERE NOW. Ghost: "perhaps the large ones should be
+    // used for force evolution or something similar."
+    //
+    // Compound lightning arcs 130 units BETWEEN bodies rather than crackling off
+    // one — which is wrong for paranoia (an affliction of individuals) and right
+    // for this (something happening to the colony as a whole). The visual now
+    // matches the scale of the event instead of the number of sliders that
+    // happened to be raised.
+    if (this.world.strikeLightning) {
+      for (const e of earned) this.world.strikeLightning(e.colony, 1.0, { compound: true });
+    }
     if (window.logLine) {
       window.logLine('⚗ FORCED EVOLUTION — a tool offered, not an instruction. ' +
                      'Each colony took what its own history had earned.', 'evolve');
