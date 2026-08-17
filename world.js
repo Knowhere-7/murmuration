@@ -133,6 +133,18 @@ window.MurmurationModules.World = class World {
     this.terrainPullA = 1.0;   // how strongly the topography channels colony A's movement
     this.terrainPullB = 1.0;   // same, for colony B — independent evolutionary path
 
+    // ── AMBIENT CURRENT STRENGTH ──
+    // Measured 2026-08-15 at the old hard-coded 0.19: this force is 3.1x
+    // alignment, 7.1x cohesion and 2.4x separation, and unlike those three it
+    // is COHERENT — every agent gets the same rotational push every tick while
+    // the boids forces are local and largely cancel. At that level the swarm's
+    // global shape is imposed by an external field instead of emerging from
+    // local decisions, which is the one property that makes it a murmuration
+    // rather than an eddy with birds in it.
+    // Kept at the shipped value so nothing changes without Ghost's say-so;
+    // now tunable at runtime so the right number can be found by eye.
+    this.currentStrength = 0.19;
+
     // UNALIGNED escalation — each "INTRODUCE UNALIGNED" press ratchets the
     // response up a tier and never de-escalates on its own (see introduceUnaligned).
     this.unalignedTier   = 0;      // 0 = none introduced yet
@@ -711,9 +723,170 @@ window.MurmurationModules.World = class World {
     }
   }
 
+  // ─── THE CIRCUIT ───
+  // Ghost, 2026-08-15: "each door or combination of doors should have a path
+  // related that must be traversed in order to be sustained."
+  //
+  // Until now sustenance was completely decoupled from the wall — economy.js has
+  // zero references to gates, harvest is pure proximity, and an agent could park
+  // on a zone and live forever. The current carried them around the loop and
+  // completing it earned nothing, which is exactly why the loop read as decor.
+  //
+  // A colony's circuit is a ring through its OWN territory with a seam
+  // checkpoint inserted for every OPEN gate. So the door configuration defines
+  // the path: all three open is a three-crossing circuit, centre-only is the
+  // figure-eight's single crossing, all shut is a closed domestic loop. Opening
+  // a different door poses a different problem.
+  //
+  // Anchored to fixed territory centres, NOT the wandering swirl centres — a
+  // sequence you must hit in order is meaningless if the targets drift while
+  // you travel toward them.
+  checkpointsFor(colony) {
+    const W = this.width, H = this.height;
+    const homeX = colony === 'B' ? W * 0.75 : W * 0.25;
+    const homeY = H * 0.5;
+    // SIZED TO THE ORBIT THEY ACTUALLY KEEP, not to a shape that looked right.
+    // Measured 2026-08-15 with 108 agents: median distance from the territory
+    // centre was dx 277 / dy 177 on a 1264x720 board. The first version used
+    // 0.15W x 0.30H — too NARROW horizontally and too TALL vertically, wrong on
+    // both axes in opposite directions, which left 91 of 108 agents stranded a
+    // median 321px from a checkpoint they needed to be within 44px of.
+    // A circuit through places the flock never visits is not a circuit.
+    const rx = W * 0.21, ry = H * 0.245;
+
+    // Base ring, clockwise from due north.
+    const ring = [
+      { x: homeX,      y: homeY - ry, a: -90 },
+      { x: homeX + rx, y: homeY,      a: 0   },
+      { x: homeX,      y: homeY + ry, a: 90  },
+      { x: homeX - rx, y: homeY,      a: 180 }
+    ];
+
+    // Every open gate becomes a seam checkpoint on the wall itself.
+    for (const g of this.wall.gates) {
+      if (!g.open) continue;
+      const gy = g.yf * H;
+      ring.push({
+        x: W * 0.5,
+        y: gy,
+        a: Math.atan2(gy - homeY, (W * 0.5) - homeX) * 180 / Math.PI,
+        gate: g.name
+      });
+    }
+
+    // Order by angle so the sequence is actually traversable rather than a
+    // teleporting checklist.
+    ring.sort((p, q) => p.a - q.a);
+    return ring;
+  }
+
+  /**
+   * Advance each agent through its colony's checkpoint sequence, IN ORDER.
+   * Only the next checkpoint counts — touching a later one early does nothing,
+   * which is what makes this a sequence rather than a set.
+   */
+  _advanceTraversal(active) {
+    // ── NOT IN THE MAZE ──
+    // Ghost, 2026-08-15: "in the maze the objective is different and the
+    // traversal rule from murmuration does not relate to a maze."
+    //
+    // This is the sphere mandate's exact failure re-armed if it is skipped. That
+    // cohort went extinct because an open-world bill was charged inside the maze
+    // — "a bill from a world not in the maze". The maze's objective is A→B
+    // optimisation; circling your own territory means nothing there.
+    //
+    // The multiplier is RESET, not merely left alone: a stale 0.35 carried in
+    // from the open world would silently throttle harvest inside the maze, which
+    // is the same leak wearing different clothes.
+    const mz = window.MurmurationModules && window.MurmurationModules.activeMaze;
+    if (mz && mz.active) {
+      for (const a of active) {
+        if (a._traversalMult != null) a._traversalMult = 1;
+      }
+      return;
+    }
+
+    const cpA = this.checkpointsFor('A');
+    const cpB = this.checkpointsFor('B');
+    this._circuitA = cpA;
+    this._circuitB = cpB;
+    // A checkpoint is a REGION, not a pixel. A flock arrives as a body ~60px
+    // across; a 38px target means most of the group passes it without anyone
+    // registering the visit.
+    const REACH = Math.max(56, this.width * 0.052);
+
+    // ── THE COLONY TRAVERSES, NOT THE AGENT ──
+    // Ghost, 2026-08-15, confirming what he had been meaning to say for days.
+    // The measurement agreed independently: checkpoint gaps run p50 277 but
+    // p75 1538 and p90 2872 — a fast majority with a very long tail. That
+    // distribution is what a FLOCK produces. The colony as a body moves
+    // steadily; any individual spends long stretches drifting between waypoints
+    // because it goes where the flock goes.
+    //
+    // Charging the individual therefore charges it for cohesion — the identical
+    // trap as the homeward pull, which only worked once applied to the colony
+    // instead of its members. 80 of 108 sat penalised while the circuit itself
+    // was working fine.
+    //
+    // So the SEQUENCE is owned by the colony. Members still do the physical
+    // traversing: a checkpoint falls when a QUORUM arrives, not when the
+    // centroid (a point where nobody need actually be) passes over it.
+    // Sustenance then flows to every member of a colony that is keeping pace.
+    // An idle agent inside a moving colony still eats — that is the design:
+    // "we want this to nearly mirror society."
+    if (!this._circuit) this._circuit = {};
+    const QUORUM = 0.22;
+
+    for (const col of ['A', 'B']) {
+      const cps = col === 'B' ? cpB : cpA;
+      const members = active.filter(a => a.colony === col && !a.isSentinel);
+      if (!cps.length || !members.length) continue;
+
+      let st = this._circuit[col];
+      if (!st || st.len !== cps.length) {
+        st = this._circuit[col] = {
+          idx: 0, tick: this.time, laps: 0, touched: new Set(), len: cps.length
+        };
+      }
+      if (st.idx >= cps.length) st.idx = 0;
+
+      const target = cps[st.idx];
+      for (const a of members) {
+        if (Math.hypot(a.x - target.x, a.y - target.y) < REACH) st.touched.add(a.id);
+      }
+
+      if (st.touched.size >= Math.max(2, Math.ceil(members.length * QUORUM))) {
+        st.idx = (st.idx + 1) % cps.length;
+        st.tick = this.time;
+        st.touched = new Set();
+        if (st.idx === 0) st.laps++;
+      }
+
+      // ── SUSTENANCE PRESSURE ──
+      // On HARVEST YIELD, never as an energy debit. The sphere mandate killed
+      // the maze cohort (-0.298/agent/600t, trust 0.065, extinct) by charging
+      // energy directly and BYPASSING the 0.05 floor. Yield sits upstream of
+      // `Math.max(0.05, energy)` in economy.js, so this physically cannot: a
+      // stalled colony gets hungry, it can never be starved to death.
+      const stalled = this.time - st.tick;
+      const grace = 1538;               // measured p75 of the advance interval
+      const mult = stalled <= grace
+        ? 1
+        : Math.max(0.35, 1 - ((stalled - grace) / 2400) * 0.65);
+
+      for (const a of members) {
+        a._traversalMult = mult;
+        a._cpIdx = st.idx;              // steer toward the COLONY's waypoint
+        a._cpLaps = st.laps;
+      }
+    }
+  }
+
   advanceStep() {
     // Exclude seppuku-complete agents from belief/action — they are memory, not participants
     const active = this.agents.filter(a => !a.seppukuDone);
+
+    this._advanceTraversal(active);
 
     // B — break any frozen consensus with a small bounded jolt (peace survives).
     this._antiStagnation(active);
@@ -729,7 +902,10 @@ window.MurmurationModules.World = class World {
     // the two eddies merge into one current spanning the whole board, so the
     // flow itself can carry agents across the open seam.
     const gatesOpen   = this.wall.gates.some(g => g.open);
-    const CURRENT_STRENGTH = 0.19;   // ~5x — a current strong enough to actually carry the drift
+    // Tunable at runtime (see constructor). Was a hard 0.19 const here, which
+    // made the single strongest force in the sim the one thing nobody could
+    // adjust without an edit-and-reload.
+    const CURRENT_STRENGTH = this.currentStrength;
     let swirlCxA, swirlCyA, swirlCxB, swirlCyB;
     if (gatesOpen) {
       const curPhase = this.time * 0.00035;              // slow overall drift so the eddy itself wanders

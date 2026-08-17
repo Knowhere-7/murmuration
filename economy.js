@@ -349,6 +349,18 @@ window.MurmurationModules.Economy = class Economy {
         }
       }
 
+      // ── CIRCUIT SUSTENANCE ──
+      // Yield scales with progress through the colony's checkpoint sequence
+      // (world._advanceTraversal). An agent keeping up with the circuit feeds
+      // normally; one that has parked feeds at up to 65% less.
+      //
+      // Deliberately multiplied into the GAIN and not subtracted from energy:
+      // the 0.05 floor two lines below is applied after this, so a stalled agent
+      // gets hungry and pressured but can never be starved to death by the rule.
+      // That distinction is the whole difference between this and the sphere
+      // mandate that made the maze cohort extinct.
+      harvested *= (agent._traversalMult == null ? 1 : agent._traversalMult);
+
       agent.energy = Math.min(1.0, agent.energy + harvested);
       this.totalHarvested += harvested;
 
@@ -560,6 +572,37 @@ window.MurmurationModules.Economy = class Economy {
       if (nearestZone) {
         const urgency = 0.06 + (0.4 - energy) * 0.15; // hungrier = stronger
         this._nudge(agent, nearestZone.x, nearestZone.y, urgency);
+      }
+    }
+
+    // DRIVE 1b: THE CIRCUIT — seek the next checkpoint in your colony's sequence.
+    //
+    // Without this the traversal rule is a bill with no map: an agent is
+    // penalised for falling behind a waypoint it has no way to seek, which is
+    // unfair pressure rather than a solvable problem. Now the circuit is
+    // navigable — the same shape as DRIVE 1 seeking a resource zone.
+    //
+    // Urgency rises with how far BEHIND the agent is and how hungry it is, so a
+    // well-fed agent keeping pace drifts free and only a lagging one is pulled.
+    // Deliberately gentle: the 60/60 work established that per-agent forces lose
+    // to cohesion, and a hard pull here would tear flocks apart to chase
+    // waypoints — which would destroy the very thing the circuit runs through.
+    //
+    // Maze-gated for the same reason the accounting is (see world._advanceTraversal).
+    const _mz = window.MurmurationModules && window.MurmurationModules.activeMaze;
+    if (!(_mz && _mz.active) && agent._cpIdx != null) {
+      const cps = agent.colony === 'B' ? this.world._circuitB : this.world._circuitA;
+      const target = cps && cps[agent._cpIdx];
+      if (target) {
+        const behind = 1 - (agent._traversalMult == null ? 1 : agent._traversalMult);
+        const hungry = Math.max(0, 0.6 - energy);
+        // Measured against the ambient current (0.19): the first version's
+        // typical urgency was 0.0238 — 8x weaker — so the circuit drive was
+        // simply drowned and only 2 of 108 agents ever advanced. Raised so a
+        // LAGGING agent gets a real pull, while a well-fed one keeping pace
+        // still drifts nearly free. Deliberately kept under the current so it
+        // biases the flock rather than tearing individuals out of it.
+        this._nudge(agent, target.x, target.y, 0.03 + behind * 0.22 + hungry * 0.08);
       }
     }
 
