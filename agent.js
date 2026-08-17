@@ -215,7 +215,11 @@ window.MurmurationModules.Agent = class Agent {
 
     const signalInfluence = envSignal * react;
     const topic           = 'current';
-    const newBelief       = avgBelief * 0.4 + signalInfluence * 0.6;
+    // Clamped to the legal belief range. Unclamped, a high-reactivity agent in
+    // a disturbed world computes a "belief" of 3.6+ and then saturates against
+    // the clamp below, which is how the population froze at 1.0.
+    const newBelief       = Math.max(-1, Math.min(1,
+      avgBelief * 0.4 + signalInfluence * 0.6));
 
     // Grief increases memory weight — loss written deeper
     const griefMemMod = 1 + this.griefLevel * 0.6;
@@ -223,11 +227,34 @@ window.MurmurationModules.Agent = class Agent {
     const memoryInfluence = this.memory.slice(-5)
       .reduce((s, m) => s + m.beliefUpdate, 0) / Math.max(1, this.memory.length) * memWeight;
 
+    // PREV IS CAPTURED BEFORE THE WRITE.
+    //
+    // Measured 2026-08-15: every agent's memory was a flat line of the SAME
+    // impossible number (3.5999 repeated), and belief sat pinned at the clamp.
+    // Two faults, compounding:
+    //
+    //   1. `newBelief` was never clamped. signalInfluence = envSignal *
+    //      reactivity, and with envSignal = 2 (disturbance 1 + anomaly 1) and
+    //      reactivity up to ~3 it overshoots to 3.6+, so belief saturated at
+    //      1.0 and could never come back down.
+    //   2. beliefUpdate was computed against beliefState AFTER that field had
+    //      already been overwritten, so it stored (unclamped - clamped) — a
+    //      constant — instead of the change in belief.
+    //
+    // A constant in memory makes memoryInfluence a constant, which pins belief,
+    // which makes getAction() return the same verdict forever. 43 of 60 agents
+    // had beliefs that moved less than 0.01 across 200 ticks: they were not
+    // deciding, they were repeating.
+    //
+    // headless/agent.py:211-214 always had this right — capture prev, then
+    // store (new - prev). This restores the browser engine to its own reference.
+    const prev = this.beliefState[topic] || 0;
+
     this.beliefState[topic] = Math.max(-1, Math.min(1,
       newBelief * 0.7 + memoryInfluence * 0.3
     ));
 
-    this.memory.push({ signal: envSignal, beliefUpdate: newBelief - (this.beliefState[topic] || 0) });
+    this.memory.push({ signal: envSignal, beliefUpdate: this.beliefState[topic] - prev });
     if (this.memory.length > 10) this.memory.shift();
   }
 
