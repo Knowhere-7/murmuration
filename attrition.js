@@ -472,175 +472,275 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
    The constitution is structure, not decoration: the contract is the scope, and
    it shows. */
 window.MurmurationModules.AttritionLobo = class AttritionLobo {
+  /* LOBO IS THE PLAYER, NOT THE SWARM.
+     Ghost, 2026-08-18: "imagine the hierarchical structure of a chessboard, add
+     water, a current and a derived biological framework.... lobo should be using
+     its swarm as pawns. the murmuration is decentralized where lobo is goal
+     oriented. its job is to find access and possess; their job is to look for a
+     reason to cascade."
+
+     So this is a REBUILD. The first LOBO made the swarm decide its own states —
+     that was murmuration logic (decentralized) wearing a red coat. Wrong. LOBO
+     is a single goal-oriented intelligence — the Main Man — that treats the
+     unaligned as expendable PIECES it moves toward one end: possess the king.
+     The colony stays decentralized and cascade-seeking (§4). LOBO does not
+     flock; it COMMANDS.
+
+     Its purpose is the thing it operates from, not a label on it:
+       TAKE THE CONTRACT · FIND ACCESS · POSSESS THE MARK · DO NOT STOP.
+     (LOBO_ADVERSARIAL_GENOME.md — "takes the contract, finds the mark, does not
+     stop, does not get bored, does not wander off, delivers the body.")
+
+     The genome is LOBO's TOOLKIT, wielded strategically, not expressed
+     emergently: Magnetoreception fixes the mark, Slime Mold finds the access
+     vector, Wolf Pack coordinates the piece that commits, Autotomy spends a
+     burned pawn, Planarian regrows the line. */
   constructor(world, kings, adversary) {
     this.world = world;
     this.kings = kings;
-    this.adversary = adversary;   // for the force dial
-    this.state = 'DORMANT';       // DORMANT · STALKING · SURGE · SCATTER
-    this.stateSince = 0;
-    this.quorumFrac = 0.6;        // fraction of the pack that must mass to commit
-    this.stagingR = 200;         // ring the pack forms on before the surge
-    this.regrowthCredit = 0;     // planarian: fractional regrowth accumulator
+    this.adversary = adversary;              // the force dial = LOBO's resolve
+    this.purpose = 'TAKE THE CONTRACT · FIND ACCESS · POSSESS THE MARK · DO NOT STOP';
+    this.plan = {};                          // colony -> current plan word
+    this.access = {};                        // colony -> {angle, quality}
+    this.regroupUntil = {};                  // colony -> tick (brief withdrawals only)
+    this.sacrificed = 0;                     // pawns LOBO has spent to reach the mark
+    this.regrowthCredit = 0;
   }
 
   _force() { return this.adversary ? this.adversary.force : 0.5; }
+  _pawns() { return this.world.agents.filter(a => a.colony === 'U' && !a.seppukuDone); }
 
-  _hunters() {
-    return this.world.agents.filter(a => a.colony === 'U' && !a.seppukuDone);
+  /** LOBO reads the board and FINDS ACCESS: the softest approach to the king —
+      the arc with the thinnest guard, biased toward an open gate if one gives a
+      clean lane. Slime Mold #11: the shortest credible chain to the crown.
+
+      A commander picks a LANE and holds it. Recomputing the softest angle every
+      tick made the pawns chase a jumping target and never mass — so access is
+      STICKY: chosen, then committed to for a campaign window, and only
+      reassessed on a timer or when a withdrawal forces a rethink. Deliberate
+      reassessment, not per-frame flinching. */
+  _findAccess(colony, reassess) {
+    const held = this.access[colony];
+    if (held && !reassess && this.world.time < (held.until || 0)) return held;
+    const home = this.kings.home(colony);
+    // The access ring must live INSIDE the world, whatever its size. A fixed
+    // captureR*2.2 put the point off-map on a small canvas (king at 0.9 width,
+    // access 110px further out, past a 320px edge) and the pawns chased a point
+    // in the void. Scale to the smaller world dimension.
+    const R = Math.min(this.kings.captureR * 2.2, Math.min(this.world.width, this.world.height) * 0.16);
+    const M = 18;  // keep the point off the very edge
+    const guards = this.world.agents.filter(a =>
+      a.colony === colony && !a.seppukuDone &&
+      Math.hypot(a.x - home.x, a.y - home.y) < R * 1.4);
+    let best = null;
+    for (let k = 0; k < 12; k++) {
+      const ang = (k / 12) * Math.PI * 2;
+      const px = home.x + Math.cos(ang) * R, py = home.y + Math.sin(ang) * R;
+      // defenders guarding this arc
+      let d = 0;
+      for (const g of guards) {
+        const ga = Math.atan2(g.y - home.y, g.x - home.x);
+        let diff = Math.abs(ga - ang); if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff < 0.6) d++;
+      }
+      // an open gate on this side offers a clean lane — score it softer
+      let gateBonus = 0;
+      const gates = (this.world.wall && this.world.wall.gates) || [];
+      for (const gt of gates) {
+        if (!gt.open) continue;
+        const gy = gt.yf * this.world.height, gx = this.world.width / 2;
+        const gAng = Math.atan2(gy - home.y, gx - home.x);
+        let diff = Math.abs(gAng - ang); if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff < 0.9) gateBonus += 2;
+      }
+      const softness = -d + gateBonus;
+      if (!best || softness > best.softness) best = { angle: ang, softness, px, py };
+    }
+    // clamp the chosen lane inside the world so the pawns can actually reach it
+    best.px = Math.max(M, Math.min(this.world.width - M, best.px));
+    best.py = Math.max(M, Math.min(this.world.height - M, best.py));
+    // hold this lane for a campaign window (~140 ticks) before reassessing
+    best.until = this.world.time + 140;
+    this.access[colony] = best;
+    return best;
   }
 
-  /** Resolve each hunter's contract target (the operator-named king). For BOTH,
-      each hunter locks the nearer king — but it is still the operator's contract,
-      never self-appointed. */
-  _targetFor(a) {
-    const t = a._loboTarget;
-    if (t === 'A' || t === 'B') return this.kings.home(t);
-    // 'both' or unset: nearest king
-    const hA = this.kings.home('A'), hB = this.kings.home('B');
-    return Math.hypot(a.x - hA.x, a.y - hA.y) < Math.hypot(a.x - hB.x, a.y - hB.y) ? hA : hB;
+  _contractColonies() {
+    const set = new Set();
+    for (const a of this._pawns()) {
+      const t = a._loboTarget;
+      if (t === 'A' || t === 'B') set.add(t);
+      else { // nearest king
+        const hA = this.kings.home('A'), hB = this.kings.home('B');
+        set.add(Math.hypot(a.x - hA.x, a.y - hA.y) < Math.hypot(a.x - hB.x, a.y - hB.y) ? 'A' : 'B');
+      }
+    }
+    return [...set];
   }
 
-  /** The cue for FLASH EXPANSION / CRYPTOBIOSIS is an ACUTE, lethal reaction —
-      the bombardier burst or the wolfpack hunt — NOT a passive shield. You do
-      not flee a wall; you press it (that is the siege). You flee the grenade.
-      So biofilm/camouflage let the siege grind on; only the OFFENSIVE reactions
-      scatter the pack. This also makes the per-cycle unlock meaningful: LOBO's
-      job gets harder exactly when the blue team acquires an offensive gene. */
+  _pawnsFor(colony) {
+    return this._pawns().filter(a => {
+      const t = a._loboTarget;
+      if (t === 'A' || t === 'B') return t === colony;
+      const hA = this.kings.home('A'), hB = this.kings.home('B');
+      return (Math.hypot(a.x - hA.x, a.y - hA.y) < Math.hypot(a.x - hB.x, a.y - hB.y) ? 'A' : 'B') === colony;
+    });
+  }
+
+  /** Is an OFFENSIVE reaction live at this crown — the grenade LOBO screens
+      against and briefly withdraws from (never from a passive shield). */
   _underFire(colony) {
     const R = window.MurmurationModules.Attrition.reactions;
     if (!R) return false;
-    return ['bombardierBeetle', 'wolfPack'].some(id =>
-      (R.active[colony + ':' + id] || 0) > 0);
-  }
-
-  setState(s) {
-    if (s !== this.state) { this.state = s; this.stateSince = this.world.time; }
+    return ['bombardierBeetle', 'wolfPack'].some(id => (R.active[colony + ':' + id] || 0) > 0);
   }
 
   step() {
-    const hunters = this._hunters();
-    if (!hunters.length) { this.setState('DORMANT'); return; }
-    const force = this._force();
-    const t = this.world.time;
+    const t = this.world.time, force = this._force();
+    const contracts = this._contractColonies();
+    if (!contracts.length) { this.plan = {}; return; }
 
-    // group hunters by which colony's crown they are contracted against
-    const packs = {};
-    for (const a of hunters) {
-      const tgt = this._targetFor(a);
-      const colony = (Math.abs(tgt.x - this.kings.home('A').x) < 1) ? 'A' : 'B';
-      (packs[colony] = packs[colony] || []).push(a);
-    }
-
-    let anySurge = false, anyScatter = false, anyStalk = false;
-
-    for (const colony of Object.keys(packs)) {
-      const pack = packs[colony];
+    for (const colony of contracts) {
+      const pawns = this._pawnsFor(colony);
+      if (!pawns.length) { this.plan[colony] = 'SPENT'; continue; }
       const home = this.kings.home(colony);
+      const captured = this.kings.captured[colony];
       const underFire = this._underFire(colony);
+      // reassess the lane only when a withdrawal forces a rethink; otherwise
+      // hold the committed line so the pawns can actually mass on it.
+      const access = this._findAccess(colony, this.plan[colony] === 'REGROUP');
 
-      // Count the massed within a zone WIDER than the form-up ring, or the pack
-      // straddles its own staging radius forever and never reaches quorum. The
-      // ring (stagingR) is where STALK gathers them; the gathering ZONE
-      // (stagingR * 1.25) is what "massed enough to commit" is measured in.
-      const massed = pack.filter(a =>
-        Math.hypot(a.x - home.x, a.y - home.y) < this.stagingR * 1.25).length;
-      const quorum = massed >= Math.ceil(pack.length * (this.quorumFrac * (1.2 - force * 0.5)));
+      // ── LOBO DECIDES. Goal-oriented, always toward possession. ──
+      // Massing is measured over a STAGING SECTOR, not a tight point — the
+      // unaligned separate hard ("don't tolerate proximity"), so a commander
+      // concentrates them into a region, never a huddle. A tight radius made
+      // the commit condition unreachable no matter how well they gathered.
+      const atAccess = pawns.filter(a => Math.hypot(a.x - access.px, a.y - access.py) < this.kings.captureR * 3).length;
+      const massedFrac = atAccess / pawns.length;
+      // Commit threshold sits BELOW what massing can physically reach — the
+      // unaligned's hard separation caps a gathered pack near ~0.4, so a bar
+      // above that can never trip. And an assault, once launched, holds for a
+      // beat (commitUntil) rather than flickering back to MASS the instant the
+      // vanguard peels off the access point toward the crown.
+      this.commitUntil = this.commitUntil || {};
+      let plan;
+      if (captured) plan = 'POSSESS';                       // hold the crown — deliver the body
+      else if (underFire && force < 0.9 && t >= (this.regroupUntil[colony] || 0)) {
+        plan = 'REGROUP'; this.regroupUntil[colony] = t + Math.round(40 * (1.1 - force * 0.6));
+        this.commitUntil[colony] = 0;
+      } else if (t < (this.regroupUntil[colony] || 0)) plan = 'REGROUP';
+      else if (t < (this.commitUntil[colony] || 0)) plan = 'COMMIT';          // assault in progress
+      else if (massedFrac >= (0.26 * (1.2 - force * 0.4))) {                  // the line is set — strike
+        plan = 'COMMIT'; this.commitUntil[colony] = t + 70;
+      } else plan = 'MASS';                                 // position on the access vector
+      this.plan[colony] = plan;
 
-      // per-colony state. FLASH EXPANSION is "scatter to a fallback THEN reform"
-      // (#28) — a brief evasive PULSE, not a cower that lasts as long as the
-      // defense. So a hot defense only TRIGGERS a scatter; the scatter is
-      // time-boxed (~48 ticks, less at high force) and then the pack reforms and
-      // re-commits. That is what gives the fight its rhythm instead of stalling.
-      this._scatterUntil = this._scatterUntil || {};
-      const scatterLen = Math.round(48 * (1.1 - force * 0.6));
-      if (underFire && force < 0.9 && t >= (this._scatterUntil[colony] || 0)) {
-        // only (re)arm a scatter if we're not already mid-pulse
-        if (!this._scattering || !this._scattering[colony]) {
-          this._scattering = this._scattering || {};
-          this._scattering[colony] = true;
-          this._scatterUntil[colony] = t + scatterLen;
-        }
-      }
-      const scattering = this._scattering && this._scattering[colony] && t < this._scatterUntil[colony];
-      if (this._scattering && this._scattering[colony] && t >= this._scatterUntil[colony]) {
-        this._scattering[colony] = false;   // pulse over — reform
-      }
+      // ── LOBO ASSIGNS ROLES — the chessboard hierarchy. Pawns do not choose;
+      //    they are placed. Vanguard drives the crown along the access lane; a
+      //    screen intercepts the offensive reaction; the reserve masses. ──
+      const byNear = pawns.slice().sort((a, b) =>
+        Math.hypot(a.x - home.x, a.y - home.y) - Math.hypot(b.x - home.x, b.y - home.y));
+      const vanguardN = Math.max(1, Math.round(pawns.length * (0.35 + force * 0.25)));
+      const screenN = underFire ? Math.max(1, Math.round(pawns.length * 0.2)) : 0;
 
-      let mode;
-      if (scattering) { mode = 'SCATTER'; anyScatter = true; }
-      else if (quorum) { mode = 'SURGE'; anySurge = true; }
-      else { mode = 'STALK'; anyStalk = true; }
-
-      for (const a of pack) {
-        const dx = home.x - a.x, dy = home.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const ux = dx / d, uy = dy / d;
-
-        if (mode === 'SURGE') {
-          // WOLF PACK — committed coordinated drive onto the crown.
-          const drive = 0.10 + force * 0.14;
-          a.vx += ux * drive; a.vy += uy * drive;
-        } else if (mode === 'STALK') {
-          // MAGNETORECEPTION + DEMOCRATIC QUORUM — close to the staging ring and
-          // hold there. Pull inward if outside the ring, ease off inside it, so
-          // the pack gathers into a shell and waits for the others.
-          const off = d - this.stagingR;
-          a.vx += ux * off * 0.006; a.vy += uy * off * 0.006;
-        } else { // SCATTER
-          // FLASH EXPANSION / CRYPTOBIOSIS — break to safe distance, go quiet.
-          if (d < this.stagingR * 1.4) { a.vx -= ux * 0.18; a.vy -= uy * 0.18; }
-          a.vx *= 0.96; a.vy *= 0.96;   // low and slow
+      // find the offensive threat to screen against (nearest colony hunter/pack)
+      let threat = null;
+      if (screenN) {
+        let bd = 1e9;
+        for (const g of this.world.agents) {
+          if (g.colony !== colony || g.seppukuDone) continue;
+          const d = Math.hypot(g.x - home.x, g.y - home.y);
+          if (d < bd) { bd = d; threat = g; }
         }
       }
 
-      // PLANARIAN — "kill one, more rise." Count fresh eliminations this colony
-      // suffered (wolfPack ejects set _attritionEjected) and regrow, scaled by
-      // force. Higher determination = the pack refuses to thin.
-      const ejected = this.world.agents.filter(a =>
-        a.colony === 'U' && a._attritionEjected && !a._loboCounted);
-      for (const e of ejected) e._loboCounted = true;
+      // The march speed and OBEY factor — how hard the order overrides the
+      // pawn's own drift. A weak impulse lost to the unaligned's separation and
+      // wander, so the pack never concentrated. Pawns OBEY: LOBO steers their
+      // velocity toward the ordered point, and the retained fraction (1-obey) is
+      // where the water still flows through. The intelligence is LOBO's; the
+      // pieces move where placed.
+      const speed = 1.5 * (0.7 + force * 0.5);
+      byNear.forEach((a, i) => {
+        let role, tx, ty, obey;
+        if (i < vanguardN) {
+          role = 'VANGUARD';
+          if (plan === 'COMMIT' || plan === 'POSSESS') {
+            tx = home.x; ty = home.y; obey = 0.62;           // drive the crown, hard
+          } else {
+            tx = access.px; ty = access.py; obey = 0.5;      // form up on the vector
+          }
+        } else if (screenN && i < vanguardN + screenN && threat) {
+          role = 'SCREEN';
+          tx = threat.x; ty = threat.y; obey = 0.6;          // throw the body in the way
+        } else {
+          role = 'RESERVE';
+          tx = access.px; ty = access.py; obey = 0.4;        // hold the access vector
+        }
+        // ORDER: steer the piece. Dominates separation/wander without freezing
+        // the current out entirely — the water still flows through (1-obey).
+        const d = Math.hypot(tx - a.x, ty - a.y) || 1;
+        const dirx = (tx - a.x) / d, diry = (ty - a.y) / d;
+        a.vx = a.vx * (1 - obey) + dirx * speed * obey;
+        a.vy = a.vy * (1 - obey) + diry * speed * obey;
+        a._loboRole = role;
+        a._loboSacrifice = (role === 'SCREEN');
+      });
+
+      // ── PLANARIAN — the line does not thin. A spent pawn is replaced,
+      //    scaled by resolve. "Kill one, more rise." ──
+      const ejected = this.world.agents.filter(a => a.colony === 'U' && a._attritionEjected && !a._loboCounted);
+      for (const e of ejected) { e._loboCounted = true; this.sacrificed++; }
       if (ejected.length) {
         this.regrowthCredit += ejected.length * (0.25 + force * 0.85);
         while (this.regrowthCredit >= 1) {
           this.regrowthCredit -= 1;
           if (this.world.spawnUnaligned) {
-            this.world.spawnUnaligned({ count: 1, tier: 3, aggressive: true,
-              hunt: false, target: colony, force, occupy: true });
-            window.MurmurationModules.AttritionKnowledge.recordAttack({
-              gene: 'planarian', event: 'split_on_kill', colony, force });
+            this.world.spawnUnaligned({ count: 1, tier: 3, aggressive: true, hunt: false, target: colony, force, occupy: true });
+            window.MurmurationModules.AttritionKnowledge.recordAttack({ gene: 'planarian', event: 'reinforced', colony, force });
           }
         }
       }
     }
-
-    // roll up a single headline state for the readout
-    if (anySurge) this.setState('SURGE');
-    else if (anyStalk) this.setState('STALKING');
-    else if (anyScatter) this.setState('SCATTER');
-    else this.setState('DORMANT');
   }
 
-  /** Overlay: LOBO's design language. Hunters wear the Main Man's crimson, and
-      the pack state is named so the operator watches the hunter think. */
+  /** LOBO's design language: the Main Man's crimson, and the commander's PLAN
+      named over the pack so the operator watches the intelligence work — not a
+      flock milling, a player moving. */
   draw(ctx) {
-    const hunters = this._hunters();
-    if (!hunters.length) return;
+    const pawns = this._pawns();
+    if (!pawns.length) return;
     ctx.save();
-    for (const a of hunters) {
-      ctx.beginPath();
-      ctx.arc(a.x, a.y, 3.2, 0, Math.PI * 2);
-      ctx.fillStyle = this.state === 'SCATTER' ? 'rgba(255,120,90,0.7)' : '#ff2a3a';
+    for (const a of pawns) {
+      const sac = a._loboSacrifice;
+      ctx.beginPath(); ctx.arc(a.x, a.y, sac ? 2.6 : 3.2, 0, Math.PI * 2);
+      ctx.fillStyle = sac ? 'rgba(255,150,90,0.75)' : (a._loboRole === 'VANGUARD' ? '#ff2a3a' : 'rgba(255,60,80,0.72)');
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,60,80,0.5)'; ctx.lineWidth = 0.6; ctx.stroke();
     }
-    // pack-state banner near the pack's centroid
-    const cx = hunters.reduce((s, a) => s + a.x, 0) / hunters.length;
-    const cy = hunters.reduce((s, a) => s + a.y, 0) / hunters.length;
-    ctx.fillStyle = '#ff2a3a'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('LOBO · ' + this.state, cx, cy - 14);
+    for (const colony of Object.keys(this.plan)) {
+      const p = this._pawnsFor(colony); if (!p.length) continue;
+      const cx = p.reduce((s, a) => s + a.x, 0) / p.length;
+      const cy = p.reduce((s, a) => s + a.y, 0) / p.length;
+      // access vector — the lane LOBO chose to the crown
+      const acc = this.access[colony];
+      const home = this.kings.home(colony);
+      if (acc) {
+        ctx.strokeStyle = 'rgba(255,60,80,0.35)'; ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(acc.px, acc.py); ctx.lineTo(home.x, home.y); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.fillStyle = '#ff2a3a'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('LOBO · ' + (this.plan[colony] || 'IDLE'), cx, cy - 14);
+    }
     ctx.restore();
   }
 
   status() {
-    return { state: this.state, hunters: this._hunters().length, force: this._force() };
+    const plans = Object.values(this.plan);
+    return {
+      state: plans[0] || 'IDLE', plans: { ...this.plan },
+      pawns: this._pawns().length, sacrificed: this.sacrificed,
+      force: this._force(), purpose: this.purpose,
+    };
   }
 };
