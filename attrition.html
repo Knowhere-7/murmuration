@@ -33,7 +33,18 @@
   #stage{grid-area:stage;position:relative;overflow:hidden}
   canvas{display:block;width:100%;height:100%}
   #panel{grid-area:panel;border-left:1px solid var(--line);background:var(--panel);
-         overflow-y:auto;padding:14px}
+         overflow-y:auto;padding:14px;transition:transform .25s ease}
+  #panel.collapsed{transform:translateX(100%)}
+  /* floating reopen tab — appears when the panel is closed */
+  #panel-reopen{position:fixed;top:60px;right:0;z-index:20;display:none;
+    background:var(--panel);border:1px solid var(--line);border-right:none;
+    border-radius:3px 0 0 3px;color:var(--dim);font-size:10px;letter-spacing:.2em;
+    padding:8px 10px;cursor:pointer;writing-mode:vertical-rl}
+  #panel-reopen:hover{color:var(--red);border-color:var(--red)}
+  body.panel-closed #panel-reopen{display:block}
+  #panel-close{background:transparent;border:1px solid var(--line);color:var(--dim);
+    font-size:10px;letter-spacing:.15em;padding:4px 9px;cursor:pointer;border-radius:3px}
+  #panel-close:hover{color:var(--red);border-color:var(--red)}
   .sec{margin-bottom:18px}
   .sec h2{font-size:10px;letter-spacing:.22em;color:var(--dim);margin:0 0 8px;
           text-transform:uppercase;border-bottom:1px solid var(--line);padding-bottom:5px}
@@ -67,7 +78,11 @@
     <span class="seam" id="seam">knowledge seam: attrition.knowledge/1 &middot; idle</span>
   </div>
   <div id="stage"><canvas id="canvas"></canvas></div>
+  <div id="panel-reopen" onclick="togglePanel()">CONTROLS</div>
   <div id="panel">
+    <div class="row" style="justify-content:flex-end;margin-bottom:6px">
+      <button id="panel-close" onclick="togglePanel()">&times; CLOSE</button>
+    </div>
 
     <div class="sec">
       <h2>Adversary &middot; the unaligned</h2>
@@ -88,6 +103,26 @@
       <div class="kv"><span>force / determination</span><span class="val" id="forceVal">0.50</span></div>
       <input type="range" id="force" min="0" max="1" step="0.01" value="0.5"
              oninput="setForce(this.value)">
+    </div>
+
+    <div class="sec">
+      <h2>Range controls</h2>
+      <div class="kv"><span>sim speed</span><span class="val" id="speedVal">1&times;</span></div>
+      <input type="range" id="speed" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
+      <div class="kv"><span>bleed rate /tick</span><span class="val" id="bleedVal">0.0040</span></div>
+      <input type="range" id="bleedR" min="0.001" max="0.016" step="0.001" value="0.004" oninput="setBleed(this.value)">
+      <div class="kv"><span>guard detail /king</span><span class="val" id="guardVal">5</span></div>
+      <input type="range" id="guard" min="2" max="10" step="1" value="5" oninput="setGuard(this.value)">
+      <div class="kv"><span>reaction quorum</span><span class="val" id="quorumVal">3</span></div>
+      <input type="range" id="quorum" min="1" max="6" step="1" value="3" oninput="setQuorum(this.value)">
+      <div class="kv"><span>LOBO relentlessness</span><span class="val" id="relVal">1.0&times;</span></div>
+      <input type="range" id="rel" min="0" max="2" step="0.1" value="1" oninput="setRel(this.value)">
+      <div class="row" style="margin-top:8px">
+        <button onclick="unlockReaction()" style="border-color:#2a6a4a;color:var(--grn)">&#9654; UNLOCK REACTION</button>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-top:4px">
+        arm the blue team&rsquo;s next gene &middot; or let evolution cycles do it
+      </div>
     </div>
 
     <div class="sec">
@@ -216,6 +251,27 @@
   function setForce(v){ document.getElementById('forceVal').textContent=parseFloat(v).toFixed(2);
     if(k26) window.MurmurationModules.Attrition.adversary.setForce(parseFloat(v)); }
 
+  let simSpeed=1;
+  function setSpeed(v){ simSpeed=parseInt(v); document.getElementById('speedVal').textContent=v+'×'; }
+  function setBleed(v){ document.getElementById('bleedVal').textContent=parseFloat(v).toFixed(4);
+    if(k26) window.MurmurationModules.Attrition.bleed.setBleedRate(parseFloat(v));
+    document.getElementById('bleedrate').textContent='bleed rate: '+parseFloat(v).toFixed(4)+'/tick (live)'; }
+  function setGuard(v){ document.getElementById('guardVal').textContent=v;
+    if(k26) window.MurmurationModules.Attrition.kings.guardCount=parseInt(v); }
+  function setQuorum(v){ document.getElementById('quorumVal').textContent=v;
+    if(k26) window.MurmurationModules.Attrition.reactions.quorum=parseInt(v); }
+  function setRel(v){ document.getElementById('relVal').textContent=parseFloat(v).toFixed(1)+'×';
+    if(k26) window.MurmurationModules.Attrition.lobo.regrowthMult=parseFloat(v); }
+  function unlockReaction(){ if(!k26) return;
+    const r=window.MurmurationModules.Attrition.reactions.unlockNext();
+    log(r?('▶ UNLOCKED — '+r.trait):'all reactions already unlocked','warn'); }
+
+  function togglePanel(){
+    const closed=document.getElementById('panel').classList.toggle('collapsed');
+    document.body.classList.toggle('panel-closed', closed);
+    if(k26) setTimeout(sizeCanvas,260);
+  }
+
   function setTarget(t){ target=t;
     document.querySelectorAll('#tgt button').forEach(b=>b.classList.toggle('on',b.dataset.t===t)); }
 
@@ -298,12 +354,14 @@
 
   function frame(){
     if(k26&&running){
+      for(let _s=0;_s<simSpeed;_s++){
       k26.step();
       // Attrition owns the post-step correction — same pattern as the maze.
       if(window.MurmurationModules.Attrition.kings) window.MurmurationModules.Attrition.kings.step();
       if(window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.step();
       if(window.MurmurationModules.Attrition.reactions) window.MurmurationModules.Attrition.reactions.step();
       if(window.MurmurationModules.Attrition.bleed) window.MurmurationModules.Attrition.bleed.step();
+      }
     }
     if(k26){ k26.draw();
       const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));

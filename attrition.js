@@ -520,6 +520,7 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
     this.regroupUntil = {};                  // colony -> tick (brief withdrawals only)
     this.sacrificed = 0;                     // pawns LOBO has spent to reach the mark
     this.regrowthCredit = 0;
+    this.regrowthMult = 1;   // operator dial: LOBO's relentlessness (planarian scale)
   }
 
   _force() { return this.adversary ? this.adversary.force : 0.5; }
@@ -714,7 +715,7 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
       const ejected = this.world.agents.filter(a => a.colony === 'U' && a._attritionEjected && !a._loboCounted);
       for (const e of ejected) { e._loboCounted = true; this.sacrificed++; }
       if (ejected.length) {
-        const gain = ejected.length * (0.25 + force * 0.85) * (throttled ? 0.4 : 1);
+        const gain = ejected.length * (0.25 + force * 0.85) * (throttled ? 0.4 : 1) * this.regrowthMult;
         this.regrowthCredit += gain;
         while (this.regrowthCredit >= 1) {
           this.regrowthCredit -= 1;
