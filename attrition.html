@@ -55,6 +55,8 @@
        border:1px solid var(--line);border-radius:3px;padding:6px;background:#070b16}
   #log div{margin:1px 0}
   .warn{color:var(--amber)}.crit{color:var(--red)}
+  .hb{height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;margin:2px 0 8px}
+  .hb span{display:block;height:100%;background:var(--grn);transition:width .2s,background .2s}
 </style>
 </head>
 <body>
@@ -123,10 +125,15 @@
     </div>
 
     <div class="sec">
-      <h2>Not yet wired</h2>
-      <div class="slot"><b>HONOR BLEED</b> &mdash; on capture, mitigate immediately (rate to be tuned)</div>
-      <div class="slot" style="margin-top:6px"><b>REACTIONS</b> &mdash; biological defense/offense, drawn from the trait registry</div>
-      <div class="slot" style="margin-top:6px"><b>UNLOCKS</b> &mdash; one new reaction per evolution cycle</div>
+      <h2>Honor bleed &middot; incident clock</h2>
+      <div class="kv"><span>KNOWHERE honor</span><span class="n" id="h-A">1.000</span></div>
+      <div class="hb"><span id="hbar-A"></span></div>
+      <div class="kv"><span>MAINLAND honor</span><span class="n" id="h-B">1.000</span></div>
+      <div class="hb"><span id="hbar-B"></span></div>
+      <div style="font-size:10px;color:var(--dim);margin-top:5px">
+        possession drains honor &middot; the colony must break it before zero &middot; zero = cascade
+      </div>
+      <div style="font-size:9px;color:var(--amber);margin-top:4px" id="bleedrate">bleed rate: 0.0025/tick (PLACEHOLDER &mdash; run the sweep)</div>
     </div>
 
     <div class="sec">
@@ -228,6 +235,16 @@
       window.MurmurationModules.Attrition.adversary?window.MurmurationModules.Attrition.adversary.wavesSent:0;
     const L=window.MurmurationModules.Attrition.lobo;
     if(L){ document.getElementById('s-lobo').textContent=L.status().state; }
+    const B=window.MurmurationModules.Attrition.bleed;
+    if(B){ for(const c of ['A','B']){ const st=B.status(c);
+      const bar=document.getElementById('hbar-'+c), val=document.getElementById('h-'+c);
+      if(!bar||!val) continue;
+      val.textContent=st.honor.toFixed(3);
+      bar.style.width=(st.honor*100)+'%';
+      bar.style.background = st.cascaded?'#000':(st.bleeding?'var(--red)':(st.honor<0.4?'var(--amber)':'var(--grn)'));
+      val.style.color = st.cascaded?'var(--red)':(st.bleeding?'var(--red)':'var(--cy)');
+      if(st.cascaded) val.textContent='CASCADED';
+    }}
     const K=window.MurmurationModules.Attrition.kings;
     if(K){ for(const c of ['A','B']){
       const st=K.status(c); const el=document.getElementById('k-'+c);
@@ -286,6 +303,7 @@
       if(window.MurmurationModules.Attrition.kings) window.MurmurationModules.Attrition.kings.step();
       if(window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.step();
       if(window.MurmurationModules.Attrition.reactions) window.MurmurationModules.Attrition.reactions.step();
+      if(window.MurmurationModules.Attrition.bleed) window.MurmurationModules.Attrition.bleed.step();
     }
     if(k26){ k26.draw();
       const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));

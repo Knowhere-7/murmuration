@@ -139,12 +139,14 @@ window.MurmurationModules.Attrition = {
   kings: null,
   reactions: null,
   lobo: null,
+  bleed: null,
   attach(world) {
     this.adversary = new window.MurmurationModules.AttritionAdversary(world);
     this.kings = new window.MurmurationModules.AttritionKings(world).install();
     this.reactions = new window.MurmurationModules.AttritionReactions(world, this.kings);
     this.lobo = new window.MurmurationModules.AttritionLobo(world, this.kings, this.adversary);
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo };
+    this.bleed = new window.MurmurationModules.AttritionBleed(world, this.kings);
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed };
   },
 };
 
@@ -741,6 +743,98 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
       state: plans[0] || 'IDLE', plans: { ...this.plan },
       pawns: this._pawns().length, sacrificed: this.sacrificed,
       force: this._force(), purpose: this.purpose,
+    };
+  }
+};
+
+/* ── §6 · THE HONOR BLEED — item 3 ──────────────────────────────────────────
+   Ghost, 2026-08-18: "the kings capture should cause an honor bleed that needs
+   to be mitigated immediately" · and, reserving this one for evidence: "we will
+   have to crunch numbers and run tests to figure out the correct amount."
+
+   So the RATE is not chosen here. This builds the mechanism and instruments it;
+   the number is picked from the sweep the range runs (crunch the numbers, then
+   set bleedRate). It ships at a placeholder, clearly labelled as un-tuned.
+
+   The mechanic is the incident-response clock. LOBO possessing a king drains the
+   colony's honor. MITIGATION is the colony breaking the possession — its
+   autonomous reactions (§4) clearing the unaligned off the crown, which flips
+   the king's `captured` back to false and staunches the bleed. If honor reaches
+   zero first, the colony CASCADES — and cascade is the colony's own nature
+   ("their job is to look for a reason to cascade"); zero honor is the reason.
+
+   The right rate is the one where MTTR MATTERS: a prepared colony can staunch it
+   if it responds in time, an unprepared one cannot. Too slow and a captured king
+   is a shrug; too fast and it is unrecoverable and teaches nothing. That window
+   is exactly what a blue-team range exists to train, and it is empirical. */
+window.MurmurationModules.AttritionBleed = class AttritionBleed {
+  constructor(world, kings) {
+    this.world = world;
+    this.kings = kings;
+    this.honor = { A: 1.0, B: 1.0 };     // colony honor, 0..1
+    // PLACEHOLDER — set from the sweep, not chosen by feel. At 0.0025/tick a
+    // full colony bleeds out in ~400 ticks of unbroken possession; whether that
+    // is the right window is what the sweep answers.
+    this.bleedRate = 0.0025;
+    this.recoverRate = 0.0006;           // honor heals slowly once the crown is safe
+    this.cascaded = { A: false, B: false };
+    this.events = [];                    // capture / staunch / cascade, with ticks
+    this._captureStart = {};
+  }
+
+  setBleedRate(r) { this.bleedRate = Math.max(0, r); return this.bleedRate; }
+
+  step() {
+    const t = this.world.time;
+    for (const colony of ['A', 'B']) {
+      if (this.cascaded[colony]) continue;   // a cascaded colony is out of the fight
+      const captured = this.kings.captured[colony];
+
+      if (captured) {
+        if (!this._captureStart[colony]) {
+          this._captureStart[colony] = t;
+          this.events.push({ t, colony, event: 'captured' });
+          window.MurmurationModules.AttritionKnowledge.recordOutcome({ event: 'bleed_start', colony });
+        }
+        this.honor[colony] -= this.bleedRate;
+        if (this.honor[colony] <= 0) {
+          this.honor[colony] = 0;
+          this.cascaded[colony] = true;
+          const held = t - this._captureStart[colony];
+          this.events.push({ t, colony, event: 'CASCADE', heldTicks: held });
+          window.MurmurationModules.AttritionKnowledge.recordOutcome({ event: 'cascade', colony, heldTicks: held });
+          this._cascade(colony);
+        }
+      } else {
+        if (this._captureStart[colony]) {
+          // MITIGATED — the colony broke the possession. This is the MTTR: how
+          // long from capture to staunch, and how much honor survived.
+          const mttr = t - this._captureStart[colony];
+          this.events.push({ t, colony, event: 'staunched', mttr, honorLeft: +this.honor[colony].toFixed(3) });
+          window.MurmurationModules.AttritionKnowledge.recordDefense({ event: 'staunched', colony, mttr, honorLeft: this.honor[colony] });
+          this._captureStart[colony] = null;
+        }
+        this.honor[colony] = Math.min(1, this.honor[colony] + this.recoverRate);
+      }
+    }
+  }
+
+  /** The cascade — the colony's collapse. It IS cascade-seeking, so the failure
+      is expressed in its own physics: grief propagates through the survivors.
+      The range records it as the training failure. */
+  _cascade(colony) {
+    for (const a of this.world.agents) {
+      if (a.colony !== colony || a.seppukuDone) continue;
+      a.griefLevel = Math.min(1, (a.griefLevel || 0) + 0.6);
+      if (a.griefState === 'ACTIVE') a.griefState = 'GRIEVING';
+    }
+  }
+
+  status(colony) {
+    return {
+      honor: +this.honor[colony].toFixed(3),
+      bleeding: !!this._captureStart[colony] && !this.cascaded[colony],
+      cascaded: this.cascaded[colony],
     };
   }
 };
