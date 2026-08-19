@@ -92,6 +92,7 @@
       <h2>Colony state</h2>
       <div class="kv"><span>alive</span><span class="n" id="s-alive">&mdash;</span></div>
       <div class="kv"><span>unaligned in system</span><span class="n" id="s-unal">&mdash;</span></div>
+      <div class="kv"><span>LOBO pack state</span><span class="n" id="s-lobo" style="color:var(--red)">&mdash;</span></div>
       <div class="kv"><span>waves sent</span><span class="n" id="s-waves">0</span></div>
       <div class="kv"><span>tick</span><span class="n" id="s-tick">0</span></div>
     </div>
@@ -124,7 +125,6 @@
     <div class="sec">
       <h2>Not yet wired</h2>
       <div class="slot"><b>HONOR BLEED</b> &mdash; on capture, mitigate immediately (rate to be tuned)</div>
-      <div class="slot" style="margin-top:6px"><b>LOBO ADVERSARY</b> &mdash; the unaligned as gene-expressing hunters</div>
       <div class="slot" style="margin-top:6px"><b>REACTIONS</b> &mdash; biological defense/offense, drawn from the trait registry</div>
       <div class="slot" style="margin-top:6px"><b>UNLOCKS</b> &mdash; one new reaction per evolution cycle</div>
     </div>
@@ -226,6 +226,8 @@
     document.getElementById('s-tick').textContent=k26.world.time;
     document.getElementById('s-waves').textContent=
       window.MurmurationModules.Attrition.adversary?window.MurmurationModules.Attrition.adversary.wavesSent:0;
+    const L=window.MurmurationModules.Attrition.lobo;
+    if(L){ document.getElementById('s-lobo').textContent=L.status().state; }
     const K=window.MurmurationModules.Attrition.kings;
     if(K){ for(const c of ['A','B']){
       const st=K.status(c); const el=document.getElementById('k-'+c);
@@ -282,9 +284,13 @@
       k26.step();
       // Attrition owns the post-step correction — same pattern as the maze.
       if(window.MurmurationModules.Attrition.kings) window.MurmurationModules.Attrition.kings.step();
+      if(window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.step();
       if(window.MurmurationModules.Attrition.reactions) window.MurmurationModules.Attrition.reactions.step();
     }
-    if(k26){ k26.draw(); drawKings(); }
+    if(k26){ k26.draw();
+      const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));
+      if(ctx && window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.draw(ctx);
+      drawKings(); }
     stats();
     raf=requestAnimationFrame(frame);
   }

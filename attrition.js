@@ -115,11 +115,17 @@ window.MurmurationModules.AttritionAdversary = class AttritionAdversary {
       wave: this.wavesSent, tier, label: spec.label, target, force: this.force, count,
     });
 
+    const before = new Set(this.world.agents.filter(a => a.colony === 'U'));
     if (this.world.spawnUnaligned) {
       this.world.spawnUnaligned({
         count, tier, aggressive: spec.aggressive, hunt: spec.hunt, target,
         force: this.force, occupy: spec.occupy,
       });
+    }
+    // Tag the freshly spawned hunters with THIS wave's contract target so LOBO
+    // (§5) can lock each to the king the operator named — NO_SELF_APPOINTMENT.
+    for (const a of this.world.agents) {
+      if (a.colony === 'U' && !before.has(a)) a._loboTarget = target;
     }
     return { wave: this.wavesSent, tier, label: spec.label, count, force: this.force, target };
   }
@@ -132,11 +138,13 @@ window.MurmurationModules.Attrition = {
   adversary: null,
   kings: null,
   reactions: null,
+  lobo: null,
   attach(world) {
     this.adversary = new window.MurmurationModules.AttritionAdversary(world);
     this.kings = new window.MurmurationModules.AttritionKings(world).install();
     this.reactions = new window.MurmurationModules.AttritionReactions(world, this.kings);
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions };
+    this.lobo = new window.MurmurationModules.AttritionLobo(world, this.kings, this.adversary);
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo };
   },
 };
 
@@ -429,5 +437,210 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
               event:'attacker_eliminated', colony, by:'wolfPack' }); } }
       }
     }
+  }
+};
+
+/* ── §5 · LOBO — THE ADVERSARY AS A GENE-EXPRESSING HUNTER ───────────────────
+   Ghost, 2026-08-18: "lobo is also wired for adversarial and with the genes at
+   its disposal it should make for a good show, and lobo should really benefit
+   from its design language and structure."
+
+   The unaligned stop being a dumb rush and become LOBO — the same genome the
+   colony carries, activated toward the HUNT (LOBO_ADVERSARIAL_GENOME.md, the
+   "identical twin, different life"). The colony's reactions (§4) are the genome
+   defending; this is the genome attacking. Same genes, opposite face.
+
+   The hunter loop, each gene faithful to the doc and each one visible on screen
+   so the fight has rhythm rather than a trickle:
+
+     MAGNETORECEPTION (#35) — "true north = the contract objective." Every hunter
+       locks to the king the OPERATOR named. LOBO never picks its own target
+       (NO_SELF_APPOINTMENT); the operator's target selector IS the contract.
+     DEMOCRATIC QUORUM (#27/#30) — the pack masses at a staging ring and does
+       NOT commit until a quorum has gathered. "The pack fires together or not
+       at all." No premature trickle that the blue team mops up.
+     WOLF PACK (#40) — LOBO's namesake and core. On quorum, a coordinated surge:
+       the whole pack drives the crown at once, whoever is closest leads.
+     FLASH EXPANSION / CRYPTOBIOSIS (#28/#6) — when the colony's reactions fire
+       at the crown, the pack SCATTERS to safe distance and goes quiet, then
+       reforms. Low and slow; survive the sweep, resume the hunt.
+     PLANARIAN (#8) — "kill one, more rise." When a hunter is eliminated, LOBO
+       regrows — adversity GROWS the pack, scaled by the force dial.
+
+   LOBO's design language: rendered in the Main Man's register — crimson, and a
+   pack-state readout, so the operator sees the hunter thinking, not just moving.
+   The constitution is structure, not decoration: the contract is the scope, and
+   it shows. */
+window.MurmurationModules.AttritionLobo = class AttritionLobo {
+  constructor(world, kings, adversary) {
+    this.world = world;
+    this.kings = kings;
+    this.adversary = adversary;   // for the force dial
+    this.state = 'DORMANT';       // DORMANT · STALKING · SURGE · SCATTER
+    this.stateSince = 0;
+    this.quorumFrac = 0.6;        // fraction of the pack that must mass to commit
+    this.stagingR = 200;         // ring the pack forms on before the surge
+    this.regrowthCredit = 0;     // planarian: fractional regrowth accumulator
+  }
+
+  _force() { return this.adversary ? this.adversary.force : 0.5; }
+
+  _hunters() {
+    return this.world.agents.filter(a => a.colony === 'U' && !a.seppukuDone);
+  }
+
+  /** Resolve each hunter's contract target (the operator-named king). For BOTH,
+      each hunter locks the nearer king — but it is still the operator's contract,
+      never self-appointed. */
+  _targetFor(a) {
+    const t = a._loboTarget;
+    if (t === 'A' || t === 'B') return this.kings.home(t);
+    // 'both' or unset: nearest king
+    const hA = this.kings.home('A'), hB = this.kings.home('B');
+    return Math.hypot(a.x - hA.x, a.y - hA.y) < Math.hypot(a.x - hB.x, a.y - hB.y) ? hA : hB;
+  }
+
+  /** The cue for FLASH EXPANSION / CRYPTOBIOSIS is an ACUTE, lethal reaction —
+      the bombardier burst or the wolfpack hunt — NOT a passive shield. You do
+      not flee a wall; you press it (that is the siege). You flee the grenade.
+      So biofilm/camouflage let the siege grind on; only the OFFENSIVE reactions
+      scatter the pack. This also makes the per-cycle unlock meaningful: LOBO's
+      job gets harder exactly when the blue team acquires an offensive gene. */
+  _underFire(colony) {
+    const R = window.MurmurationModules.Attrition.reactions;
+    if (!R) return false;
+    return ['bombardierBeetle', 'wolfPack'].some(id =>
+      (R.active[colony + ':' + id] || 0) > 0);
+  }
+
+  setState(s) {
+    if (s !== this.state) { this.state = s; this.stateSince = this.world.time; }
+  }
+
+  step() {
+    const hunters = this._hunters();
+    if (!hunters.length) { this.setState('DORMANT'); return; }
+    const force = this._force();
+    const t = this.world.time;
+
+    // group hunters by which colony's crown they are contracted against
+    const packs = {};
+    for (const a of hunters) {
+      const tgt = this._targetFor(a);
+      const colony = (Math.abs(tgt.x - this.kings.home('A').x) < 1) ? 'A' : 'B';
+      (packs[colony] = packs[colony] || []).push(a);
+    }
+
+    let anySurge = false, anyScatter = false, anyStalk = false;
+
+    for (const colony of Object.keys(packs)) {
+      const pack = packs[colony];
+      const home = this.kings.home(colony);
+      const underFire = this._underFire(colony);
+
+      // Count the massed within a zone WIDER than the form-up ring, or the pack
+      // straddles its own staging radius forever and never reaches quorum. The
+      // ring (stagingR) is where STALK gathers them; the gathering ZONE
+      // (stagingR * 1.25) is what "massed enough to commit" is measured in.
+      const massed = pack.filter(a =>
+        Math.hypot(a.x - home.x, a.y - home.y) < this.stagingR * 1.25).length;
+      const quorum = massed >= Math.ceil(pack.length * (this.quorumFrac * (1.2 - force * 0.5)));
+
+      // per-colony state. FLASH EXPANSION is "scatter to a fallback THEN reform"
+      // (#28) — a brief evasive PULSE, not a cower that lasts as long as the
+      // defense. So a hot defense only TRIGGERS a scatter; the scatter is
+      // time-boxed (~48 ticks, less at high force) and then the pack reforms and
+      // re-commits. That is what gives the fight its rhythm instead of stalling.
+      this._scatterUntil = this._scatterUntil || {};
+      const scatterLen = Math.round(48 * (1.1 - force * 0.6));
+      if (underFire && force < 0.9 && t >= (this._scatterUntil[colony] || 0)) {
+        // only (re)arm a scatter if we're not already mid-pulse
+        if (!this._scattering || !this._scattering[colony]) {
+          this._scattering = this._scattering || {};
+          this._scattering[colony] = true;
+          this._scatterUntil[colony] = t + scatterLen;
+        }
+      }
+      const scattering = this._scattering && this._scattering[colony] && t < this._scatterUntil[colony];
+      if (this._scattering && this._scattering[colony] && t >= this._scatterUntil[colony]) {
+        this._scattering[colony] = false;   // pulse over — reform
+      }
+
+      let mode;
+      if (scattering) { mode = 'SCATTER'; anyScatter = true; }
+      else if (quorum) { mode = 'SURGE'; anySurge = true; }
+      else { mode = 'STALK'; anyStalk = true; }
+
+      for (const a of pack) {
+        const dx = home.x - a.x, dy = home.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const ux = dx / d, uy = dy / d;
+
+        if (mode === 'SURGE') {
+          // WOLF PACK — committed coordinated drive onto the crown.
+          const drive = 0.10 + force * 0.14;
+          a.vx += ux * drive; a.vy += uy * drive;
+        } else if (mode === 'STALK') {
+          // MAGNETORECEPTION + DEMOCRATIC QUORUM — close to the staging ring and
+          // hold there. Pull inward if outside the ring, ease off inside it, so
+          // the pack gathers into a shell and waits for the others.
+          const off = d - this.stagingR;
+          a.vx += ux * off * 0.006; a.vy += uy * off * 0.006;
+        } else { // SCATTER
+          // FLASH EXPANSION / CRYPTOBIOSIS — break to safe distance, go quiet.
+          if (d < this.stagingR * 1.4) { a.vx -= ux * 0.18; a.vy -= uy * 0.18; }
+          a.vx *= 0.96; a.vy *= 0.96;   // low and slow
+        }
+      }
+
+      // PLANARIAN — "kill one, more rise." Count fresh eliminations this colony
+      // suffered (wolfPack ejects set _attritionEjected) and regrow, scaled by
+      // force. Higher determination = the pack refuses to thin.
+      const ejected = this.world.agents.filter(a =>
+        a.colony === 'U' && a._attritionEjected && !a._loboCounted);
+      for (const e of ejected) e._loboCounted = true;
+      if (ejected.length) {
+        this.regrowthCredit += ejected.length * (0.25 + force * 0.85);
+        while (this.regrowthCredit >= 1) {
+          this.regrowthCredit -= 1;
+          if (this.world.spawnUnaligned) {
+            this.world.spawnUnaligned({ count: 1, tier: 3, aggressive: true,
+              hunt: false, target: colony, force, occupy: true });
+            window.MurmurationModules.AttritionKnowledge.recordAttack({
+              gene: 'planarian', event: 'split_on_kill', colony, force });
+          }
+        }
+      }
+    }
+
+    // roll up a single headline state for the readout
+    if (anySurge) this.setState('SURGE');
+    else if (anyStalk) this.setState('STALKING');
+    else if (anyScatter) this.setState('SCATTER');
+    else this.setState('DORMANT');
+  }
+
+  /** Overlay: LOBO's design language. Hunters wear the Main Man's crimson, and
+      the pack state is named so the operator watches the hunter think. */
+  draw(ctx) {
+    const hunters = this._hunters();
+    if (!hunters.length) return;
+    ctx.save();
+    for (const a of hunters) {
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, 3.2, 0, Math.PI * 2);
+      ctx.fillStyle = this.state === 'SCATTER' ? 'rgba(255,120,90,0.7)' : '#ff2a3a';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,60,80,0.5)'; ctx.lineWidth = 0.6; ctx.stroke();
+    }
+    // pack-state banner near the pack's centroid
+    const cx = hunters.reduce((s, a) => s + a.x, 0) / hunters.length;
+    const cy = hunters.reduce((s, a) => s + a.y, 0) / hunters.length;
+    ctx.fillStyle = '#ff2a3a'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('LOBO · ' + this.state, cx, cy - 14);
+    ctx.restore();
+  }
+
+  status() {
+    return { state: this.state, hunters: this._hunters().length, force: this._force() };
   }
 };
