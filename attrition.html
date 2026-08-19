@@ -114,8 +114,17 @@
     </div>
 
     <div class="sec">
+      <h2>Reactions &middot; the colony's genome</h2>
+      <div id="reactions" style="font-size:10px"></div>
+      <div style="font-size:10px;color:var(--dim);margin-top:6px">
+        drawn from the trait registry &middot; quorum-gated &middot; one unlocks per evolution cycle
+      </div>
+    </div>
+
+    <div class="sec">
       <h2>Not yet wired</h2>
       <div class="slot"><b>HONOR BLEED</b> &mdash; on capture, mitigate immediately (rate to be tuned)</div>
+      <div class="slot" style="margin-top:6px"><b>LOBO ADVERSARY</b> &mdash; the unaligned as gene-expressing hunters</div>
       <div class="slot" style="margin-top:6px"><b>REACTIONS</b> &mdash; biological defense/offense, drawn from the trait registry</div>
       <div class="slot" style="margin-top:6px"><b>UNLOCKS</b> &mdash; one new reaction per evolution cycle</div>
     </div>
@@ -223,6 +232,15 @@
       el.textContent = st.captured?'CAPTURED':(st.alive?'holding':'fallen');
       el.style.color = st.captured?'var(--red)':(st.alive?'var(--grn)':'var(--dim)');
     }}
+    const R=window.MurmurationModules.Attrition.reactions;
+    if(R){ const box=document.getElementById('reactions');
+      const active=new Set(Object.entries(R.active).filter(([k,v])=>v>0).map(([k])=>k.split(':')[1]));
+      box.innerHTML=R.reactions.map(r=>{
+        const col=!r.unlocked?'var(--dim)':(active.has(r.id)?'var(--red)':(r.kind==='offense'?'var(--amber)':'var(--grn)'));
+        const tag=!r.unlocked?'🔒':(active.has(r.id)?'▶':(r.kind==='gate'?'◆':'○'));
+        return '<div style="color:'+col+';margin:1px 0" title="'+r.desc+'">'+tag+' '+r.trait+'</div>';
+      }).join('');
+    }
   }
 
   // ── KING + GUARD OVERLAY ──
@@ -264,6 +282,7 @@
       k26.step();
       // Attrition owns the post-step correction — same pattern as the maze.
       if(window.MurmurationModules.Attrition.kings) window.MurmurationModules.Attrition.kings.step();
+      if(window.MurmurationModules.Attrition.reactions) window.MurmurationModules.Attrition.reactions.step();
     }
     if(k26){ k26.draw(); drawKings(); }
     stats();

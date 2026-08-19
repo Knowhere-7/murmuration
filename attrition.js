@@ -131,10 +131,12 @@ window.MurmurationModules.Attrition = {
   version: '0.1.0-foundation',
   adversary: null,
   kings: null,
+  reactions: null,
   attach(world) {
     this.adversary = new window.MurmurationModules.AttritionAdversary(world);
     this.kings = new window.MurmurationModules.AttritionKings(world).install();
-    return { adversary: this.adversary, kings: this.kings };
+    this.reactions = new window.MurmurationModules.AttritionReactions(world, this.kings);
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions };
   },
 };
 
@@ -250,5 +252,182 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
       alive: !!(k && !k.seppukuDone),
       captured: this.captured[colony],
     };
+  }
+};
+
+/* ── §4 · BIOLOGICAL REACTIONS — item 4, and Ghost's "LOBO" ──────────────────
+   Ghost, 2026-08-18: "the colonies should have biological reactions to being
+   attacked" · "LOBO" · "yes, they will draw from the traits until the traits
+   are outgrown."
+
+   The key LOBO gives us: LOBO is the same 50 genes activated toward ENFORCEMENT
+   instead of construction — "identical twins, different lives"
+   (LOBO_ADVERSARIAL_GENOME.md). So every gene has TWO faces:
+     DEFENSE  = the trait's constructive activation (protect the colony)
+     OFFENSE  = that same trait's LOBO activation (strike the attacker)
+   which is exactly item 5's "one new defensive OR offensive reaction per cycle"
+   — one gene, two faces, and the unlock picks a face. LOBO is not a bolt-on; it
+   is the offensive half of the genome the colony already carries.
+
+   Each reaction below is drawn from a REAL trait in juggernaut/traits/ (the
+   registry has 52). The heavy Node trait modules can't run in the browser, so
+   each reaction here is a faithful SWARM EXPRESSION of that gene's documented
+   mechanism — "drawn from the traits until the traits are outgrown."
+
+   QUORUM SENSING is the gate on all of them (Vibrio fischeri, trait file:
+   "consensus quorum required... reduces false positives dramatically"). Nothing
+   fires on one scout; the colony must independently confirm the threat — the
+   same structural false-positive resistance the BombardierBeetle module is
+   built around. Innate immunity (quorum + biofilm) is present from birth;
+   the rest is adaptive, acquired one per evolution cycle (item 5). */
+window.MurmurationModules.AttritionReactions = class AttritionReactions {
+  constructor(world, kings) {
+    this.world = world;
+    this.kings = kings;
+    this.quorum = 3;              // Vibrio threshold — independent confirmations
+    this.threatR = 130;          // how near an unaligned must be to "sense"
+    this.active = {};            // key -> ticksRemaining (a reaction expressing)
+    this.lastFired = {};         // key -> tick, for cooldowns
+    this.fireLog = [];
+
+    // The repertoire. `unlocked` seeds INNATE immunity; adaptive ones start
+    // locked and are revealed one per evolution cycle by the unlock pass.
+    this.reactions = [
+      { id:'quorumSensing', trait:'Quorum Sensing (Vibrio fischeri)', kind:'gate',
+        unlocked:true,
+        desc:'consensus threshold — nothing fires until a quorum independently confirms the threat' },
+      { id:'biofilmShield', trait:'Biofilm Shield (P. aeruginosa)', kind:'defense',
+        unlocked:true, dur:180, cd:120,
+        desc:'the colony tightens into a collective shell around the king — protection is emergent, no one cell makes it' },
+      { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
+        unlocked:false, dur:120, cd:200,
+        desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
+      { id:'bombardierBeetle', trait:'Bombardier Beetle (Brachinus)', kind:'offense',
+        unlocked:false, dur:1, cd:260,
+        desc:'multi-signal convergence fires a coordinated burst at the crown — structurally cannot misfire' },
+      { id:'wolfPack', trait:'Wolf Pack (Canis lupus)', kind:'offense',
+        unlocked:false, dur:220, cd:180,
+        desc:'a hunting party breaks off under a tactician and runs the attackers down' },
+    ];
+  }
+
+  byId(id){ return this.reactions.find(r=>r.id===id); }
+  unlockedList(){ return this.reactions.filter(r=>r.unlocked); }
+  lockedList(){ return this.reactions.filter(r=>!r.unlocked); }
+
+  /** Reveal the next locked reaction — called once per evolution cycle (item 5). */
+  unlockNext(){
+    const next = this.reactions.find(r=>!r.unlocked);
+    if(next){ next.unlocked = true;
+      this.fireLog.unshift({ t:this.world.time, id:next.id, msg:'UNLOCKED ' + next.trait }); }
+    return next || null;
+  }
+
+  _threatTo(colony){
+    // unaligned near this colony's king = the attack signal
+    const home = this.kings.home(colony);
+    return this.world.agents.filter(a=>a.colony==='U' && !a.seppukuDone &&
+      Math.hypot(a.x-home.x, a.y-home.y) < this.threatR);
+  }
+  _confirm(colony, threat){
+    // QUORUM: count independent colony members who can also sense the threat.
+    // Consensus, not a single alarm — the false-positive gate.
+    if(threat.length===0) return false;
+    const sensing = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone &&
+      threat.some(u=>Math.hypot(a.x-u.x,a.y-u.y) < this.threatR*0.6)).length;
+    return sensing >= this.quorum;
+  }
+
+  step(){
+    const t = this.world.time;
+    for(const colony of ['A','B']){
+      const threat = this._threatTo(colony);
+      const confirmed = this._confirm(colony, threat);
+
+      // decay active reactions, keep expressing while live
+      for(const r of this.reactions){
+        const key = colony+':'+r.id;
+        if(this.active[key]>0){ this.active[key]--; this._express(colony, r, threat); }
+      }
+      if(!confirmed) continue;
+
+      // fire any unlocked, off-cooldown reaction whose face suits the moment.
+      for(const r of this.unlockedList()){
+        if(r.kind==='gate') continue;
+        const key = colony+':'+r.id;
+        if(this.active[key]>0) continue;
+        if(t - (this.lastFired[key]||-9999) < (r.cd||120)) continue;
+        // bombardier demands the structural multi-signal convergence (>=2 at the
+        // crown) — it "cannot misfire".
+        if(r.id==='bombardierBeetle'){
+          const h=this.kings.home(colony);
+          const atCrown = threat.filter(u=>Math.hypot(u.x-h.x,u.y-h.y) < this.kings.captureR*1.2).length;
+          if(atCrown < 2) continue;
+        }
+        this.active[key] = r.dur||1;
+        this.lastFired[key] = t;
+        this.fireLog.unshift({ t, id:r.id, colony, msg:colony+' → '+r.trait });
+        if(this.fireLog.length>40) this.fireLog.pop();
+        window.MurmurationModules.AttritionKnowledge.recordDefense({
+          colony, reaction:r.id, kind:r.kind, threat:threat.length });
+        this._express(colony, r, threat);
+      }
+    }
+  }
+
+  /** Apply a reaction's swarm effect for this tick. Faithful to each gene. */
+  _express(colony, r, threat){
+    const home = this.kings.home(colony);
+    if(r.id==='biofilmShield'){
+      // Collectively emergent shell: colony members near the king pull inward to
+      // a dense film; unaligned at the crown are pushed OUT — the EPS matrix
+      // "physically impedes diffusion". Protection scales with contributors.
+      const contributors = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone &&
+        Math.hypot(a.x-home.x,a.y-home.y) < this.threatR);
+      const strength = Math.min(1, contributors.length/12);
+      for(const a of contributors){
+        const d=Math.hypot(a.x-home.x,a.y-home.y)||1;
+        a.vx += ((home.x-a.x)/d)*0.06*strength; a.vy += ((home.y-a.y)/d)*0.06*strength;
+      }
+      for(const u of threat){
+        const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
+        u.vx += ((u.x-home.x)/d)*0.12*strength; u.vy += ((u.y-home.y)/d)*0.12*strength;
+      }
+    } else if(r.id==='cephalopodCamouflage'){
+      // Pattern-break: the attackers lose lock — damp their pull toward the king
+      // this beat (the king "disappears" against the pattern).
+      for(const u of threat){
+        const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
+        u.vx -= ((home.x-u.x)/d)*0.05; u.vy -= ((home.y-u.y)/d)*0.05;
+      }
+    } else if(r.id==='bombardierBeetle'){
+      // The burst: a single hard exothermic pulse. Strong outward impulse on
+      // everything unaligned within the burst radius at the crown.
+      for(const u of threat){
+        const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
+        if(d < this.kings.captureR*1.6){
+          u.vx += ((u.x-home.x)/d)*1.4; u.vy += ((u.y-home.y)/d)*1.4;
+          u._attritionStruck = (u._attritionStruck||0)+1;
+        }
+      }
+    } else if(r.id==='wolfPack'){
+      // A pack breaks off and runs the nearest attackers down. Tactician = the
+      // highest-trust free member; the pack pursues; on contact a strike, and
+      // enough strikes eject the invader.
+      const pack = this.world.agents
+        .filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard)
+        .sort((a,b)=>(b.trustCharge||0)-(a.trustCharge||0)).slice(0,4);
+      for(const h of pack){
+        let tgt=null, best=1e9;
+        for(const u of threat){ const d=Math.hypot(u.x-h.x,u.y-h.y); if(d<best){best=d;tgt=u;} }
+        if(!tgt) continue;
+        const d=best||1;
+        h.vx += ((tgt.x-h.x)/d)*0.16; h.vy += ((tgt.y-h.y)/d)*0.16;
+        if(d < 14){ tgt._attritionStruck=(tgt._attritionStruck||0)+1;
+          if(tgt._attritionStruck>=3){ tgt.seppukuDone=true; tgt._attritionEjected=true;
+            window.MurmurationModules.AttritionKnowledge.recordOutcome({
+              event:'attacker_eliminated', colony, by:'wolfPack' }); } }
+      }
+    }
   }
 };
