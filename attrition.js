@@ -411,14 +411,27 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         u.vx -= ((home.x-u.x)/d)*0.05; u.vy -= ((home.y-u.y)/d)*0.05;
       }
     } else if(r.id==='bombardierBeetle'){
-      // The burst: a single hard exothermic pulse. Strong outward impulse on
-      // everything unaligned within the burst radius at the crown.
+      // RADIUS CLEAR (Ghost's mitigation ruling, 2026-08-18). The burst EMPTIES
+      // the crown at once — every unaligned in the burst radius is ejected, not
+      // merely shoved. This is what restores a real incident-response window:
+      // the sweep showed the colony could almost never break a possession vs
+      // LOBO's planarian refill, so a coordinated burst has to clear the crown
+      // outright. It auto-staunches the bleed (crown clears -> captured flips
+      // false) and starts the MTTR race; the planarian throttle (below) keeps
+      // LOBO from instantly refilling, so the window is real.
+      let cleared=0;
       for(const u of threat){
         const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
         if(d < this.kings.captureR*1.6){
-          u.vx += ((u.x-home.x)/d)*1.4; u.vy += ((u.y-home.y)/d)*1.4;
-          u._attritionStruck = (u._attritionStruck||0)+1;
+          u.seppukuDone=true; u._attritionEjected=true; cleared++;
         }
+      }
+      if(cleared){
+        // open the throttle window LOBO reads — no instant restock of THIS crown
+        this.kings._crownClearedUntil = this.kings._crownClearedUntil || {};
+        this.kings._crownClearedUntil[colony] = this.world.time + 140;
+        window.MurmurationModules.AttritionKnowledge.recordDefense({
+          event:'crown_cleared', colony, ejected:cleared, gene:'bombardierBeetle' });
       }
     } else if(r.id==='wolfPack'){
       // A pack breaks off and runs the nearest attackers down. Tactician = the
@@ -691,15 +704,23 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
 
       // ── PLANARIAN — the line does not thin. A spent pawn is replaced,
       //    scaled by resolve. "Kill one, more rise." ──
+      //    THROTTLE (Ghost's option 2, 2026-08-18): LOBO reinforces the APPROACH
+      //    but cannot instantly restock a CROWN a burst just cleared. During the
+      //    clear window the refill is halved, so a radius clear buys a real MTTR
+      //    window instead of being nullified on the next tick. LOBO stays
+      //    relentless everywhere except the crown it was just blown off of.
+      const clearedUntil = (this.kings._crownClearedUntil && this.kings._crownClearedUntil[colony]) || 0;
+      const throttled = this.world.time < clearedUntil;
       const ejected = this.world.agents.filter(a => a.colony === 'U' && a._attritionEjected && !a._loboCounted);
       for (const e of ejected) { e._loboCounted = true; this.sacrificed++; }
       if (ejected.length) {
-        this.regrowthCredit += ejected.length * (0.25 + force * 0.85);
+        const gain = ejected.length * (0.25 + force * 0.85) * (throttled ? 0.4 : 1);
+        this.regrowthCredit += gain;
         while (this.regrowthCredit >= 1) {
           this.regrowthCredit -= 1;
           if (this.world.spawnUnaligned) {
             this.world.spawnUnaligned({ count: 1, tier: 3, aggressive: true, hunt: false, target: colony, force, occupy: true });
-            window.MurmurationModules.AttritionKnowledge.recordAttack({ gene: 'planarian', event: 'reinforced', colony, force });
+            window.MurmurationModules.AttritionKnowledge.recordAttack({ gene: 'planarian', event: throttled ? 'reinforced_throttled' : 'reinforced', colony, force });
           }
         }
       }
@@ -772,10 +793,14 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
     this.world = world;
     this.kings = kings;
     this.honor = { A: 1.0, B: 1.0 };     // colony honor, 0..1
-    // PLACEHOLDER — set from the sweep, not chosen by feel. At 0.0025/tick a
-    // full colony bleeds out in ~400 ticks of unbroken possession; whether that
-    // is the right window is what the sweep answers.
-    this.bleedRate = 0.0025;
+    // SWEEP-DERIVED, 2026-08-18 — not chosen by feel. The rate sweep (with the
+    // radius-clear mitigation live) put 0.004/tick at the sweet spot where MTTR
+    // matters: a prepared colony (an offensive gene unlocked) can recover with
+    // skill, a weak one (innate only) cannot, and an overwhelming rate (0.008)
+    // cascades everyone regardless. Faster is pure punishment; slower makes a
+    // captured king a shrug. Single-run variance is real, so this is the
+    // indicated value, not a decree — a multi-run pass would tighten it.
+    this.bleedRate = 0.004;
     this.recoverRate = 0.0006;           // honor heals slowly once the crown is safe
     this.cascaded = { A: false, B: false };
     this.events = [];                    // capture / staunch / cascade, with ticks
