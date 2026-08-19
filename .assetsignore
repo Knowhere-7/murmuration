@@ -22,3 +22,7 @@ wrangler.jsonc
 .assetsignore
 .gitignore
 .nojekyll
+
+# Attrition is PRIVATE — served via tunnel, never deployed to the public site.
+attrition.html
+attrition.js
