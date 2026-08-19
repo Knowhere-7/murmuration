@@ -97,9 +97,25 @@
     </div>
 
     <div class="sec">
+      <h2>The wall &middot; gates</h2>
+      <div class="row" id="gates"></div>
+      <div style="font-size:10px;color:var(--dim)">
+        open a gate and the adversary flows through it &mdash; and the colonies can reach each other to unite
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>Kings &middot; capture-the-king</h2>
+      <div class="kv"><span>KNOWHERE king</span><span class="n" id="k-A">&mdash;</span></div>
+      <div class="kv"><span>MAINLAND king</span><span class="n" id="k-B">&mdash;</span></div>
+      <div style="font-size:10px;color:var(--dim);margin-top:4px">
+        planted where the flags were &middot; small guard detail &middot; overwhelm to capture
+      </div>
+    </div>
+
+    <div class="sec">
       <h2>Not yet wired</h2>
-      <div class="slot"><b>KINGS</b> &mdash; stationary, guarded detail &middot; capture-the-king</div>
-      <div class="slot" style="margin-top:6px"><b>HONOR BLEED</b> &mdash; on capture, mitigate immediately</div>
+      <div class="slot"><b>HONOR BLEED</b> &mdash; on capture, mitigate immediately (rate to be tuned)</div>
       <div class="slot" style="margin-top:6px"><b>REACTIONS</b> &mdash; biological defense/offense, drawn from the trait registry</div>
       <div class="slot" style="margin-top:6px"><b>UNLOCKS</b> &mdash; one new reaction per evolution cycle</div>
     </div>
@@ -146,7 +162,29 @@
     if(!window.MurmurationModules.Attrition){ log('attrition module failed to load','crit'); return; }
     window.MurmurationModules.Attrition.attach(k26.world);
     window.MurmurationModules.AttritionKnowledge.reset();
+    buildGates();
     log('range armed · 120 agents · two colonies','warn');
+  }
+
+  // ── GATE CONTROLS ──
+  // The wall lives in the engine (world.wall.gates); Attrition just surfaces it.
+  // In a wartime, capture-the-king world the gates are the terrain of the fight:
+  // a closed gate is a moat the adversary cannot cross to reach a king; an open
+  // one is both an invasion route AND the only way the two colonies can reach
+  // each other to unite. The operator holds that trade.
+  function buildGates(){
+    const box=document.getElementById('gates'); box.innerHTML='';
+    const gates=k26.world.wall && k26.world.wall.gates || [];
+    gates.forEach((g,i)=>{
+      const b=document.createElement('button');
+      b.textContent=(g.open?'▣ ':'▢ ')+g.name.replace(' GATE','');
+      b.style.borderColor=g.open?'var(--grn)':'var(--line)';
+      b.style.color=g.open?'var(--grn)':'var(--ink)';
+      b.onclick=()=>{ const open=k26.world.toggleGate(i);
+        log((open?'▶ OPENED — ':'■ CLOSED — ')+g.name, open?'warn':null);
+        buildGates(); };
+      box.appendChild(b);
+    });
   }
 
   function wave(tier){
@@ -179,11 +217,55 @@
     document.getElementById('s-tick').textContent=k26.world.time;
     document.getElementById('s-waves').textContent=
       window.MurmurationModules.Attrition.adversary?window.MurmurationModules.Attrition.adversary.wavesSent:0;
+    const K=window.MurmurationModules.Attrition.kings;
+    if(K){ for(const c of ['A','B']){
+      const st=K.status(c); const el=document.getElementById('k-'+c);
+      el.textContent = st.captured?'CAPTURED':(st.alive?'holding':'fallen');
+      el.style.color = st.captured?'var(--red)':(st.alive?'var(--grn)':'var(--dim)');
+    }}
+  }
+
+  // ── KING + GUARD OVERLAY ──
+  // Drawn in Attrition's own layer, after the engine's draw — the map is shared
+  // with murmuration but the king objective is Attrition's, so it lives here and
+  // never touches the engine's render.
+  function drawKings(){
+    const A=window.MurmurationModules.Attrition;
+    if(!A||!A.kings) return;
+    const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));
+    if(!ctx) return;
+    for(const c of ['A','B']){
+      const st=A.kings.status(c);
+      const {x,y}=st.home;
+      const col = st.captured ? '#ff4d5e' : (c==='A' ? '#c9a0ff' : '#38e0d8');
+      // guard ring
+      ctx.save();
+      ctx.globalAlpha = st.captured ? 0.9 : 0.5;
+      ctx.strokeStyle=col; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(x,y,A.kings.ringR,0,Math.PI*2); ctx.stroke();
+      // capture radius (fainter)
+      ctx.globalAlpha=0.18; ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.arc(x,y,A.kings.captureR,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      // crown marker
+      ctx.globalAlpha = st.alive ? 1 : 0.3;
+      ctx.fillStyle=col; ctx.font='16px serif'; ctx.textAlign='center';
+      ctx.fillText(st.captured?'☠':'♛', x, y+5);
+      if(st.captured){
+        ctx.globalAlpha=1; ctx.fillStyle='#ff4d5e'; ctx.font='9px monospace';
+        ctx.fillText('CAPTURED', x, y-A.kings.ringR-6);
+      }
+      ctx.restore();
+    }
   }
 
   function frame(){
-    if(k26&&running) k26.step();
-    if(k26) k26.draw();
+    if(k26&&running){
+      k26.step();
+      // Attrition owns the post-step correction — same pattern as the maze.
+      if(window.MurmurationModules.Attrition.kings) window.MurmurationModules.Attrition.kings.step();
+    }
+    if(k26){ k26.draw(); drawKings(); }
     stats();
     raf=requestAnimationFrame(frame);
   }

@@ -130,8 +130,125 @@ window.MurmurationModules.AttritionAdversary = class AttritionAdversary {
 window.MurmurationModules.Attrition = {
   version: '0.1.0-foundation',
   adversary: null,
+  kings: null,
   attach(world) {
     this.adversary = new window.MurmurationModules.AttritionAdversary(world);
-    return this.adversary;
+    this.kings = new window.MurmurationModules.AttritionKings(world).install();
+    return { adversary: this.adversary, kings: this.kings };
   },
+};
+
+/* ── §3 · THE KINGS — item 2 ────────────────────────────────────────────────
+   Ghost, 2026-08-18: "the stationary kings will replace the flags from capture
+   the flag... the purpose and use will be a little different."
+
+   CTF's king is the highest-honor agent, dynamically crowned, and it AMBLES
+   within its lands. Attrition's king is the opposite: PLANTED where the flag
+   used to sit, immobile, ringed by a small guard detail. The flag objective is
+   gone; reaching and overwhelming the king IS the objective — capture-the-king.
+
+   This pass builds the stationary king, the guard detail, and CAPTURE DETECTION.
+   The honor bleed that a capture triggers is the next pass, and its rate is to
+   be found by measurement, not guessed (Ghost: "crunch numbers and run tests").
+   A hook — onCapture — is left for it so this layer never has to be reopened. */
+window.MurmurationModules.AttritionKings = class AttritionKings {
+  constructor(world, opts = {}) {
+    this.world = world;
+    this.guardCount = opts.guardCount || 5;     // a small detail, as specced
+    this.ringR = opts.ringR || 42;              // guard orbit radius
+    this.captureR = opts.captureR || 50;        // how close is "at the king"
+    this.kings = { A: null, B: null };
+    this.captured = { A: false, B: false };
+    this.onCapture = opts.onCapture || null;    // hook for the honor-bleed pass
+  }
+
+  home(colony) {
+    const W = this.world.width, H = this.world.height;
+    return colony === 'A' ? { x: W * 0.10, y: H * 0.5 } : { x: W * 0.90, y: H * 0.5 };
+  }
+
+  _living(colony) {
+    return this.world.agents.filter(a =>
+      a.colony === colony && !a.seppukuDone && !a.isSentinel);
+  }
+
+  /** Crown the highest-trust living member and plant it. Idempotent — safe to
+      call again to re-crown after a king falls. */
+  install() {
+    for (const c of ['A', 'B']) {
+      if (this.kings[c] && !this.kings[c].seppukuDone) continue;
+      const pool = this._living(c).filter(a => !a.isKing);
+      if (!pool.length) { this.kings[c] = null; continue; }
+      const king = pool.reduce((b, a) =>
+        (a.trustCharge || 0) > (b ? (b.trustCharge || 0) : -1) ? a : b, null);
+      king.isKing = true;
+      king._attritionKing = true;
+      this.kings[c] = king;
+    }
+    return this;
+  }
+
+  /** Called AFTER world.advanceStep each frame — Attrition owns the post-step
+      correction, the same way the maze does. */
+  step() {
+    for (const c of ['A', 'B']) {
+      let king = this.kings[c];
+      if (!king || king.seppukuDone) { this.install(); king = this.kings[c]; }
+      if (!king) continue;
+
+      // PLANTED. The engine's current and boids push it every step; we override
+      // right after, so the king holds its ground and reads as a fixed objective
+      // rather than a wandering agent.
+      const home = this.home(c);
+      king.x = home.x; king.y = home.y; king.vx = 0; king.vy = 0;
+
+      // GUARD DETAIL — the N nearest living non-king members, gently held on a
+      // ring around the king. Reassigned each step so casualties are backfilled
+      // from whoever is closest, which is what a real detail does under fire.
+      const detail = this._living(c)
+        .filter(a => !a.isKing)
+        .map(a => ({ a, d: Math.hypot(a.x - home.x, a.y - home.y) }))
+        .sort((p, q) => p.d - q.d)
+        .slice(0, this.guardCount);
+      const guardSet = new Set(detail.map(g => g.a));
+      for (const a of this._living(c)) a._attritionGuard = guardSet.has(a);
+      for (const { a, d } of detail) {
+        // pull toward the ring: inward if outside it, outward if inside — so the
+        // detail forms a shell, not a huddle on the crown.
+        const off = d - this.ringR;
+        const ux = (a.x - home.x) / (d || 1), uy = (a.y - home.y) / (d || 1);
+        a.vx -= ux * off * 0.02;
+        a.vy -= uy * off * 0.02;
+      }
+
+      // CAPTURE — the unaligned reach the king faster than the guard can hold.
+      // Capture when attackers at the crown outnumber the guards there, and it
+      // takes at least a squad (>=3) so a lone straggler cannot "capture" a king.
+      const atKing = (pred) => this.world.agents.filter(a =>
+        !a.seppukuDone && pred(a) &&
+        Math.hypot(a.x - home.x, a.y - home.y) < this.captureR).length;
+      const attackers = atKing(a => a.colony === 'U');
+      const guardsHere = atKing(a => a._attritionGuard);
+      if (attackers >= 3 && attackers > guardsHere) {
+        if (!this.captured[c]) {
+          this.captured[c] = true;
+          window.MurmurationModules.AttritionKnowledge.recordOutcome({
+            event: 'king_captured', colony: c, attackers, guards: guardsHere,
+          });
+          if (this.onCapture) this.onCapture(c, { attackers, guards: guardsHere });
+        }
+      } else if (attackers === 0) {
+        this.captured[c] = false;   // the crown is relieved when the siege breaks
+      }
+    }
+  }
+
+  status(colony) {
+    const k = this.kings[colony];
+    return {
+      home: this.home(colony),
+      alive: !!(k && !k.seppukuDone),
+      captured: this.captured[colony],
+    };
+  }
 };
