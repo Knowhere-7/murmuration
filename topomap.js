@@ -14,25 +14,96 @@
 
   // Deterministic multi-octave field in [0,1]. Same seed every build so the
   // baked contours line up exactly with the movement gradient.
-  function raw(nx, ny) {
+  // Basin floors — one per colony, and the king stands at the bottom of each.
+  // Exported so the engine can plant kings and size arenas from the SAME
+  // numbers the contours are drawn from; a map whose landmarks are declared
+  // twice drifts apart the first time either copy is edited.
+  const BASIN = { A: { x: 0.24, y: 0.50 }, B: { x: 0.76, y: 0.50 } };
+  // Saddle passes through the meridian ridge — the only ways across.
+  const PASS_Y = [0.26, 0.50, 0.74];
+
+  /* THE COMPOSED RANGE (Ghost, 2026-08-24). Four ideas at four scales, added
+     into one field — they compose rather than compete because each owns a
+     different frequency:
+
+       TWIN SINKS ...... the large shape: a deep bowl per colony, not one
+                         central sink, so each side owns its own ground.
+       DEFENSE IN DEPTH  concentric terraces inside each bowl, sharp at the
+                         crown and fading outward — rings an attacker crosses.
+       SEGMENTED RIFT .. a hard ridge on the meridian, notched by three passes.
+       ARCHIPELAGO ..... scattered relief so no ground is ever flat.
+
+     Because TopoField feeds movement as well as the contours, this is a
+     behaviour spec, not a picture: agents drift downhill, so both colonies
+     settle around their own king, and anything that enters a bowl slides
+     toward the crown — easy to fall into, work to climb out of. */
+  /* THE ORIGINAL OPEN-WORLD FIELD. murmuration.knowhere-group.com runs on this
+     surface and its emergent results were recorded against it, so it stays the
+     DEFAULT — the composed range below is opt-in. Two massifs, a border bowl,
+     and drift that leans inward. */
+  function rawClassic(nx, ny) {
     let v = 0;
     v += Math.sin(nx * TAU * 1.15 + 1.2) * Math.cos(ny * TAU * 0.85 + 0.4);
     v += 0.60 * Math.sin(nx * TAU * 2.10 + 3.1) * Math.cos(ny * TAU * 1.70 + 2.0);
     v += 0.32 * Math.sin(nx * TAU * 3.70 + 0.7) * Math.cos(ny * TAU * 3.10 + 1.1);
     v += 0.18 * Math.sin(nx * TAU * 6.30 + 2.4) * Math.cos(ny * TAU * 5.20 + 0.9);
-    // two broad massifs so there are real basins to pool into
     v += 1.05 * Math.exp(-(((nx - 0.28) ** 2 + (ny - 0.34) ** 2) / 0.05));
     v += 0.95 * Math.exp(-(((nx - 0.74) ** 2 + (ny - 0.68) ** 2) / 0.05));
-    // border bowl — gentle lift at the edges so downhill drift leans inward
     const edge = Math.min(Math.min(nx, 1 - nx), Math.min(ny, 1 - ny));
     v += (0.35 - edge) * 0.7;
     return v;
   }
 
+  function rawComposed(nx, ny) {
+    const dA = Math.hypot(nx - BASIN.A.x, ny - BASIN.A.y);
+    const dB = Math.hypot(nx - BASIN.B.x, ny - BASIN.B.y);
+    const d  = Math.min(dA, dB);            // distance to the nearer crown
+    let v = 0;
+
+    // TWIN SINKS — a deep well under each king
+    v -= 2.20 * Math.exp(-(dA * dA) / 0.030);
+    v -= 2.20 * Math.exp(-(dB * dB) / 0.030);
+
+    // DEFENSE IN DEPTH — ring crests around whichever crown is nearer, the
+    // amplitude decaying so the inner rings bite and the outer ones dissolve
+    // into open ground rather than tiling the whole map with ripples.
+    v += 0.42 * Math.cos(d * TAU / 0.085) * Math.exp(-(d * d) / 0.075);
+
+    // SEGMENTED RIFT — meridian ridge, cut by the three saddle passes
+    const spine = Math.exp(-((nx - 0.5) ** 2) / 0.0022);
+    let pass = 0;
+    for (const py of PASS_Y) pass += Math.exp(-((ny - py) ** 2) / 0.0016);
+    v += 2.30 * spine * (1 - Math.min(1, pass));
+
+    // ARCHIPELAGO — broad relief, plus islets seated on the approach lanes
+    v += 0.30 * Math.sin(nx * TAU * 3.1 + 0.7) * Math.cos(ny * TAU * 2.6 + 1.4);
+    v += 0.16 * Math.sin(nx * TAU * 5.7 + 2.2) * Math.cos(ny * TAU * 4.9 + 0.3);
+    v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.12) ** 2) / 0.004));
+    v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.88) ** 2) / 0.004));
+    v += 0.40 * Math.exp(-(((nx - 0.36) ** 2 + (ny - 0.30) ** 2) / 0.003));
+    v += 0.40 * Math.exp(-(((nx - 0.64) ** 2 + (ny - 0.70) ** 2) / 0.003));
+
+    // NO CENTRAL PULL (Ghost, 2026-08-24). The old field lifted the border so
+    // drift leaned toward the middle of the map. Under twin sinks that is
+    // exactly wrong: it drags both colonies onto the meridian ridge and
+    // undoes the basins. Each bowl now supplies its own gravity, so a colony
+    // falls toward ITS king and the centre is a place you must choose to go.
+    return v;
+  }
+
   // Normalize the raw range (~[-2.05, 3.2]) into [0,1].
+  // Each field carries its OWN measured range. Normalizing one field with the
+  // other's constants silently clips the contours and flattens the gradient
+  // that drives movement, so the pair travels together.
+  const FIELDS = {
+    classic:  { fn: rawClassic,  off: 2.000, span: 5.600 },
+    composed: { fn: rawComposed, off: 2.797, span: 5.831 }  // 400x400 sweep: [-2.797, 3.034]
+  };
+  let MODE = 'classic';   // the live open world keeps the surface it was measured on
+
   function heightN(nx, ny) {
-    const v = raw(nx, ny);
-    return Math.max(0, Math.min(1, (v + 2.0) / 5.6));
+    const f = FIELDS[MODE] || FIELDS.classic;
+    return Math.max(0, Math.min(1, (f.fn(nx, ny) + f.off) / f.span));
   }
 
   const TopoField = {
@@ -145,4 +216,18 @@
 
   window.TopoField = TopoField;
   window.buildTopoMap = buildTopoMap;
+  // Landmarks in normalized [0,1] coords. Kings are planted at BASIN.A/B and
+  // the per-colony arenas are sized around them, so terrain and engine read
+  // the same map. PASS_Y are the gaps in the meridian ridge.
+  window.TopoLandmarks = { BASIN, PASS_Y };
+  /** Choose the height field. Call BEFORE the topo layer is baked — the
+      contours and the movement gradient are the same surface, so switching
+      after a build leaves the picture disagreeing with the physics.
+      'classic' = the live open world. 'composed' = the Attrition range. */
+  window.setTopoField = function (name) {
+    if (!FIELDS[name]) return false;
+    MODE = name;
+    return true;
+  };
+  window.getTopoField = function () { return MODE; };
 })();

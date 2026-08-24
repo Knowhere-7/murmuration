@@ -381,12 +381,18 @@ window.MurmurationModules.K26 = class K26 {
     ctx.globalCompositeOperation = 'lighter';
 
     // Edge gradient — void at center, color at perimeter; center tracks the mass
+    // nebulaGain — a host may push the atmosphere harder without touching the
+    // open sim. Attrition runs the range on near-black with topo contours over
+    // it, where the stock alphas read as nothing; 1 keeps murmuration exactly
+    // as it was. Clamped so no host can wash out the agents it sits behind.
+    const NG = Math.max(0.2, Math.min(2.4, this.nebulaGain || 1));
+    const A = (a) => Math.min(0.92, a * NG).toFixed(3);
     const edgeR = Math.max(W, H) * 0.88;
     const g0 = ctx.createRadialGradient(cx, cy, edgeR * 0.12, cx, cy, edgeR);
     g0.addColorStop(0,    'rgba(0,0,0,0)');
-    g0.addColorStop(0.50, `hsla(${hue}, 55%, 20%, 0.14)`);
-    g0.addColorStop(0.78, `hsla(${hue}, 68%, 32%, 0.32)`);
-    g0.addColorStop(1,    `hsla(${hue}, 76%, 40%, 0.50)`);
+    g0.addColorStop(0.50, `hsla(${hue}, 55%, 20%, ${A(0.14)})`);
+    g0.addColorStop(0.78, `hsla(${hue}, 68%, 32%, ${A(0.32)})`);
+    g0.addColorStop(1,    `hsla(${hue}, 76%, 40%, ${A(0.50)})`);
     ctx.fillStyle = g0;
     ctx.fillRect(0, 0, W, H);
 
@@ -395,8 +401,8 @@ window.MurmurationModules.K26 = class K26 {
       const density = Math.min(1, live.length / 150);
       const massR   = Math.min(W, H) * (0.28 + density * 0.18);
       const gm = ctx.createRadialGradient(cx, cy, 0, cx, cy, massR);
-      gm.addColorStop(0,   `hsla(${hue}, 70%, 28%, ${0.06 + density * 0.08})`);
-      gm.addColorStop(0.6, `hsla(${hue}, 60%, 20%, ${0.03 + density * 0.04})`);
+      gm.addColorStop(0,   `hsla(${hue}, 70%, 28%, ${A(0.06 + density * 0.08)})`);
+      gm.addColorStop(0.6, `hsla(${hue}, 60%, 20%, ${A(0.03 + density * 0.04)})`);
       gm.addColorStop(1,   'rgba(0,0,0,0)');
       ctx.fillStyle = gm;
       ctx.fillRect(0, 0, W, H);

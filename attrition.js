@@ -182,6 +182,12 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
 
   home(colony) {
     const W = this.world.width, H = this.world.height;
+    // The king stands on the floor of his colony's basin. Read the landmark
+    // from the terrain itself rather than repeating the numbers here — the
+    // crown and the contours around it must never be able to disagree.
+    const L = window.TopoLandmarks && window.TopoLandmarks.BASIN;
+    const b = L ? L[colony] : null;
+    if (b) return { x: W * b.x, y: H * b.y };
     return colony === 'A' ? { x: W * 0.10, y: H * 0.5 } : { x: W * 0.90, y: H * 0.5 };
   }
 
