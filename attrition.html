@@ -19,7 +19,11 @@
 -->
 <style>
   :root{--bg:#05070d;--ink:#c9d6e5;--dim:#5b6b80;--red:#ff4d5e;--amber:#ffb020;
-        --grn:#39d98a;--cy:#38e0d8;--vio:#c9a0ff;--panel:#0b1020;--line:#1b2740}
+        --grn:#39d98a;--cy:#38e0d8;--vio:#c9a0ff;--panel:#0b1020;--line:#1b2740;
+        /* blood orange — LOBO's colour. Deeper and more arterial than --amber,
+           so the adversary's controls never read as the same family as the
+           colonies' violet. */
+        --blood:#e2481c}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
             font:13px/1.5 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}
@@ -37,7 +41,7 @@
      its own, so the canvas is always full width and the controls float above
      the range instead of cropping it. Background is fully transparent — only
      the sliders, and a hairline of text shadow for legibility, are drawn. */
-  #panel{grid-area:stage;justify-self:end;width:320px;z-index:15;
+  #panel{grid-area:stage;justify-self:start;width:320px;z-index:15;
          background:transparent;border-left:none;
          overflow-y:auto;overscroll-behavior:contain;padding:14px;
          transition:transform .28s cubic-bezier(.4,0,.2,1);
@@ -46,34 +50,37 @@
   #panel::-webkit-scrollbar{width:6px}
   #panel::-webkit-scrollbar-thumb{background:rgba(56,224,216,.28);border-radius:3px}
   #panel::-webkit-scrollbar-track{background:transparent}
-  #panel.collapsed{transform:translateX(calc(100% + 8px))}
+  #panel.collapsed{transform:translateX(calc(-100% - 8px))}
 
-  /* THE WORLD PANEL — same glass, mirrored to the left. Two surfaces because
-     they answer to different masters: the right panel drives LOBO and the
-     adversary, this one carries the colonies' own world. */
-  #worldpanel{grid-area:stage;justify-self:start;width:300px;z-index:15;
+  /* THE WORLD PANEL — same glass, mirrored to the RIGHT. Two surfaces because
+     they answer to different masters: LOBO and the adversary hold the left,
+     this one carries the colonies' own world on the right. */
+  #worldpanel{grid-area:stage;justify-self:end;width:300px;z-index:15;
          background:transparent;overflow-y:auto;overscroll-behavior:contain;padding:14px;
          transition:transform .28s cubic-bezier(.4,0,.2,1);
          text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 10px rgba(0,0,0,.8);
-         scrollbar-width:thin;scrollbar-color:rgba(56,224,216,.3) transparent}
+         scrollbar-width:thin;scrollbar-color:rgba(201,160,255,.3) transparent}
   #worldpanel::-webkit-scrollbar{width:6px}
-  #worldpanel::-webkit-scrollbar-thumb{background:rgba(56,224,216,.28);border-radius:3px}
-  #worldpanel.collapsed{transform:translateX(calc(-100% - 8px))}
+  #worldpanel::-webkit-scrollbar-thumb{background:rgba(201,160,255,.28);border-radius:3px}
+  #worldpanel.collapsed{transform:translateX(calc(100% + 8px))}
+  /* The colonies' sliders are opaque too — same rule, their own colour. */
   #worldpanel input[type=range]{-webkit-appearance:none;appearance:none;
     width:100%;height:16px;background:transparent;cursor:pointer;margin:0 0 10px}
   #worldpanel input[type=range]::-webkit-slider-runnable-track{height:2px;
-    background:rgba(201,160,255,.30);border-radius:2px}
+    background:var(--vio);border-radius:0}
   #worldpanel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
     width:11px;height:11px;margin-top:-4.5px;border-radius:50%;
-    background:var(--vio);box-shadow:0 0 9px rgba(201,160,255,.85),0 0 2px #000}
+    background:var(--vio);box-shadow:0 0 10px rgba(201,160,255,.9),0 0 2px #000}
+  #worldpanel input[type=range]::-moz-range-track{height:2px;
+    background:var(--vio);border-radius:0}
   #worldpanel input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;
-    border-radius:50%;background:var(--vio);box-shadow:0 0 9px rgba(201,160,255,.85)}
+    border-radius:50%;background:var(--vio);box-shadow:0 0 10px rgba(201,160,255,.9)}
   #worldpanel input[type=range]:hover::-webkit-slider-thumb{background:#fff}
   #worldpanel button{backdrop-filter:blur(2px);background:rgba(11,16,32,.42)}
   #worldpanel .val{color:var(--vio)}
-  #world-reopen{position:fixed;top:60px;left:0;z-index:20;display:none;
-    background:var(--panel);border:1px solid var(--line);border-left:none;
-    border-radius:0 3px 3px 0;color:var(--dim);font-size:10px;letter-spacing:.2em;
+  #world-reopen{position:fixed;top:60px;right:0;z-index:20;display:none;
+    background:var(--panel);border:1px solid var(--line);border-right:none;
+    border-radius:3px 0 0 3px;color:var(--dim);font-size:10px;letter-spacing:.2em;
     padding:8px 10px;cursor:pointer;writing-mode:vertical-rl}
   #world-reopen:hover{color:var(--vio);border-color:var(--vio)}
   body.world-closed #world-reopen{display:block}
@@ -81,32 +88,35 @@
     font-size:10px;letter-spacing:.15em;padding:4px 9px;cursor:pointer;border-radius:3px}
   #world-close:hover{color:var(--vio);border-color:var(--vio)}
 
-  /* THE SLIDERS ARE THE EXCEPTION — everything else may vanish into the
-     void, but a control you cannot see is a control you cannot use. */
+  /* THE SLIDERS ARE THE EXCEPTION — the panel may vanish into the void, but
+     the controls themselves carry NO transparency (Ghost, 2026-08-24). LOBO's
+     are a blood-orange single line: one weight, one colour, fully opaque, so
+     the adversary's hand on the range is never in doubt. */
   #panel input[type=range]{-webkit-appearance:none;appearance:none;
     width:100%;height:16px;background:transparent;cursor:pointer;margin:0 0 10px}
   #panel input[type=range]::-webkit-slider-runnable-track{height:2px;
-    background:rgba(56,224,216,.30);border-radius:2px}
+    background:var(--blood);border-radius:0}
   #panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
     width:11px;height:11px;margin-top:-4.5px;border-radius:50%;
-    background:var(--cy);box-shadow:0 0 9px rgba(56,224,216,.85),0 0 2px #000}
+    background:var(--blood);box-shadow:0 0 10px rgba(226,72,28,.9),0 0 2px #000}
   #panel input[type=range]::-moz-range-track{height:2px;
-    background:rgba(56,224,216,.30);border-radius:2px}
+    background:var(--blood);border-radius:0}
   #panel input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;
-    border-radius:50%;background:var(--cy);box-shadow:0 0 9px rgba(56,224,216,.85)}
+    border-radius:50%;background:var(--blood);box-shadow:0 0 10px rgba(226,72,28,.9)}
   #panel input[type=range]:hover::-webkit-slider-thumb{background:#fff}
+  #panel .val{color:var(--blood)}
   /* buttons keep the faintest possible backing so they read as hit targets */
   #panel button{backdrop-filter:blur(2px);background:rgba(11,16,32,.42)}
   /* floating reopen tab — appears when the panel is closed */
-  #panel-reopen{position:fixed;top:60px;right:0;z-index:20;display:none;
-    background:var(--panel);border:1px solid var(--line);border-right:none;
-    border-radius:3px 0 0 3px;color:var(--dim);font-size:10px;letter-spacing:.2em;
+  #panel-reopen{position:fixed;top:60px;left:0;z-index:20;display:none;
+    background:var(--panel);border:1px solid var(--line);border-left:none;
+    border-radius:0 3px 3px 0;color:var(--dim);font-size:10px;letter-spacing:.2em;
     padding:8px 10px;cursor:pointer;writing-mode:vertical-rl}
-  #panel-reopen:hover{color:var(--red);border-color:var(--red)}
+  #panel-reopen:hover{color:var(--blood);border-color:var(--blood)}
   body.panel-closed #panel-reopen{display:block}
   #panel-close{background:transparent;border:1px solid var(--line);color:var(--dim);
     font-size:10px;letter-spacing:.15em;padding:4px 9px;cursor:pointer;border-radius:3px}
-  #panel-close:hover{color:var(--red);border-color:var(--red)}
+  #panel-close:hover{color:var(--blood);border-color:var(--blood)}
   .sec{margin-bottom:18px}
   .sec h2{font-size:10px;letter-spacing:.22em;color:var(--dim);margin:0 0 8px;
           text-transform:uppercase;border-bottom:1px solid var(--line);padding-bottom:5px}
@@ -151,7 +161,7 @@
        than driving pressure, so putting them on a live panel would be a control
        that lies about what it does. -->
   <div id="worldpanel">
-    <div class="row" style="justify-content:flex-start;margin-bottom:6px">
+    <div class="row" style="justify-content:flex-end;margin-bottom:6px">
       <button id="world-close" onclick="toggleWorld()">&times; CLOSE</button>
     </div>
 
@@ -190,7 +200,7 @@
     </div>
   </div>
   <div id="panel">
-    <div class="row" style="justify-content:flex-end;margin-bottom:6px">
+    <div class="row" style="justify-content:flex-start;margin-bottom:6px">
       <button id="panel-close" onclick="togglePanel()">&times; CLOSE</button>
     </div>
 
