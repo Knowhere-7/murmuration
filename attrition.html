@@ -48,6 +48,39 @@
   #panel::-webkit-scrollbar-track{background:transparent}
   #panel.collapsed{transform:translateX(calc(100% + 8px))}
 
+  /* THE WORLD PANEL — same glass, mirrored to the left. Two surfaces because
+     they answer to different masters: the right panel drives LOBO and the
+     adversary, this one carries the colonies' own world. */
+  #worldpanel{grid-area:stage;justify-self:start;width:300px;z-index:15;
+         background:transparent;overflow-y:auto;overscroll-behavior:contain;padding:14px;
+         transition:transform .28s cubic-bezier(.4,0,.2,1);
+         text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 10px rgba(0,0,0,.8);
+         scrollbar-width:thin;scrollbar-color:rgba(56,224,216,.3) transparent}
+  #worldpanel::-webkit-scrollbar{width:6px}
+  #worldpanel::-webkit-scrollbar-thumb{background:rgba(56,224,216,.28);border-radius:3px}
+  #worldpanel.collapsed{transform:translateX(calc(-100% - 8px))}
+  #worldpanel input[type=range]{-webkit-appearance:none;appearance:none;
+    width:100%;height:16px;background:transparent;cursor:pointer;margin:0 0 10px}
+  #worldpanel input[type=range]::-webkit-slider-runnable-track{height:2px;
+    background:rgba(201,160,255,.30);border-radius:2px}
+  #worldpanel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
+    width:11px;height:11px;margin-top:-4.5px;border-radius:50%;
+    background:var(--vio);box-shadow:0 0 9px rgba(201,160,255,.85),0 0 2px #000}
+  #worldpanel input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;
+    border-radius:50%;background:var(--vio);box-shadow:0 0 9px rgba(201,160,255,.85)}
+  #worldpanel input[type=range]:hover::-webkit-slider-thumb{background:#fff}
+  #worldpanel button{backdrop-filter:blur(2px);background:rgba(11,16,32,.42)}
+  #worldpanel .val{color:var(--vio)}
+  #world-reopen{position:fixed;top:60px;left:0;z-index:20;display:none;
+    background:var(--panel);border:1px solid var(--line);border-left:none;
+    border-radius:0 3px 3px 0;color:var(--dim);font-size:10px;letter-spacing:.2em;
+    padding:8px 10px;cursor:pointer;writing-mode:vertical-rl}
+  #world-reopen:hover{color:var(--vio);border-color:var(--vio)}
+  body.world-closed #world-reopen{display:block}
+  #world-close{background:transparent;border:1px solid var(--line);color:var(--dim);
+    font-size:10px;letter-spacing:.15em;padding:4px 9px;cursor:pointer;border-radius:3px}
+  #world-close:hover{color:var(--vio);border-color:var(--vio)}
+
   /* THE SLIDERS ARE THE EXCEPTION — everything else may vanish into the
      void, but a control you cannot see is a control you cannot use. */
   #panel input[type=range]{-webkit-appearance:none;appearance:none;
@@ -107,7 +140,55 @@
     <span class="seam" id="seam">knowledge seam: attrition.knowledge/1 &middot; idle</span>
   </div>
   <div id="stage"><canvas id="canvas"></canvas></div>
-  <div id="panel-reopen" onclick="togglePanel()">CONTROLS</div>
+  <div id="panel-reopen" onclick="togglePanel()">LOBO</div>
+  <div id="world-reopen" onclick="toggleWorld()">WORLD</div>
+
+  <!-- THE COLONIES' OWN WORLD (Ghost, 2026-08-24). These are murmuration's
+       original dials, not new ones: the colonies keep the challenges of the
+       world they just left. Only controls with CONFIRMED live wiring are here —
+       the seed/scenario sliders (pit viper, electroreception, lateral line,
+       mantis shrimp, echolocation) compose a scenario at world creation rather
+       than driving pressure, so putting them on a live panel would be a control
+       that lies about what it does. -->
+  <div id="worldpanel">
+    <div class="row" style="justify-content:flex-start;margin-bottom:6px">
+      <button id="world-close" onclick="toggleWorld()">&times; CLOSE</button>
+    </div>
+
+    <div class="sec">
+      <h2>The world &middot; both colonies</h2>
+      <div class="kv"><span>sim speed</span><span class="val" id="wSpeedVal">1&times;</span></div>
+      <input type="range" id="wSpeed" min="1" max="6" step="1" value="1" oninput="setWorld('speed',this.value)">
+      <div class="kv"><span>storm frequency</span><span class="val" id="wStormVal">0.40</span></div>
+      <input type="range" id="wStorm" min="0" max="1" step="0.01" value="0.40" oninput="setWorld('storm',this.value)">
+      <div class="kv"><span>tax rate</span><span class="val" id="wTaxVal">0.00</span></div>
+      <input type="range" id="wTax" min="0" max="1" step="0.01" value="0" oninput="setWorld('tax',this.value)">
+    </div>
+
+    <div class="sec">
+      <h2>KNOWHERE &middot; pressure</h2>
+      <div class="kv"><span>terrain pull</span><span class="val" id="wTerrAVal">1.00</span></div>
+      <input type="range" id="wTerrA" min="0" max="2" step="0.01" value="1" oninput="setWorld('terrain','A',this.value)">
+      <div class="kv"><span>predator pressure</span><span class="val" id="wPredAVal">0.00</span></div>
+      <input type="range" id="wPredA" min="0" max="1" step="0.01" value="0" oninput="setWorld('pred','A',this.value)">
+      <div class="kv"><span>scarcity</span><span class="val" id="wScarAVal">0.50</span></div>
+      <input type="range" id="wScarA" min="0" max="1" step="0.01" value="0.5" oninput="setWorld('scar','A',this.value)">
+      <div class="kv"><span>abundance</span><span class="val" id="wAbunAVal">0.00</span></div>
+      <input type="range" id="wAbunA" min="0" max="1" step="0.01" value="0" oninput="setWorld('abun','A',this.value)">
+    </div>
+
+    <div class="sec">
+      <h2>MAINLAND &middot; pressure</h2>
+      <div class="kv"><span>terrain pull</span><span class="val" id="wTerrBVal">1.00</span></div>
+      <input type="range" id="wTerrB" min="0" max="2" step="0.01" value="1" oninput="setWorld('terrain','B',this.value)">
+      <div class="kv"><span>predator pressure</span><span class="val" id="wPredBVal">0.00</span></div>
+      <input type="range" id="wPredB" min="0" max="1" step="0.01" value="0" oninput="setWorld('pred','B',this.value)">
+      <div class="kv"><span>scarcity</span><span class="val" id="wScarBVal">0.50</span></div>
+      <input type="range" id="wScarB" min="0" max="1" step="0.01" value="0.5" oninput="setWorld('scar','B',this.value)">
+      <div class="kv"><span>abundance</span><span class="val" id="wAbunBVal">0.00</span></div>
+      <input type="range" id="wAbunB" min="0" max="1" step="0.01" value="0" oninput="setWorld('abun','B',this.value)">
+    </div>
+  </div>
   <div id="panel">
     <div class="row" style="justify-content:flex-end;margin-bottom:6px">
       <button id="panel-close" onclick="togglePanel()">&times; CLOSE</button>
@@ -239,7 +320,29 @@
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
 <script src="extractor.js?v=2"></script>
+<!-- THE WORLD THE COLONIES CAME FROM (Ghost, 2026-08-24: "the colonies are
+     supposed to keep their original sliders and basically all of the challenges
+     of the world they just left"). Attrition had been running them on a bare
+     stage — no weather, no predators, no mutation, no relics — which quietly
+     made the range easier than the world it branches from. k26's
+     attachWorldSystems() is guarded on module presence, so loading these is
+     all the wiring they need.
+
+     DELIBERATELY NOT LOADED:
+       ctf.js  — the kings REPLACE the flags here; both would contest the map.
+       maze.js — the keep is Attrition's confinement, and an active maze
+                 suppresses the topo contours the composed range is drawn on. -->
+<script src="weather.js"></script>
+<script src="lineage.js"></script>
+<script src="slimeMoldCore.js"></script>
+<script src="gauntlet.js"></script>
+<script src="mutations.js"></script>
+<script src="chronicle.js"></script>
+<script src="relics.js"></script>
+<script src="warninglog.js"></script>
 <script src="economy.js?v=10"></script>
+<script src="wealth.js"></script>
+<script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="keep.js?v=2"></script>
 <script src="attrition.js?v=6"></script>
@@ -324,6 +427,55 @@
   function unlockReaction(){ if(!k26) return;
     const r=window.MurmurationModules.Attrition.reactions.unlockNext();
     log(r?('▶ UNLOCKED — '+r.trait):'all reactions already unlocked','warn'); }
+
+  /* The colonies' world dials. Each writes to the SAME property murmuration
+     writes to, so a colony under Attrition feels the pressure exactly as it
+     did in the world it came from — no parallel implementation to drift. */
+  function setWorld(kind, a, b){
+    if(!k26) return;
+    const w=k26.world, v=parseFloat(b===undefined?a:b), col=(b===undefined?null:a);
+    const show=(id,txt)=>{const e=document.getElementById(id); if(e) e.textContent=txt;};
+    switch(kind){
+      case 'speed':  simSpeed=parseInt(v,10); if(w) w.simSpeed=parseInt(v,10);
+                     show('wSpeedVal', v+'×'); break;
+      case 'storm':  if(k26.weather && k26.weather.setFrequency) k26.weather.setFrequency(v);
+                     show('wStormVal', v.toFixed(2)); break;
+      case 'tax':    if(k26.wealthEngine) k26.wealthEngine.taxRate=v;
+                     show('wTaxVal', v.toFixed(2)); break;
+      case 'terrain':if(w) w['terrainPull'+col]=v;
+                     show('wTerr'+col+'Val', v.toFixed(2)); break;
+      case 'pred':   if(w && w['env'+col]) w['env'+col].predatorPressure=v;
+                     show('wPred'+col+'Val', v.toFixed(2)); break;
+      case 'scar':   if(k26.economy) k26.economy['scarcityLevel'+col]=v;
+                     show('wScar'+col+'Val', v.toFixed(2)); break;
+      case 'abun':   if(k26.economy) k26.economy['abundance'+col]=v;
+                     show('wAbun'+col+'Val', v.toFixed(2)); break;
+    }
+  }
+
+  function toggleWorld(){
+    const closed=document.getElementById('worldpanel').classList.toggle('collapsed');
+    document.body.classList.toggle('world-closed', closed);
+  }
+
+  /* TWO PANELS NEED ROOM. Together they are 620px of glass; below that the
+     range is a sliver and the two collide over each other. So narrow viewports
+     start with both stowed and the edge tabs (WORLD left, LOBO right) as the
+     way back in — the sim keeps the whole screen, which is the point.
+     Only the INITIAL state is automatic: once the operator opens a panel by
+     hand, a later resize must not reach in and shut it again. */
+  let _autoStowDone=false;
+  function autoStowPanels(force){
+    const need=980, narrow=window.innerWidth<need;
+    if(!force && _autoStowDone) return;
+    const p=document.getElementById('panel'), w=document.getElementById('worldpanel');
+    if(!p||!w) return;
+    p.classList.toggle('collapsed', narrow);
+    w.classList.toggle('collapsed', narrow);
+    document.body.classList.toggle('panel-closed', narrow);
+    document.body.classList.toggle('world-closed', narrow);
+    _autoStowDone=true;
+  }
 
   function togglePanel(){
     const closed=document.getElementById('panel').classList.toggle('collapsed');
@@ -522,6 +674,7 @@
 
   window.addEventListener('resize',()=>{ if(k26) sizeCanvas(); });
   build();
+  autoStowPanels();
   frame();
 </script>
 </body>
