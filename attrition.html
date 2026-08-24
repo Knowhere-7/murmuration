@@ -227,7 +227,8 @@
 <script src="extractor.js?v=2"></script>
 <script src="economy.js?v=10"></script>
 <script src="k26.js?v=19"></script>
-<script src="attrition.js?v=4"></script>
+<script src="keep.js?v=1"></script>
+<script src="attrition.js?v=5"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -404,11 +405,19 @@
       if(window.MurmurationModules.Attrition.reactions) window.MurmurationModules.Attrition.reactions.step();
       if(window.MurmurationModules.Attrition.bleed) window.MurmurationModules.Attrition.bleed.step();
       if(window.MurmurationModules.Attrition.mortality) window.MurmurationModules.Attrition.mortality.step();
+      // keeps step LAST: the king is planted by kings.step() above, and the
+      // walls are enforced as position corrections, so they must have the
+      // final word on where an attacker actually ended up this tick.
+      const _kp=window.MurmurationModules.Attrition.keeps;
+      if(_kp) for(const k of _kp) k.step();
       }
     }
     if(k26){ k26.draw();
       const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));
       if(ctx && window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.draw(ctx);
+      // keep walls under the crown marker — architecture, then the king on it
+      const _kd=window.MurmurationModules.Attrition.keeps;
+      if(ctx && _kd) for(const k of _kd) k.draw(ctx);
       drawKings(); }
     stats();
     raf=requestAnimationFrame(frame);

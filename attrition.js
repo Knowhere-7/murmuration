@@ -151,7 +151,19 @@ window.MurmurationModules.Attrition = {
     this.tic = new window.MurmurationModules.AttritionTIC(world, this.kings, this.reactions, this.lobo);
     this.bleed.tic = this.tic;   // §6 honor drains in proportion to §7 disrespect
     this.mortality = new window.MurmurationModules.AttritionMortality(world, this.kings);
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality };
+    // ONE KEEP PER CROWN — the king's last line of defence. Centre is sampled
+    // live from the kings system, so a re-crowned king brings his walls with
+    // him rather than leaving them standing around an empty floor.
+    if (window.MurmurationModules.Keep) {
+      this.keeps = ['A', 'B'].map(c => new window.MurmurationModules.Keep(world, {
+        colony: c,
+        centre: () => {
+          const k = this.kings && this.kings.kings[c];
+          return k ? { x: k.x, y: k.y } : this.kings.home(c);
+        }
+      }).enable());
+    }
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps };
   },
 };
 
