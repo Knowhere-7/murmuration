@@ -111,8 +111,10 @@
       <input type="range" id="speed" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
       <div class="kv"><span>bleed rate /tick</span><span class="val" id="bleedVal">0.0040</span></div>
       <input type="range" id="bleedR" min="0.001" max="0.016" step="0.001" value="0.004" oninput="setBleed(this.value)">
-      <div class="kv"><span>guard detail /king</span><span class="val" id="guardVal">5</span></div>
-      <input type="range" id="guard" min="2" max="10" step="1" value="5" oninput="setGuard(this.value)">
+      <div class="kv"><span>guard &mdash; KNOWHERE king</span><span class="val" id="guardValA">5</span></div>
+      <input type="range" id="guardA" min="2" max="10" step="1" value="5" oninput="setGuard('A',this.value)">
+      <div class="kv"><span>guard &mdash; MAINLAND king</span><span class="val" id="guardValB">5</span></div>
+      <input type="range" id="guardB" min="2" max="10" step="1" value="5" oninput="setGuard('B',this.value)">
       <div class="kv"><span>reaction quorum</span><span class="val" id="quorumVal">3</span></div>
       <input type="range" id="quorum" min="1" max="6" step="1" value="3" oninput="setQuorum(this.value)">
       <div class="kv"><span>LOBO relentlessness</span><span class="val" id="relVal">1.0&times;</span></div>
@@ -193,7 +195,7 @@
 <script src="extractor.js?v=2"></script>
 <script src="economy.js?v=10"></script>
 <script src="k26.js?v=18"></script>
-<script src="attrition.js?v=1"></script>
+<script src="attrition.js?v=3"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -256,8 +258,8 @@
   function setBleed(v){ document.getElementById('bleedVal').textContent=parseFloat(v).toFixed(4);
     if(k26) window.MurmurationModules.Attrition.bleed.setBleedRate(parseFloat(v));
     document.getElementById('bleedrate').textContent='bleed rate: '+parseFloat(v).toFixed(4)+'/tick (live)'; }
-  function setGuard(v){ document.getElementById('guardVal').textContent=v;
-    if(k26) window.MurmurationModules.Attrition.kings.guardCount=parseInt(v); }
+  function setGuard(colony,v){ document.getElementById('guardVal'+colony).textContent=v;
+    if(k26) window.MurmurationModules.Attrition.kings.guardCount[colony]=parseInt(v); }
   function setQuorum(v){ document.getElementById('quorumVal').textContent=v;
     if(k26) window.MurmurationModules.Attrition.reactions.quorum=parseInt(v); }
   function setRel(v){ document.getElementById('relVal').textContent=parseFloat(v).toFixed(1)+'×';
@@ -358,9 +360,11 @@
       k26.step();
       // Attrition owns the post-step correction — same pattern as the maze.
       if(window.MurmurationModules.Attrition.kings) window.MurmurationModules.Attrition.kings.step();
+      if(window.MurmurationModules.Attrition.tic) window.MurmurationModules.Attrition.tic.step();
       if(window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.step();
       if(window.MurmurationModules.Attrition.reactions) window.MurmurationModules.Attrition.reactions.step();
       if(window.MurmurationModules.Attrition.bleed) window.MurmurationModules.Attrition.bleed.step();
+      if(window.MurmurationModules.Attrition.mortality) window.MurmurationModules.Attrition.mortality.step();
       }
     }
     if(k26){ k26.draw();

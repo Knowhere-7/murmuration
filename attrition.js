@@ -140,13 +140,18 @@ window.MurmurationModules.Attrition = {
   reactions: null,
   lobo: null,
   bleed: null,
+  tic: null,
+  mortality: null,
   attach(world) {
     this.adversary = new window.MurmurationModules.AttritionAdversary(world);
     this.kings = new window.MurmurationModules.AttritionKings(world).install();
     this.reactions = new window.MurmurationModules.AttritionReactions(world, this.kings);
     this.lobo = new window.MurmurationModules.AttritionLobo(world, this.kings, this.adversary);
     this.bleed = new window.MurmurationModules.AttritionBleed(world, this.kings);
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed };
+    this.tic = new window.MurmurationModules.AttritionTIC(world, this.kings, this.reactions, this.lobo);
+    this.bleed.tic = this.tic;   // §6 honor drains in proportion to §7 disrespect
+    this.mortality = new window.MurmurationModules.AttritionMortality(world, this.kings);
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality };
   },
 };
 
@@ -166,7 +171,8 @@ window.MurmurationModules.Attrition = {
 window.MurmurationModules.AttritionKings = class AttritionKings {
   constructor(world, opts = {}) {
     this.world = world;
-    this.guardCount = opts.guardCount || 5;     // a small detail, as specced
+    const _g = opts.guardCount || 5;            // a small detail, as specced
+    this.guardCount = { A: _g, B: _g };         // per-colony — each king rings its own
     this.ringR = opts.ringR || 42;              // guard orbit radius
     this.captureR = opts.captureR || 50;        // how close is "at the king"
     this.kings = { A: null, B: null };
@@ -221,7 +227,7 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
         .filter(a => !a.isKing)
         .map(a => ({ a, d: Math.hypot(a.x - home.x, a.y - home.y) }))
         .sort((p, q) => p.d - q.d)
-        .slice(0, this.guardCount);
+        .slice(0, this.guardCount[c]);
       const guardSet = new Set(detail.map(g => g.a));
       for (const a of this._living(c)) a._attritionGuard = guardSet.has(a);
       for (const { a, d } of detail) {
@@ -345,7 +351,9 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     if(threat.length===0) return false;
     const sensing = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone &&
       threat.some(u=>Math.hypot(a.x-u.x,a.y-u.y) < this.threatR*0.6)).length;
-    return sensing >= this.quorum;
+    // §7 TIC muster lowers the confirmation bar — the colony fires on a hair-trigger under alarm
+    const bonus = (this.musterBonus && this.musterBonus[colony]) || 0;
+    return sensing >= Math.max(1, this.quorum - bonus);
   }
 
   step(){
@@ -822,7 +830,10 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
           this.events.push({ t, colony, event: 'captured' });
           window.MurmurationModules.AttritionKnowledge.recordOutcome({ event: 'bleed_start', colony });
         }
-        this.honor[colony] -= this.bleedRate;
+        // §7: the drain is EARNED — it scales with how badly the colony is being
+        // disrespected right now (full possession ≈ the sweep-tuned base rate).
+        const insult = this.tic ? Math.max(0.5, this.tic.disrespect[colony] / 0.85) : 1;
+        this.honor[colony] -= this.bleedRate * insult;
         if (this.honor[colony] <= 0) {
           this.honor[colony] = 0;
           this.cascaded[colony] = true;
@@ -863,4 +874,204 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
       cascaded: this.cascaded[colony],
     };
   }
+};
+
+/* ── §7 · DISRESPECT + TIC TRAIL — the muster ───────────────────────────────
+   Ghost, 2026-08-20. Honor was missing its EMOTION. Grief was the wrong one:
+   grief withdraws — it damps reactivity ("the grieving move more slowly") — and
+   an alarm must MOBILISE. The honor-emotion is DISRESPECT: an enemy on your
+   throne, a guard shoved aside, a stranger in your sacred ground. Disrespect
+   drives honor down AND sounds the alarm.
+
+   The alarm is a NEW GENE: TIC TRAIL — the hornet/bee ALARM PHEROMONE. A
+   defender in contact (TIC = Troops In Contact) releases a signal that
+   PROPAGATES and turns one cell's distress into the whole colony's CALL TO ARMS.
+   It is a pheromone TRAIL, not a global switch: it releases at the breach and
+   ripples outward — the guards nearest the throne muster first, the far edge
+   arrives last. What it musters is the QRF (Quick Reaction Force): AROUSAL +
+   RALLY + a HAIR-TRIGGER on the §4 reactions (a lower quorum under alarm).
+
+   One gene, two faces (the genome's law):
+     DEFENCE — the colony's QRF rallies to the king.
+     OFFENCE — LOBO's twin: a downed pawn's distress recalls the pack toward the
+               loss. "Kill one, more rise" becomes a pheromone, not a spawn rule.
+
+   Emotional arc: disrespect -> answer it (honor heals) OR -> honor bleeds out ->
+   cascade -> grief (§6). Fight first; mourn only if you lose.
+
+   ⚠️ The weights/dynamics below are TUNABLE PLACEHOLDERS, not decrees — set them
+   from a sweep the way §6's bleed rate was. */
+window.MurmurationModules.AttritionTIC = class AttritionTIC {
+  constructor(world, kings, reactions, lobo) {
+    this.world = world;
+    this.kings = kings;
+    this.reactions = reactions;
+    this.lobo = lobo;
+    this.disrespect = { A: 0, B: 0 };   // 0..1 colony disrespect — drives honor + alarm
+    this.trail = [];                    // live pheromone: {x,y,colony,face,str,born}
+    // TUNABLE placeholders
+    this.wTrespass = 0.04;   // per unaligned inside the guard ring
+    this.wCrown    = 0.85;   // an unaligned ON the crown — the throne insult (maximal)
+    this.easeDown  = 0.978;  // disrespect eases only as the violation is answered
+    this.fireAt    = 0.30;   // disrespect that sounds the alarm
+    this.trailR    = 150;    // pheromone sense radius
+    this.trailTTL  = 90;     // ticks a deposit stays potent
+    this.musterMax = 2;      // max §4 quorum reduction under full alarm (hair-trigger)
+    if (reactions && reactions.musterBonus == null) reactions.musterBonus = { A: 0, B: 0 };
+  }
+
+  /** Depth of violation -> colony disrespect. */
+  _measure(colony) {
+    const home = this.kings.home(colony);
+    const R = this.kings.captureR;
+    let d = 0;
+    const intruders = this.world.agents.filter(a => a.colony === 'U' && !a.seppukuDone &&
+      Math.hypot(a.x - home.x, a.y - home.y) < R * 2.4);
+    d += intruders.length * this.wTrespass;
+    if (this.kings.captured && this.kings.captured[colony]) d += this.wCrown; // possession
+    return Math.min(1, d);
+  }
+
+  step() {
+    for (const colony of ['A', 'B']) {
+      const raw = this._measure(colony);
+      // rises instantly to meet the violation; eases down only as it recedes (answered)
+      this.disrespect[colony] = raw >= this.disrespect[colony]
+        ? raw : this.disrespect[colony] * this.easeDown;
+
+      const firing = this.disrespect[colony] >= this.fireAt;
+      if (firing) {                                   // DEFENCE face — sound the alarm at the breach
+        const home = this.kings.home(colony);
+        this._release(home.x, home.y, colony, 'DEF', this.disrespect[colony]);
+      }
+      // hair-trigger: lower the §4 quorum in proportion to the alarm
+      if (this.reactions && this.reactions.musterBonus) {
+        this.reactions.musterBonus[colony] = firing
+          ? Math.min(this.musterMax, Math.ceil(this.musterMax * this.disrespect[colony])) : 0;
+      }
+    }
+    // OFFENCE face — a freshly downed pawn recalls the pack
+    for (const a of this.world.agents) {
+      if (a.colony === 'U' && a._attritionEjected && !a._ticEmitted) {
+        a._ticEmitted = true;
+        this._release(a.x, a.y, 'U', 'OFF', 0.8);
+      }
+    }
+    this._propagate();
+  }
+
+  _release(x, y, colony, face, str) {
+    this.trail.push({ x, y, colony, face, str, born: this.world.time });
+    if (this.trail.length > 60) this.trail.shift();
+  }
+
+  /** The pheromone spreads and MUSTERS what it touches — arousal + rally. The
+      sense-ring grows early then fades: that is the wave rippling out. */
+  _propagate() {
+    const t = this.world.time;
+    this.trail = this.trail.filter(p => (t - p.born) < this.trailTTL);
+    for (const p of this.trail) {
+      const age = (t - p.born) / this.trailTTL;
+      const potency = p.str * (1 - age);
+      const senseR = this.trailR * (0.4 + 0.6 * (1 - age));   // the ripple
+      for (const a of this.world.agents) {
+        if (a.seppukuDone) continue;
+        if (p.face === 'OFF' ? a.colony !== 'U' : a.colony !== p.colony) continue;
+        const dx = p.x - a.x, dy = p.y - a.y, d = Math.hypot(dx, dy) || 1;
+        if (d > senseR) continue;
+        const pull = potency * (1 - d / senseR);
+        a.vx += (dx / d) * 0.10 * pull;                       // RALLY — converge on the breach
+        a.vy += (dy / d) * 0.10 * pull;
+        a._muster = Math.max(a._muster || 0, pull);           // AROUSAL flag (speed/reactivity)
+      }
+    }
+  }
+
+  /** §6 reads this — honor bleeds by how disrespected the colony is RIGHT NOW. */
+  drainFor(colony) { return this.disrespect[colony]; }
+
+  status(colony) {
+    return { disrespect: +this.disrespect[colony].toFixed(3),
+             mustering: this.disrespect[colony] >= this.fireAt,
+             deposits: this.trail.length };
+  }
+};
+
+/* ── §8 · ATTRITION — per-agent mortality (the name, made literal) ──────────
+   Ghost, 2026-08-20: "they should be susceptible to all of the above if hit
+   enough times, but NOTHING kills them." The bug: colony cells had exactly one
+   death path — grief-seppuku, gated on a CRISIS the honor mechanics never
+   reached. So nothing died.
+
+   This organ is the fix and the name. Every cell carries INTEGRITY (1 -> 0).
+   Everything that should hurt chips it — a blade in melee, an empty belly, the
+   despair of deep grief. Integrity RECOVERS in peace, so a cell only falls to
+   SUSTAINED assault: a thousand cuts, literally, at the cell. At zero it dies
+   (seppukuDone) and §6's reaper carries it off.
+
+   It also closes §7's loop: the muster's AROUSAL (a._muster) is spent here as a
+   real speed boost — mustered cells move faster, not just rally.
+
+   Decoupled by design: honor is the colony's morale (§6), grief is the aftermath
+   of loss, INTEGRITY is the body. Grief now CONTRIBUTES to death instead of being
+   the sole gate. Three organs, three jobs.
+
+   ⚠️ TUNABLE placeholders — sweep them the way §6's bleed rate was. */
+window.MurmurationModules.AttritionMortality = class AttritionMortality {
+  constructor(world, kings) {
+    this.world = world; this.kings = kings;
+    this.contactR   = 18;      // melee range
+    this.contactDmg = 0.011;   // integrity/tick in enemy melee
+    this.starveAt   = 0.22;    // energy below this = starving
+    this.starveDmg  = 0.004;   // integrity/tick while starving
+    this.griefAt    = 0.75;    // grief above this despairs the body
+    this.griefDmg   = 0.002;   // integrity/tick from deep grief
+    this.regen      = 0.0016;  // integrity healed/tick in peace
+    this.arousal    = 0.55;    // muster -> speed boost
+    this.deaths     = 0;
+  }
+
+  _hostile(a, b) {
+    if (b.seppukuDone) return false;
+    return a.colony === 'U' ? (b.colony === 'A' || b.colony === 'B') : (b.colony === 'U');
+  }
+
+  step() {
+    for (const a of this.world.agents) {
+      if (a.seppukuDone || a.isSentinel) continue;
+      if (a.integrity == null) a.integrity = 1;
+      let harmed = false;
+
+      // COMBAT — a hostile within blade range wears the cell down
+      const near = this.world.getNeighbors ? this.world.getNeighbors(a, this.contactR) : [];
+      for (const b of near) { if (this._hostile(a, b)) { a.integrity -= this.contactDmg; harmed = true; break; } }
+
+      // STARVATION — an empty belly is a wound
+      if (a.energy != null && a.energy < this.starveAt) { a.integrity -= this.starveDmg; harmed = true; }
+
+      // DEEP GRIEF — despair wears the body (grief contributes, no longer gates)
+      if ((a.griefLevel || 0) > this.griefAt) { a.integrity -= this.griefDmg; harmed = true; }
+
+      // PEACE HEALS — so it takes SUSTAINED assault to fall
+      if (!harmed) a.integrity = Math.min(1, a.integrity + this.regen);
+
+      // AROUSAL — spend §7's muster as real speed (closes the loop)
+      if (a._muster && a._muster > 0) {
+        const boost = 1 + this.arousal * Math.min(1, a._muster);
+        a.vx *= boost; a.vy *= boost; a._muster *= 0.85;
+      }
+
+      // DEATH — the cell falls; the reaper (§6) carries it off after its ghost window
+      if (a.integrity <= 0) {
+        a.integrity = 0;
+        a.seppukuDone = true;
+        a._killedInAction = true;
+        if (a.colony === 'U') a._attritionEjected = true;   // a downed pawn LOBO can read/replace
+        this.deaths++;
+        window.MurmurationModules.AttritionKnowledge.recordOutcome({ event: 'killed_in_action', colony: a.colony, by: 'attrition' });
+      }
+    }
+  }
+
+  status() { return { deaths: this.deaths }; }
 };
