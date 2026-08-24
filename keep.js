@@ -189,11 +189,27 @@ window.MurmurationModules.Keep = class Keep {
       const g = this.gaps[i];
       // inner rings read hotter — the closer to the crown, the more it matters
       const heat = i / Math.max(1, this.rings - 1);
-      ctx.strokeStyle = `hsla(${175 - heat * 150}, 78%, ${52 + heat * 8}%, ${0.30 + (1 - heat) * 0.34})`;
-      ctx.lineWidth = 1 + (1 - heat) * 0.7;
+      // The keep is ARCHITECTURE and has to read as such against the bond web,
+      // which is the brightest thing on the field. A glow pass under a solid
+      // stroke gives it weight without widening the line into a smear — the
+      // wall stays a hairline, it just stops being lost.
       ctx.beginPath();
       ctx.arc(c.x, c.y, R, g + this.gapArc * 0.5, g - this.gapArc * 0.5 + Math.PI * 2);
+      ctx.strokeStyle = `hsla(${175 - heat * 150}, 85%, ${46 + heat * 8}%, ${0.16 + (1 - heat) * 0.14})`;
+      ctx.lineWidth = 5 + (1 - heat) * 2.5;
       ctx.stroke();
+      ctx.strokeStyle = `hsla(${175 - heat * 150}, 88%, ${60 + heat * 8}%, ${0.62 + (1 - heat) * 0.30})`;
+      ctx.lineWidth = 1.2 + (1 - heat) * 0.8;
+      ctx.stroke();
+      // gap mouths — mark where the wall opens, so the way through is legible
+      for (const s of [-1, 1]) {
+        const ga = g + s * this.gapArc * 0.5;
+        ctx.strokeStyle = `hsla(${175 - heat * 150}, 92%, 74%, ${0.55 + (1 - heat) * 0.25})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(c.x + Math.cos(ga) * R, c.y + Math.sin(ga) * R, 2.6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     // traps — small, dim, and only visible once armed
     for (const t of this.traps) {

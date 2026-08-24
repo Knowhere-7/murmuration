@@ -618,6 +618,14 @@ window.MurmurationModules.K26 = class K26 {
     const now = Date.now() * 0.0003;                         // slow global drift clock
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';            // spiritual layer — not burning through agents
+    // webOpacity — Ghost, 2026-08-24: "do your best to not take away from the
+    // beauty of those strings. only incremental ticks of translucency."
+    // A single multiplier over the whole layer is the gentlest possible lever:
+    // every hue, width, strain gradient and conflict signal below is untouched,
+    // so the web keeps its exact character and simply sits back a step. Editing
+    // the five alpha formulas individually would have drifted their balance.
+    // 1 = unchanged, which is what the open sim keeps.
+    ctx.globalAlpha = Math.max(0.15, Math.min(1, this.webOpacity == null ? 1 : this.webOpacity));
     ctx.lineCap = 'round';
     for (const a of this.world.agents) {
       if (!ok(a)) continue;

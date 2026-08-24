@@ -240,8 +240,8 @@
 <script src="evolution.js"></script>
 <script src="extractor.js?v=2"></script>
 <script src="economy.js?v=10"></script>
-<script src="k26.js?v=19"></script>
-<script src="keep.js?v=1"></script>
+<script src="k26.js?v=20"></script>
+<script src="keep.js?v=2"></script>
 <script src="attrition.js?v=6"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
@@ -265,6 +265,9 @@
     // The range is read on near-black under topo contours — the stock nebula
     // alphas disappear there. Push the atmosphere without touching the open sim.
     k26.nebulaGain=1.7;
+    // The web stays exactly as beautiful — it just sits back a couple of ticks
+    // so the terrain and the keep walls can be read through it.
+    k26.webOpacity=0.74;
     window.k26=k26;
     if(!window.MurmurationModules.Attrition){ log('attrition module failed to load','crit'); return; }
     window.MurmurationModules.Attrition.attach(k26.world);
