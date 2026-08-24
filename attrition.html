@@ -135,6 +135,20 @@
     </div>
 
     <div class="sec">
+      <h2>View</h2>
+      <div class="row tgt" id="viewsel">
+        <button data-v="auto" class="on" onclick="setView('auto')">AUTO</button>
+        <button data-v="range" onclick="setView('range')">FULL RANGE</button>
+        <button data-v="A" onclick="setView('A')">KNOWHERE</button>
+        <button data-v="B" onclick="setView('B')">MAINLAND</button>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
+        showing: <span id="viewNow" style="color:var(--cy)">full range &middot; auto</span><br>
+        auto cuts to whichever keep is being fought over
+      </div>
+    </div>
+
+    <div class="sec">
       <h2>Range controls</h2>
       <div class="kv"><span>sim speed</span><span class="val" id="speedVal">1&times;</span></div>
       <input type="range" id="speed" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
@@ -228,7 +242,7 @@
 <script src="economy.js?v=10"></script>
 <script src="k26.js?v=19"></script>
 <script src="keep.js?v=1"></script>
-<script src="attrition.js?v=5"></script>
+<script src="attrition.js?v=6"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -394,6 +408,84 @@
     }
   }
 
+  /* ── THE CUT (Ghost, 2026-08-24: "we simply cut screen to a different view
+     instead of creating an entirely different camera action") ──────────────
+     No camera, no panning, no easing. The world renders exactly as it always
+     does; the cut is a POST-PROCESS — copy the contested keep's square out of
+     the finished frame and blit it back scaled to fill the screen. Because it
+     happens after every layer is already painted, contours, agents, keep walls
+     and crowns all come along for free and no draw code knows it exists. */
+  let VIEW='range', VIEW_AUTO=true, _cutBuf=null, _dwell=0;
+  const DWELL_TICKS=90;          // hold the cut after a fight ends, so a
+                                 // last straggler leaving does not snap the view
+
+  function keepRegion(colony){
+    const A=window.MurmurationModules.Attrition;
+    const k=A.keeps&&A.keeps.find(x=>x.colony===colony);
+    if(!k) return null;
+    const c=k.centreFn(); if(!c) return null;
+    const pad=k.outerR()*1.30;   // the keep plus a margin of the ground it sits on
+    return {x:c.x-pad,y:c.y-pad,w:pad*2,h:pad*2};
+  }
+
+  /** Which keep is actually being fought over — two or more unaligned inside it.
+      One stray wanderer is not a battle and must not steal the screen. */
+  function contestedKeep(){
+    const A=window.MurmurationModules.Attrition;
+    if(!A.keeps) return null;
+    let best=null,bestN=1;
+    for(const k of A.keeps){
+      const c=k.centreFn(); if(!c) continue;
+      const R=k.outerR()*1.1; let n=0;
+      for(const a of k.world.agents){
+        if(a.colony!=='U'||a.seppukuDone) continue;
+        if(Math.hypot(a.x-c.x,a.y-c.y)<R) n++;
+      }
+      if(n>bestN){bestN=n;best=k.colony;}
+    }
+    return best;
+  }
+
+  function updateAutoView(){
+    if(!VIEW_AUTO) return;
+    const c=contestedKeep();
+    if(c){ if(VIEW!==c){ VIEW=c; syncViewButtons();
+             log('▣ CUT → '+(c==='A'?'KNOWHERE':'MAINLAND')+' keep contested','warn'); }
+           _dwell=DWELL_TICKS; }
+    else if(VIEW!=='range'){ if(--_dwell<=0){ VIEW='range'; syncViewButtons();
+             log('▣ CUT → full range','warn'); } }
+  }
+
+  function applyCut(){
+    if(VIEW==='range') return;
+    const r=keepRegion(VIEW); if(!r) return;
+    const cv=k26.canvas, ctx=cv.getContext('2d'), W=cv.width, H=cv.height;
+    if(!_cutBuf) _cutBuf=document.createElement('canvas');
+    if(_cutBuf.width!==W||_cutBuf.height!==H){_cutBuf.width=W;_cutBuf.height=H;}
+    const b=_cutBuf.getContext('2d');
+    b.clearRect(0,0,W,H); b.drawImage(cv,0,0);          // hold the finished frame
+    const s=Math.min(W/r.w,H/r.h), dw=r.w*s, dh=r.h*s;
+    ctx.fillStyle='#05070d'; ctx.fillRect(0,0,W,H);
+    ctx.drawImage(_cutBuf, r.x,r.y,r.w,r.h, (W-dw)/2,(H-dh)/2, dw,dh);
+    // a thin frame so the cut reads as a deliberate view, not a zoom glitch
+    ctx.strokeStyle='rgba(56,224,216,.34)'; ctx.lineWidth=1;
+    ctx.strokeRect((W-dw)/2+.5,(H-dh)/2+.5,dw-1,dh-1);
+    ctx.fillStyle='rgba(56,224,216,.75)'; ctx.font='10px ui-monospace,monospace';
+    ctx.fillText((VIEW==='A'?'KNOWHERE':'MAINLAND')+' KEEP', (W-dw)/2+8, (H-dh)/2+16);
+  }
+
+  function setView(v){ VIEW_AUTO=(v==='auto'); if(v!=='auto') VIEW=v; else _dwell=0;
+    syncViewButtons(); }
+  function syncViewButtons(){
+    document.querySelectorAll('#viewsel button').forEach(b=>{
+      const v=b.dataset.v;
+      b.classList.toggle('on', v==='auto' ? VIEW_AUTO : (!VIEW_AUTO&&VIEW===v));
+    });
+    const l=document.getElementById('viewNow');
+    if(l) l.textContent=(VIEW==='range'?'full range':(VIEW==='A'?'KNOWHERE keep':'MAINLAND keep'))
+      +(VIEW_AUTO?' · auto':'');
+  }
+
   function frame(){
     if(k26&&running){
       for(let _s=0;_s<simSpeed;_s++){
@@ -418,7 +510,9 @@
       // keep walls under the crown marker — architecture, then the king on it
       const _kd=window.MurmurationModules.Attrition.keeps;
       if(ctx && _kd) for(const k of _kd) k.draw(ctx);
-      drawKings(); }
+      drawKings();
+      updateAutoView();
+      applyCut(); }        // LAST — the cut works on the finished frame
     stats();
     raf=requestAnimationFrame(frame);
   }
