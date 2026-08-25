@@ -762,22 +762,85 @@ window.MurmurationModules.World = class World {
       { x: homeX - rx, y: homeY,      a: 180 }
     ];
 
-    // Every open gate becomes a seam checkpoint on the wall itself.
-    for (const g of this.wall.gates) {
-      if (!g.open) continue;
-      const gy = g.yf * H;
-      ring.push({
-        x: W * 0.5,
-        y: gy,
-        a: Math.atan2(gy - homeY, (W * 0.5) - homeX) * 180 / Math.PI,
-        gate: g.name
-      });
+    /* ── TWO GATES MAKE A LOOP; ONE MAKES A DEAD END ────────────────────────
+       Ghost, 2026-08-24: "each side should loop its own box until two gates are
+       opened, then the order should be the colony's own box and then the full
+       loop around the outer nodes then back into a loop of their own box and
+       back to the big, alternating until there are no longer 2 gates open
+       simultaneously."
+
+       The arithmetic behind the two: a circuit has to come BACK. With one gate
+       open an agent can cross, but the only way home is the way it came, which
+       is an out-and-back, not a loop. Two open gates are the minimum that makes
+       the far side traversable as a circle — out through one, home through the
+       other. So the outer loop is not unlocked by permission, it is unlocked by
+       geometry.
+
+       Below two, this stays a pure box. That is a deliberate change: a single
+       open gate used to add a seam checkpoint and bend the route toward a
+       crossing the colony could not complete. */
+    const open = this.wall.gates.filter(g => g.open);
+    const canLoop = open.length >= 2;
+
+    if (!canLoop) {
+      // Own box only. Sorted by angle so the sequence is traversable rather
+      // than a teleporting checklist.
+      ring.sort((p, q) => p.a - q.a);
+      return ring;
     }
 
-    // Order by angle so the sequence is actually traversable rather than a
-    // teleporting checklist.
-    ring.sort((p, q) => p.a - q.a);
-    return ring;
+    // Alternating: box lap, outer lap, box lap, outer lap. The phase is COLONY
+    // state, never per-agent — the colony traverses, not the agent (2026-08-15),
+    // and a per-agent phase would split a flock across two different routes.
+    this._lapPhase = this._lapPhase || { A: 'BOX', B: 'BOX' };
+    if (this._lapPhase[colony] === 'BOX') {
+      ring.sort((p, q) => p.a - q.a);
+      return ring;
+    }
+    return this.outerCircuit(colony, open);
+  }
+
+  /**
+   * THE BIG LOOP — around the outer nodes of the whole map, crossing the wall
+   * at the open gates.
+   *
+   * The outer nodes are the four far corners the resource spheres already sit
+   * on (WELL KN I / ML II / ML IV / KN III). This is not a new geography; it is
+   * the one the map was laid out with, finally traversed as a circuit.
+   */
+  outerCircuit(colony, open) {
+    const W = this.width, H = this.height;
+    const homeX = colony === 'B' ? W * 0.75 : W * 0.25;
+    const homeY = H * 0.5;
+    // The far corners, matching the WELL positions in the zone table.
+    const corners = [
+      { x: W * 0.12, y: H * 0.20 }, { x: W * 0.88, y: H * 0.20 },
+      { x: W * 0.88, y: H * 0.80 }, { x: W * 0.12, y: H * 0.80 }
+    ];
+    const pts = corners.map(c => ({
+      x: c.x, y: c.y, outer: true,
+      a: Math.atan2(c.y - homeY, c.x - homeX) * 180 / Math.PI
+    }));
+    // Cross at the gates — without these the loop asks the flock to walk the
+    // wall, which is exactly the unsolvable bill the sphere mandate charged.
+    for (const g of open) {
+      const gy = g.yf * H;
+      pts.push({
+        x: W * 0.5, y: gy, gate: g.name, outer: true,
+        a: Math.atan2(gy - homeY, (W * 0.5) - homeX) * 180 / Math.PI
+      });
+    }
+    pts.sort((p, q) => p.a - q.a);
+    return pts;
+  }
+
+  /** Called when a colony completes a lap — flips box↔outer while two gates hold. */
+  advanceLap(colony) {
+    this._lapPhase = this._lapPhase || { A: 'BOX', B: 'BOX' };
+    const open = this.wall.gates.filter(g => g.open).length;
+    if (open < 2) { this._lapPhase[colony] = 'BOX'; return 'BOX'; }
+    this._lapPhase[colony] = this._lapPhase[colony] === 'BOX' ? 'OUTER' : 'BOX';
+    return this._lapPhase[colony];
   }
 
   /**
@@ -859,7 +922,20 @@ window.MurmurationModules.World = class World {
         st.idx = (st.idx + 1) % cps.length;
         st.tick = this.time;
         st.touched = new Set();
-        if (st.idx === 0) st.laps++;
+        if (st.idx === 0) {
+          st.laps++;
+          // A COMPLETED LAP IS WHERE THE ROUTE CHANGES — box, then the big loop,
+          // then box again, alternating for as long as two gates hold. Switching
+          // mid-lap would strand the flock partway round a circuit that no
+          // longer exists, which is the sphere mandate's failure exactly: a
+          // waypoint it is charged for and cannot reach.
+          const phase = this.advanceLap(col);
+          if (window.logLine) {
+            window.logLine(phase === 'OUTER'
+              ? `↻ Colony ${col} runs the OUTER LOOP — two gates hold, the far side is a circuit`
+              : `↺ Colony ${col} returns to its own box`, 'evolve');
+          }
+        }
       }
 
       // ── SUSTENANCE PRESSURE ──
