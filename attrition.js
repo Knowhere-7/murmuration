@@ -365,6 +365,33 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       { id:'waspAlarm', trait:'Wasp Alarm Pheromone (Vespula)', kind:'signal',
         unlocked:false,
         desc:'guards and the wounded release a call to arms that spreads outward — distance becomes delay, and the gradient says which way' },
+      /* GEA — Ghost, 2026-08-25: "the next unlockable i want... and this may seem
+         incorrect at first, but it should be GEA."
+
+         It seems incorrect because it is not a combat trait. Camouflage, the
+         bombardier and the wolf pack are all tactics; GEA is structure. And it
+         is the most important rung on this ladder for one reason: LOBO was given
+         memory across campaigns, and the colonies were not. The adversary
+         compounds forever while the defence starts naive every run, so a colony
+         must eventually lose — not for being worse, but because only one side
+         was allowed to remember.
+
+         GEA is the only entry in the catalog that answers that. It bundles #13
+         Crow Tool, #14 Epigenetic Memory ("new agent instances inherit learned
+         biases from all predecessors"), #43 Horizontal Gene Transfer and #50
+         Collective Memory ("knowledge transcends individual agent lifespan").
+
+         It also lands squarely on Population Boom: every replacement agent is
+         currently born naive, so a colony that replenishes under pressure keeps
+         diluting what it has learned. With GEA the replacements inherit.
+
+         Ordered after the alarm deliberately. First a colony can CALL for help;
+         then it can REMEMBER what happened. That is the order a nervous system
+         actually develops in, and the reverse would be memory with nothing yet
+         worth recording. */
+      { id:'gea', trait:'GEA — Genetic Evolution Architecture', kind:'inheritance',
+        unlocked:false,
+        desc:'the colony stops starting over: unlocks carry between campaigns and new agents inherit what their predecessors learned' },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
         unlocked:false, dur:120, cd:200,
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
@@ -375,6 +402,63 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         unlocked:false, dur:220, cd:180,
         desc:'a hunting party breaks off under a tactician and runs the attackers down' },
     ];
+  }
+
+  /* ── GEA: THE COLONY STOPS STARTING OVER ────────────────────────────────
+     The mirror of LOBO's persistence, and deliberately NOT the same shape.
+     LOBO remembers COUNTERS — what it learned to do. A colony remembers what it
+     UNLOCKED and what its dead knew, which is inheritance rather than tactics.
+
+     Gated on the GEA rung itself: until it is unlocked, none of this runs and
+     the colony genuinely does start naive. That keeps the baseline honest —
+     memory has to be EARNED before it can be relied on. */
+  _geaKey(){ return 'attrition.colony.gea.v1'; }
+
+  geaActive(){ const r = this.byId('gea'); return !!(r && r.unlocked); }
+
+  saveInheritance(){
+    if (!this.geaActive()) return null;
+    try {
+      const unlocked = this.reactions.filter(r=>r.unlocked).map(r=>r.id);
+      // #14: the learned BIAS, not the individuals — a colony inherits a
+      // disposition, never a roster.
+      const live = this.world.agents.filter(a=>a.colony!=='U' && !a.seppukuDone);
+      const trust = live.length
+        ? live.reduce((s,a)=>s+(a.trustCharge||0),0)/live.length : null;
+      window.localStorage.setItem(this._geaKey(), JSON.stringify({
+        unlocked, trustBias: trust, savedAt: Date.now()
+      }));
+      return { unlocked, trustBias: trust };
+    } catch(e){ return null; }
+  }
+
+  restoreInheritance(){
+    try {
+      const raw = window.localStorage.getItem(this._geaKey());
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      // A colony can only inherit if the PREVIOUS colony earned GEA — the record
+      // itself carries the right to read it.
+      if (!(d.unlocked||[]).includes('gea')) return null;
+      for (const id of d.unlocked){ const r = this.byId(id); if (r) r.unlocked = true; }
+      this.inheritedTrust = d.trustBias;
+      return d;
+    } catch(e){ return null; }
+  }
+
+  /** #14 — a newly born agent inherits the colony's learned disposition rather
+      than the default it would otherwise be handed. */
+  applyInheritance(agent){
+    if (!this.geaActive() || this.inheritedTrust == null || !agent) return false;
+    agent.trustCharge = this.inheritedTrust;
+    agent._inherited = true;
+    return true;
+  }
+
+  forgetInheritance(){
+    try { window.localStorage.removeItem(this._geaKey()); } catch(e){}
+    this.inheritedTrust = null;
+    return true;
   }
 
   byId(id){ return this.reactions.find(r=>r.id===id); }
