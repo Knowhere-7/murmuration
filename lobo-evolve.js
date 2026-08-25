@@ -65,6 +65,95 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     this.total = 0;
     this.history = [];                // every adoption, with the evidence
     this.THRESHOLD = opts.threshold ?? 12;   // deaths before it may adapt
+    this.initConquest(opts);                 // finite muster + the conquest tiers
+  }
+
+  /* ── CONQUEST — LOBO's honor, and deliberately NOT the colony's ──────────
+     Ghost, 2026-08-24: "its system has to be inherently different because if
+     not we'd be right back here running the devil gene next."
+
+     That is a constitutional argument, not an aesthetic one. Symmetric value
+     systems converge: give LOBO an honor that bleeds, heals and governs its
+     exits and it becomes a second colony wearing a different flag — at which
+     point it needs the same oversight, and the Devil Gene has to be pointed at
+     the adversary too. So the shapes are opposite on purpose.
+
+       COLONY honor  earned by what you GIVE UP — seppuku, the crown defended,
+                     effort brought to the clan. Continuous 0..1. It BLEEDS when
+                     the crown is taken and HEALS when it is safe. It is a
+                     STATE, and states can be wrong, which is why the colony
+                     needs a skeptic.
+       LOBO honor    earned by what you TAKE. Discrete tiers, never bled, never
+                     healed, never recovered. It is a RECORD of what happened,
+                     and a record has nothing to be skeptical of.
+
+     THE MUSTER IS WHAT MAKES IT A TEST. Ghost: "lobo needs a finite number if
+     we want a true test. if it can run out of agents then there is a decisive
+     winner." Unlimited waves have no losing condition, so nothing is ever
+     settled. A finite muster also makes the break-off load-bearing: withdrawal
+     is meaningless when bodies are free, and strategy the moment they are not. */
+  initConquest(opts = {}) {
+    this.muster = opts.muster ?? 240;    // the whole campaign, not a wave
+    this.spent = 0;
+    this.kingsTaken = 0;
+    this.silentKills = 0;                // kings taken with the alarm never raised
+    this.tier = null;
+    this.tiersEarned = [];
+    return this;
+  }
+
+  TIERS() {
+    return [
+      { id:'BLOODED', at:'kingsTaken>=1', name:'Blooded',
+        desc:'a crown has fallen to it' },
+      { id:'ELITE',   at:'kingsTaken>=2', name:'Elite',
+        desc:'both crowns taken — nothing on the map went unbeaten' },
+      { id:'CROWNED', at:'kingsTaken>=3', name:'Crowned',
+        desc:'more than two: the colonies re-crowned and it took those too, so it holds a crown of its own' },
+      // The ultimate prize is defined AGAINST trait #51. It cannot be won by
+      // force at all — only by never being heard.
+      { id:'PHANTOM', at:'silentKills>=1', name:'Phantom',
+        desc:'a crown taken without the alarm ever being raised — a stealth takeover' }
+    ];
+  }
+
+  /** Draw from the muster. Returns how many LOBO can actually field. */
+  draw(n) {
+    if (this.muster == null) return n;             // conquest not armed
+    const got = Math.max(0, Math.min(n, this.muster - this.spent));
+    this.spent += got;
+    return got;
+  }
+  remaining() { return this.muster == null ? Infinity : Math.max(0, this.muster - this.spent); }
+  exhausted() { return this.remaining() <= 0; }
+
+  /**
+   * A crown has fallen. `silent` is true only if the alarm was never raised for
+   * that colony during the attempt — the caller owns that judgement, because
+   * only it can see the field.
+   */
+  recordKingTaken(silent) {
+    if (this.muster == null) return null;
+    this.kingsTaken++;
+    if (silent) this.silentKills++;
+    const won = [];
+    for (const t of this.TIERS()) {
+      if (this.tiersEarned.includes(t.id)) continue;
+      const ok = t.id === 'PHANTOM' ? this.silentKills >= 1
+               : t.id === 'CROWNED' ? this.kingsTaken >= 3
+               : t.id === 'ELITE'   ? this.kingsTaken >= 2
+               : this.kingsTaken >= 1;
+      if (ok) { this.tiersEarned.push(t.id); this.tier = t.id; won.push(t); }
+    }
+    return won.length ? won : null;
+  }
+
+  /** Who won, or null while it is still undecided. */
+  verdict() {
+    if (this.muster == null) return null;
+    if (this.tiersEarned.includes('CROWNED')) return { winner:'LOBO', how:'crowned' };
+    if (this.exhausted()) return { winner:'COLONIES', how:'muster exhausted' };
+    return null;
   }
 
   /** Record why one attacker died. Called by whoever kills it. */

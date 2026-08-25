@@ -405,9 +405,9 @@
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
-<script src="lobo-evolve.js?v=2"></script>
+<script src="lobo-evolve.js?v=3"></script>
 <script src="keep.js?v=2"></script>
-<script src="attrition.js?v=9"></script>
+<script src="attrition.js?v=10"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -432,6 +432,12 @@
     // Point the terrain's passes at the REAL wall gates before anything bakes
     // the topo layer. Hardcoding them is how the ridge ended up sitting across
     // the north and south gateways in the first place.
+    // The kings layer left an onCapture hook precisely so this never has to be
+    // polled — a crown falls exactly once, and a poll would count it twice.
+    if(window.MurmurationModules.Attrition.kings){
+      const _k=window.MurmurationModules.Attrition.kings, _prev=_k.onCapture;
+      _k.onCapture=(c,info)=>{ if(_prev) _prev(c,info); onKingTaken(c); };
+    }
     if(window.syncTopoPassesToGates && !window.syncTopoPassesToGates(k26.world))
       log('gate sync failed — terrain passes may not match the wall','warn');
     k26.nebulaGain=1.7;
@@ -469,12 +475,43 @@
 
   function wave(tier){
     if(!k26) return;
+    // THE MUSTER IS FINITE — a campaign that can run out is a campaign that can
+    // be LOST, and without a losing condition nothing is ever settled.
+    const _E=window.MurmurationModules.Attrition.loboEvolve;
+    if(_E && _E.exhausted()){
+      log('✖ MUSTER SPENT — LOBO has nothing left to send. The colonies hold.','crit');
+      return;
+    }
     const r=window.MurmurationModules.Attrition.adversary.sendWave(tier,target);
     if(r.error){ log('wave error: '+r.error,'crit'); return; }
     log('⚠ WAVE '+r.wave+' · '+r.label+' ×'+r.count+' → '+r.target.toUpperCase()
         +' (force '+r.force.toFixed(2)+')', tier===3?'crit':'warn');
+    if(_E){
+      _E.draw(r.count);
+      log('   muster: '+_E.remaining()+' of '+_E.muster+' left', 'warn');
+      const v=_E.verdict();
+      if(v) log('■■ DECIDED — '+v.winner+' ('+v.how+')','crit');
+    }
     document.getElementById('seam').textContent='knowledge seam: attrition.knowledge/1 · '
       + window.MurmurationModules.AttritionKnowledge.ledger.attacks.length+' attacks recorded';
+  }
+
+  /* A CROWN HAS FALLEN. Stealth is judged from the field, not assumed: silent
+     means the colony's alarm never rose above a trace during the attempt. That
+     makes PHANTOM the one tier force cannot buy — it is defined AGAINST trait
+     #51, so the only route to it is never being heard. */
+  function onKingTaken(colony){
+    const A=window.MurmurationModules.Attrition, E=A.loboEvolve;
+    if(!E) return;
+    const al=A.alarm;
+    const silent = !al || !al.enabled || (al.stats()[colony] || 0) < 0.05;
+    const won=E.recordKingTaken(silent);
+    log('♛ CROWN TAKEN — '+(colony==='A'?'KNOWHERE':'MAINLAND')
+        +(silent?' · NO ALARM WAS EVER RAISED':''), 'crit');
+    if(won) for(const t of won)
+      log('☠ LOBO EARNS '+t.name.toUpperCase()+' — '+t.desc, 'crit');
+    const v=E.verdict();
+    if(v) log('■■ DECIDED — '+v.winner+' ('+v.how+')','crit');
   }
 
   function setForce(v){ document.getElementById('forceVal').textContent=parseFloat(v).toFixed(2);
