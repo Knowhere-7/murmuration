@@ -169,8 +169,24 @@
       <h2>The world &middot; both colonies</h2>
       <div class="kv"><span>sim speed</span><span class="val" id="wSpeedVal">1&times;</span></div>
       <input type="range" id="wSpeed" min="1" max="6" step="1" value="1" oninput="setWorld('speed',this.value)">
+    </div>
+
+    <!-- WEATHER — the world's own pressure, independent of LOBO. The toggle is
+         real: weather.js checks `enabled` before scheduling, so OFF genuinely
+         stops mother nature rather than just hiding her. -->
+    <div class="sec">
+      <h2>Weather</h2>
+      <div class="row">
+        <button id="wxToggle" onclick="toggleWeather()">&#9210; WEATHER: ON</button>
+        <span class="val" id="wxActive" style="margin-left:auto">0 fronts</span>
+      </div>
       <div class="kv"><span>storm frequency</span><span class="val" id="wStormVal">0.40</span></div>
       <input type="range" id="wStorm" min="0" max="1" step="0.01" value="0.40" oninput="setWorld('storm',this.value)">
+      <div class="kv"><span>mean ticks between</span><span class="val" id="wxCadence">&mdash;</span></div>
+      <div style="font-size:10px;color:var(--dim);margin:6px 0 6px">
+        or call one down yourself &mdash; the PATH is always random:
+      </div>
+      <div class="row" id="wxKinds"></div>
       <div class="kv"><span>tax rate</span><span class="val" id="wTaxVal">0.00</span></div>
       <input type="range" id="wTax" min="0" max="1" step="0.01" value="0" oninput="setWorld('tax',this.value)">
     </div>
@@ -223,6 +239,19 @@
       <div class="kv"><span>force / determination</span><span class="val" id="forceVal">0.50</span></div>
       <input type="range" id="force" min="0" max="1" step="0.01" value="0.5"
              oninput="setForce(this.value)">
+    </div>
+
+    <div class="sec">
+      <h2>War games</h2>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
+        scripted exercises &mdash; same sequence every run, so two attempts
+        can actually be compared
+      </div>
+      <div class="row" id="wargames"></div>
+      <div class="kv"><span>running</span><span class="val" id="wgNow">&mdash;</span></div>
+      <div class="row" style="margin-top:4px">
+        <button onclick="stopWarGame()" style="border-color:#2a6a4a;color:var(--grn)">&#9632; ABORT</button>
+      </div>
     </div>
 
     <div class="sec">
@@ -355,7 +384,7 @@
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="keep.js?v=2"></script>
-<script src="attrition.js?v=6"></script>
+<script src="attrition.js?v=7"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -466,6 +495,160 @@
       case 'abun':   if(k26.economy) k26.economy['abundance'+col]=v;
                      show('wAbun'+col+'Val', v.toFixed(2)); break;
     }
+  }
+
+  /* ── WEATHER ─────────────────────────────────────────────────────────────
+     The toggle is honest: weather.js checks `enabled` before it schedules, so
+     OFF stops mother nature rather than merely hiding her. Fronts already
+     crossing are left to finish — cancelling them mid-map would teleport the
+     ground back to safe under agents that are currently reacting to it. */
+  function toggleWeather(){
+    if(!k26 || !k26.weather) return;
+    k26.weather.enabled = !k26.weather.enabled;
+    syncWeather();
+    log(k26.weather.enabled ? '☁ WEATHER ON' : '☀ WEATHER OFF — fronts in flight will finish', 'warn');
+  }
+
+  function callStorm(kind){
+    if(!k26 || !k26.weather) return;
+    if(!k26.weather.enabled){
+      log('weather is OFF — turn it on to call a storm','warn'); return;
+    }
+    k26.weather.spawn(kind, 1.0);
+    log('▚ ' + kind + ' called down — path is random, not chosen', 'crit');
+    syncWeather();
+  }
+
+  function syncWeather(){
+    if(!k26 || !k26.weather) return;
+    const w = k26.weather, on = !!w.enabled;
+    const b = document.getElementById('wxToggle');
+    if(b){ b.textContent = (on?'◉':'○') + ' WEATHER: ' + (on?'ON':'OFF');
+           b.style.borderColor = on ? 'var(--vio)' : 'var(--line)';
+           b.style.color = on ? 'var(--vio)' : 'var(--dim)'; }
+    const a = document.getElementById('wxActive');
+    if(a){ const n = (w.active||[]).length; a.textContent = n + (n===1?' front':' fronts'); }
+    const c = document.getElementById('wxCadence');
+    if(c) c.textContent = w.cadence ? Math.round(w.cadence) : '—';
+    const box = document.getElementById('wxKinds');
+    if(box && !box.dataset.built){
+      box.dataset.built = '1';
+      (w.kinds||[]).forEach(k => {
+        const btn = document.createElement('button');
+        btn.textContent = k;
+        btn.style.fontSize = '10px';
+        btn.onclick = () => callStorm(k);
+        box.appendChild(btn);
+      });
+    }
+  }
+
+  /* ── WAR GAMES ───────────────────────────────────────────────────────────
+     A range is only useful if two runs can be COMPARED, so these are scripted
+     rather than improvised: the same beats in the same order every time. Each
+     step is {t, do, why} where t is ticks from the start — the operator can
+     still touch anything mid-run, because a rehearsal nobody can interrupt is
+     a cutscene, not an exercise. */
+  const WAR_GAMES = {
+    'PROBE': {
+      blurb: 'a single light wave — the control run',
+      steps: [
+        { t: 0,   do: () => { target='B'; wave(1); }, why: 'recon on MAINLAND' }
+      ]
+    },
+    'TWO FRONTS': {
+      blurb: 'both colonies at once — can they hold alone?',
+      steps: [
+        { t: 0,   do: () => { target='A'; wave(2); }, why: 'strike KNOWHERE' },
+        { t: 60,  do: () => { target='B'; wave(2); }, why: 'strike MAINLAND' },
+        { t: 600, do: () => { target='both'; wave(2); }, why: 'second pulse, both' }
+      ]
+    },
+    'LONG SIEGE': {
+      blurb: 'escalating waves plus starvation on one colony',
+      steps: [
+        { t: 0,    do: () => { target='B'; wave(1); }, why: 'probe' },
+        { t: 400,  do: () => setWorldSlider('wScarB','scar','B',0.85), why: 'starve MAINLAND' },
+        { t: 500,  do: () => { target='B'; wave(2); }, why: 'strike team' },
+        { t: 1100, do: () => { target='B'; wave(3); }, why: 'occupation' },
+        { t: 1800, do: () => { target='B'; wave(3); }, why: 'and again — no relief' }
+      ]
+    },
+    'STORM AND STEEL': {
+      blurb: 'weather and assault together — compounding pressure',
+      steps: [
+        { t: 0,   do: () => { if(k26.weather){k26.weather.enabled=true; k26.weather.spawn('HURRICANE',1);} syncWeather(); }, why: 'hurricane' },
+        { t: 120, do: () => { target='both'; wave(2); }, why: 'strike while they scatter' },
+        { t: 700, do: () => { if(k26.weather) k26.weather.spawn('FLOOD',1); syncWeather(); }, why: 'flood the ground behind them' },
+        { t: 900, do: () => { target='both'; wave(3); }, why: 'occupation' }
+      ]
+    },
+    'DECAPITATION': {
+      blurb: 'everything at one crown — does the keep buy enough time?',
+      steps: [
+        { t: 0,   do: () => { setRelentless(2.0); target='A'; wave(3); }, why: 'LOBO all-in on KNOWHERE' },
+        { t: 300, do: () => { target='A'; wave(3); }, why: 'no pause' },
+        { t: 600, do: () => { target='A'; wave(3); }, why: 'no pause' }
+      ]
+    }
+  };
+
+  let WG = null;   // {name, started, idx}
+
+  function setWorldSlider(id, kind, col, v){
+    const el = document.getElementById(id); if(el) el.value = v;
+    setWorld(kind, col, v);
+  }
+  function setRelentless(v){
+    const el = document.getElementById('rel'); if(el) el.value = v;
+    setRel(v);
+  }
+
+  function startWarGame(name){
+    const g = WAR_GAMES[name]; if(!g || !k26) return;
+    WG = { name, started: k26.world.time || 0, idx: 0 };
+    running = true;
+    log('▶▶ WAR GAME — ' + name + ' · ' + g.blurb, 'crit');
+    syncWarGames();
+  }
+  function stopWarGame(){
+    if(!WG) return;
+    log('■ war game aborted — ' + WG.name, 'warn');
+    WG = null; syncWarGames();
+  }
+  function stepWarGame(){
+    if(!WG || !k26) return;
+    const g = WAR_GAMES[WG.name]; if(!g) { WG=null; return; }
+    const elapsed = (k26.world.time || 0) - WG.started;
+    while(WG.idx < g.steps.length && elapsed >= g.steps[WG.idx].t){
+      const s = g.steps[WG.idx++];
+      try { s.do(); } catch(e) { log('war game step failed: '+e.message,'crit'); }
+      log('   · ' + s.why, 'warn');
+    }
+    if(WG.idx >= g.steps.length){
+      log('▣ WAR GAME COMPLETE — ' + WG.name + ' · watch how it settles', 'crit');
+      WG = null;
+    }
+    syncWarGames();
+  }
+  function syncWarGames(){
+    const box = document.getElementById('wargames');
+    if(box && !box.dataset.built){
+      box.dataset.built = '1';
+      Object.keys(WAR_GAMES).forEach(n => {
+        const b = document.createElement('button');
+        b.textContent = n; b.style.fontSize = '10px';
+        b.title = WAR_GAMES[n].blurb;
+        b.onclick = () => startWarGame(n);
+        box.appendChild(b);
+      });
+    }
+    const now = document.getElementById('wgNow');
+    if(now) now.textContent = WG
+      ? WG.name + '  (' + WG.idx + '/' + WAR_GAMES[WG.name].steps.length + ')'
+      : '—';
+    if(box) Array.from(box.children).forEach(b =>
+      b.style.borderColor = (WG && b.textContent===WG.name) ? 'var(--blood)' : 'var(--line)');
   }
 
   function toggleWorld(){
@@ -683,6 +866,10 @@
       drawKings();
       updateAutoView();
       applyCut(); }        // LAST — the cut works on the finished frame
+    if(k26 && running){
+      stepWarGame();
+      if((k26.world.time|0) % 30 === 0) syncWeather();   // live front count
+    }
     stats();
     raf=requestAnimationFrame(frame);
   }
@@ -690,6 +877,8 @@
   window.addEventListener('resize',()=>{ if(k26) sizeCanvas(); });
   build();
   autoStowPanels();
+  syncWeather();
+  syncWarGames();
   frame();
 </script>
 </body>
