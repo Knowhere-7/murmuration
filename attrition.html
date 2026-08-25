@@ -323,7 +323,7 @@
 
 <!-- topomap FIRST: k26.drawBackground self-heals the contour layer by calling
      window.buildTopoMap, so without this the range renders on bare black. -->
-<script src="topomap.js?v=3"></script>
+<script src="topomap.js?v=4"></script>
 <script src="agent.js?v=6"></script>
 <script src="world.js?v=24"></script>
 <script src="seed.js?v=2"></script>
@@ -377,6 +377,11 @@
     k26.init(120);
     // The range is read on near-black under topo contours — the stock nebula
     // alphas disappear there. Push the atmosphere without touching the open sim.
+    // Point the terrain's passes at the REAL wall gates before anything bakes
+    // the topo layer. Hardcoding them is how the ridge ended up sitting across
+    // the north and south gateways in the first place.
+    if(window.syncTopoPassesToGates && !window.syncTopoPassesToGates(k26.world))
+      log('gate sync failed — terrain passes may not match the wall','warn');
     k26.nebulaGain=1.7;
     // The web stays exactly as beautiful — it just sits back a couple of ticks
     // so the terrain and the keep walls can be read through it.

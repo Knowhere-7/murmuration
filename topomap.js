@@ -19,8 +19,28 @@
   // numbers the contours are drawn from; a map whose landmarks are declared
   // twice drifts apart the first time either copy is edited.
   const BASIN = { A: { x: 0.24, y: 0.50 }, B: { x: 0.76, y: 0.50 } };
-  // Saddle passes through the meridian ridge — the only ways across.
-  const PASS_Y = [0.26, 0.50, 0.74];
+  /* Saddle passes through the meridian ridge — the only ways across, and they
+     MUST sit exactly where the wall's gates are.
+
+     Ghost, 2026-08-24: "knowhere only tries to use the north gate, and mainland
+     only tries to use the central gate." That was this: the passes were seeded
+     at 0.26/0.50/0.74 while world.js puts the gates at 0.14/0.50/0.86, so only
+     the CENTRE lined up. The ridge was solid rock across the north and south
+     gateways — terrain quietly overruling the wall, and a colony cannot walk
+     through a door with a mountain in front of it.
+
+     Defaults match world.js. syncPassesToGates() re-reads the real wall at
+     build time so an edit to either file cannot silently re-open this gap. */
+  let PASS_Y = [0.14, 0.50, 0.86];
+
+  function syncPassesToGates(world) {
+    const gates = world && world.wall && world.wall.gates;
+    if (!gates || !gates.length) return false;
+    const ys = gates.map(g => g.yf).filter(y => typeof y === 'number');
+    if (!ys.length) return false;
+    PASS_Y = ys;
+    return true;
+  }
 
   /* THE COMPOSED RANGE (Ghost, 2026-08-24). Four ideas at four scales, added
      into one field — they compose rather than compete because each owns a
@@ -69,17 +89,45 @@
     // into open ground rather than tiling the whole map with ripples.
     v += 0.42 * Math.cos(d * TAU / 0.085) * Math.exp(-(d * d) / 0.075);
 
-    // SEGMENTED RIFT — meridian ridge, cut by the three saddle passes
+    // SEGMENTED RIFT — meridian ridge, cut by a saddle at every gate.
+    // The pass mouths are WIDE (0.0034 vs the old 0.0016) so a colony drifting
+    // along the wall finds the opening instead of sliding past it.
     const spine = Math.exp(-((nx - 0.5) ** 2) / 0.0022);
     let pass = 0;
-    for (const py of PASS_Y) pass += Math.exp(-((ny - py) ** 2) / 0.0016);
-    v += 2.30 * spine * (1 - Math.min(1, pass));
+    for (const py of PASS_Y) pass += Math.exp(-((ny - py) ** 2) / 0.0034);
+    pass = Math.min(1, pass);
+    v += 2.30 * spine * (1 - pass);
+
+    // APPROACH FUNNEL — Ghost, 2026-08-24: "we need more pull towards all
+    // gates." Cutting the ridge only stops a gate being blocked; it gives an
+    // agent no reason to WANT one. This carves a shallow bowl in front of each
+    // opening, widening with distance from the seam, so downhill drift gathers
+    // a colony toward every gate rather than only the one it happens to touch.
+    // It is deliberately gentle — a hint in the ground, not a conveyor belt,
+    // so which gate a colony commits to stays their decision.
+    // Each gate is funnelled INDIVIDUALLY, and the outer ones are cut deeper.
+    // The centre gate lies on the line between the two basins, so the ground is
+    // naturally lower there — world.js says as much, calling north and south "a
+    // committed detour". Left alone that reads as one obvious door and two
+    // afterthoughts. Scaling the cut by distance from mid-height pays the outer
+    // gates back what the basins take from them, so all three cost about the
+    // same to reach and the choice is tactical rather than gravitational.
+    const nearSeam = Math.exp(-((nx - 0.5) ** 2) / 0.045);
+    for (const py of PASS_Y) {
+      const m = Math.exp(-((ny - py) ** 2) / 0.0034);
+      v -= (0.42 + 1.15 * Math.abs(py - 0.5)) * m * nearSeam;
+    }
 
     // ARCHIPELAGO — broad relief, plus islets seated on the approach lanes
     v += 0.30 * Math.sin(nx * TAU * 3.1 + 0.7) * Math.cos(ny * TAU * 2.6 + 1.4);
     v += 0.16 * Math.sin(nx * TAU * 5.7 + 2.2) * Math.cos(ny * TAU * 4.9 + 0.3);
-    v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.12) ** 2) / 0.004));
-    v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.88) ** 2) / 0.004));
+    // These two sit BETWEEN the gates, not on them. Seated at 0.12/0.88 they
+    // landed squarely on the north and south gateways and quietly filled in the
+    // funnels above — relief competing with the doors. Moved onto the ridge
+    // segments instead, where they deepen the contrast between a way through
+    // and a wall.
+    v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.32) ** 2) / 0.004));
+    v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.68) ** 2) / 0.004));
     v += 0.40 * Math.exp(-(((nx - 0.36) ** 2 + (ny - 0.30) ** 2) / 0.003));
     v += 0.40 * Math.exp(-(((nx - 0.64) ** 2 + (ny - 0.70) ** 2) / 0.003));
 
@@ -97,7 +145,7 @@
   // that drives movement, so the pair travels together.
   const FIELDS = {
     classic:  { fn: rawClassic,  off: 2.000, span: 5.600 },
-    composed: { fn: rawComposed, off: 2.797, span: 5.831 }  // 400x400 sweep: [-2.797, 3.034]
+    composed: { fn: rawComposed, off: 2.944, span: 5.338 }  // 400x400 sweep: [-2.944, 2.395]
   };
   let MODE = 'classic';   // the live open world keeps the surface it was measured on
 
@@ -219,7 +267,10 @@
   // Landmarks in normalized [0,1] coords. Kings are planted at BASIN.A/B and
   // the per-colony arenas are sized around them, so terrain and engine read
   // the same map. PASS_Y are the gaps in the meridian ridge.
-  window.TopoLandmarks = { BASIN, PASS_Y };
+  window.TopoLandmarks = { BASIN, get PASS_Y() { return PASS_Y; } };
+  /** Point the terrain's passes at the REAL wall gates. Call before the topo
+      layer is baked; returns false if the world has no wall yet. */
+  window.syncTopoPassesToGates = syncPassesToGates;
   /** Choose the height field. Call BEFORE the topo layer is baked — the
       contours and the movement gradient are the same surface, so switching
       after a build leaves the picture disagreeing with the physics.
