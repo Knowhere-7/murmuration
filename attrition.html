@@ -407,9 +407,10 @@
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
+<script src="stress.js?v=1"></script>
 <script src="lobo-evolve.js?v=6"></script>
 <script src="keep.js?v=4"></script>
-<script src="attrition.js?v=12"></script>
+<script src="attrition.js?v=13"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -1036,6 +1037,18 @@
         const got=_ev.adapt();
         if(got) log('☣ LOBO ADAPTED — '+got.trait+' · '+got.evidence.cause+
                     ' killed '+got.evidence.n+'/'+got.evidence.of+' · '+got.desc,'crit');
+      }
+      // STRESS ACCUMULATES FROM EVENTS, never from a schedule.
+      const _ss=window.MurmurationModules.Attrition.stress;
+      if(_ss){
+        _ss.step();
+        const _A=window.MurmurationModules.Attrition;
+        for(const col of ['A','B']){
+          const threat=_A.reactions?_A.reactions._threatTo(col):[];
+          const raised=_A.alarm&&_A.alarm.enabled&&(_A.alarm.stats()[col]||0)>0.05;
+          if(raised && !threat.length) _ss.alarmWithoutContact(col);   // cried wolf
+          if(raised && threat.length)  _ss.vindicated(col);            // it was real
+        }
       }
       const _al=window.MurmurationModules.Attrition.alarm;
       if(_al){

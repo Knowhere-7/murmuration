@@ -153,6 +153,10 @@ window.MurmurationModules.Attrition = {
     this.mortality = new window.MurmurationModules.AttritionMortality(world, this.kings);
     // LOBO ADAPTATION — the adversary is a subject of the test too, so it
     // evolves from what actually beat it rather than from a ladder we wrote.
+    // MENTAL STRESS — biases thresholds, never adds behaviour.
+    if (window.MurmurationModules.ColonyStress) {
+      this.stress = new window.MurmurationModules.ColonyStress(world);
+    }
     if (window.MurmurationModules.LoboEvolve) {
       this.loboEvolve = new window.MurmurationModules.LoboEvolve(world);
     }
@@ -176,7 +180,7 @@ window.MurmurationModules.Attrition = {
         }
       }).enable());
     }
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm, loboEvolve: this.loboEvolve };
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm, loboEvolve: this.loboEvolve, stress: this.stress };
   },
 };
 
@@ -395,7 +399,16 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       threat.some(u=>Math.hypot(a.x-u.x,a.y-u.y) < this.threatR*0.6)).length;
     // §7 TIC muster lowers the confirmation bar — the colony fires on a hair-trigger under alarm
     const bonus = (this.musterBonus && this.musterBonus[colony]) || 0;
-    return sensing >= Math.max(1, this.quorum - bonus);
+    /* THE COLONY'S STATE OF MIND DECIDES THE THRESHOLD, not us.
+       Stress never tells anyone what to do — it moves THIS number, and every
+       behaviour downstream changes without a new rule. Paranoia pulls it down
+       (act on less), fatigue pushes it up (demand more), and where it lands is
+       the running argument between how often this colony has been wrong and how
+       often it has been tired. */
+    const _st = window.MurmurationModules.Attrition &&
+                window.MurmurationModules.Attrition.stress;
+    const q = _st ? _st.quorumFor(colony, this.quorum) : this.quorum;
+    return sensing >= Math.max(1, q - bonus);
   }
 
   step(){
