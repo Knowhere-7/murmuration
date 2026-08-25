@@ -200,6 +200,63 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     return won.length ? won : null;
   }
 
+  /* ── H2O — THE STEALTH GATE ─────────────────────────────────────────────
+     Ghost, 2026-08-25: "we need to figure out how to have lobo incorporate h2o
+     possibly for those stealth hits."
+
+     H2O is the pentest engine's constitutional constraint — "never knowingly
+     decrease correspondence" — and its defining property is that it is
+     STRUCTURAL: "It runs before the action, not after. The engine physically
+     cannot generate a low-confidence finding." It does not punish a bad call, it
+     makes the bad call unavailable.
+
+     That is the right shape for stealth, because a FAILED silent approach is
+     strictly worse than an honest assault: it spends the same bodies, loses
+     surprise, AND raises the alarm that INFILTRATION exists to avoid. Committing
+     to silence you cannot keep is exactly "knowingly decreasing correspondence"
+     — claiming a capability the situation does not support.
+
+     So the gate runs before the commitment, and refuses rather than gambles.
+     It also protects the PHANTOM tier from being won by luck (SR-009 forecloses
+     awarding it on a judgement call): a stealth kill now has to be a stealth
+     ATTEMPT that was earned before it began. */
+  H2O_FLOOR = 0.55;
+
+  h2oStealthGate(ctx = {}) {
+    const reasons = [];
+    let c = 1.0;
+
+    // You cannot move unheard without having learned how. INFILTRATION is the
+    // counter to coordinated defence and the only trait that avoids contact.
+    if (!this.has('INFILTRATION')) {
+      return { allowed:false, confidence:0, reason:'no capability for silence — INFILTRATION not adopted' };
+    }
+    // If the colony is ALREADY roused, there is no silence left to keep. This is
+    // correspondence in its plainest form: the claim "they will not hear us" is
+    // already false.
+    if (ctx.alarmLevel > 0.05) {
+      return { allowed:false, confidence:0, reason:'the colony is already roused — the silence is spent' };
+    }
+    // A MASS CANNOT BE QUIET. Force and silence are genuinely exclusive, so this
+    // is where LOBO must choose one rather than being handed both.
+    if (ctx.committed > 6) { c -= 0.12 * (ctx.committed - 6); reasons.push('too many committed to stay quiet'); }
+    // Defenders on the approach make detection likelier the closer they sit.
+    if (ctx.defendersNear) { c -= 0.08 * ctx.defendersNear; reasons.push('defenders on the approach'); }
+    // A guard detail ringing the crown is the thing most likely to make contact.
+    if (ctx.guardsAtCrown) { c -= 0.06 * ctx.guardsAtCrown; reasons.push('the detail is at the crown'); }
+    // Being already inside the keep means walls have been crossed — that is
+    // progress, and it raises the odds the rest can be done unheard.
+    if (ctx.insideKeep) c += 0.15;
+
+    c = Math.max(0, Math.min(1, c));
+    const allowed = c >= this.H2O_FLOOR;
+    return {
+      allowed, confidence: +c.toFixed(3),
+      floor: this.H2O_FLOOR,
+      reason: allowed ? 'silence is credible' : (reasons[0] || 'confidence below the floor')
+    };
+  }
+
   /** Who won, or null while it is still undecided. */
   verdict() {
     if (this.muster == null) return null;

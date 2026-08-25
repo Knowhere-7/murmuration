@@ -689,7 +689,32 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
          half determination the advance is genuinely drowned and the unaligned
          drift as before; at full determination it clearly dominates. That is
          what makes the dial mean something rather than merely count bodies. */
-      const adv = 0.08 + force * 0.22;         // 0.19 == parity with the current
+      /* H2O DECIDES HOW THIS WAVE MOVES, before it moves.
+         A silent approach is only attempted when the gate says the silence is
+         credible; refused, LOBO presses honestly instead. Structural, not a
+         gamble — the same discipline the pentest engine applies to a finding. */
+      const _ev = window.MurmurationModules.Attrition.loboEvolve;
+      let stealth = null;
+      if (_ev && _ev.h2oStealthGate) {
+        const al = window.MurmurationModules.Attrition.alarm;
+        const guards = this.world.agents.filter(a => a._attritionGuard && !a.seppukuDone &&
+          Math.hypot(a.x - home.x, a.y - home.y) < this.threatR).length;
+        stealth = _ev.h2oStealthGate({
+          alarmLevel: al && al.enabled ? (al.stats()[colony] || 0) : 0,
+          committed: pawns.length,
+          defendersNear: 0,
+          guardsAtCrown: guards,
+          insideKeep: false
+        });
+        if (stealth.allowed && !this._silentAnnounced) {
+          this._silentAnnounced = true;
+          if (window.logLine) window.logLine(
+            `◐ LOBO GOES QUIET — H2O passed at ${stealth.confidence}: ${stealth.reason}`, 'crisis');
+        }
+      }
+      // A silent approach moves SLOWER — speed is noise. Refused, it presses.
+      const adv = (stealth && stealth.allowed ? 0.05 + force * 0.10
+                                              : 0.08 + force * 0.22);
       for (const p of pawns) {
         const dx = home.x - p.x, dy = home.y - p.y;
         const d = Math.hypot(dx, dy) || 1;
