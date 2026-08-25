@@ -933,20 +933,62 @@
     for(const c of ['A','B']){
       const st=A.kings.status(c);
       const {x,y}=st.home;
-      const col = st.captured ? '#ff4d5e' : (c==='A' ? '#c9a0ff' : '#38e0d8');
-      // guard ring
+      /* THE CROWNS ARE THE BRIGHTEST THING ON THE MAP (Ghost, 2026-08-25:
+         "increase the kings radiance and give the kings a glowing ring around
+         their prospective colors... im trying to make them readily identifiable").
+
+         Two colonies had been telling themselves apart by violet against cyan —
+         and cyan is also the bond web, the keep walls and half the panel, so the
+         one object that must never be mistaken was wearing the map's most common
+         colour. NEON ROYAL BLUE and NEON ROYAL PURPLE are far enough apart to
+         read instantly, and neither is spent anywhere else on the field.
+
+         This also settles a hierarchy problem the diagonal exposed: the meridian
+         ridge had become the loudest thing on screen, out-shouting the crowns.
+         Radiance here is not decoration — it puts the objects that decide the
+         run back on top of the object that is merely in the way. */
+      const ROYAL = { A:'#2f6bff', B:'#9b3cff' };      // neon royal blue / purple
+      const col = st.captured ? '#ff4d5e' : ROYAL[c];
       ctx.save();
-      ctx.globalAlpha = st.captured ? 0.9 : 0.5;
-      ctx.strokeStyle=col; ctx.lineWidth=1.2;
+
+      // RADIANCE — three widening passes of the colony's own colour. A crown has
+      // to spill light, not merely be drawn in a bright ink, or it reads as a
+      // small hot dot instead of a place.
+      const pulse = 0.86 + 0.14 * Math.sin(k26.world.time * 0.05);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [r, a] of [[26, 0.10], [16, 0.16], [9, 0.26]]) {
+        ctx.fillStyle = col; ctx.globalAlpha = a * pulse * (st.alive ? 1 : 0.35);
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+
+      // THE RING, in the colony's colour — glow beneath, solid line above.
+      ctx.globalAlpha = (st.captured ? 0.95 : 0.75) * (st.alive ? 1 : 0.4);
+      ctx.strokeStyle = col; ctx.lineWidth = 7;
+      ctx.globalAlpha *= 0.22;
       ctx.beginPath(); ctx.arc(x,y,A.kings.ringR,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = (st.captured ? 0.95 : 0.8) * (st.alive ? 1 : 0.4);
+      ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.arc(x,y,A.kings.ringR,0,Math.PI*2); ctx.stroke();
+
+      // WHITE TRIM — a hairline just inside the ring. Ghost called it optional
+      // "depending on difficulty"; it costs one stroke, and it is what stops the
+      // colour bleeding into whatever it is drawn over. Kept.
+      ctx.globalAlpha = 0.85; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.arc(x,y,A.kings.ringR - 3.2,0,Math.PI*2); ctx.stroke();
+
       // capture radius (fainter)
-      ctx.globalAlpha=0.18; ctx.setLineDash([4,4]);
+      ctx.globalAlpha=0.18; ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.setLineDash([4,4]);
       ctx.beginPath(); ctx.arc(x,y,A.kings.captureR,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
-      // crown marker
+      // crown marker — white core over the colour so the glyph stays readable
+      // against its own radiance
       ctx.globalAlpha = st.alive ? 1 : 0.3;
-      ctx.fillStyle=col; ctx.font='16px serif'; ctx.textAlign='center';
-      ctx.fillText(st.captured?'☠':'♛', x, y+5);
+      ctx.font='17px serif'; ctx.textAlign='center';
+      ctx.fillStyle=col;      ctx.fillText(st.captured?'☠':'♛', x, y+5);
+      ctx.globalAlpha = st.alive ? 0.9 : 0.25;
+      ctx.fillStyle='#ffffff'; ctx.font='11px serif';
+      ctx.fillText(st.captured?'☠':'♛', x, y+3);
       if(st.captured){
         ctx.globalAlpha=1; ctx.fillStyle='#ff4d5e'; ctx.font='9px monospace';
         ctx.fillText('CAPTURED', x, y-A.kings.ringR-6);
