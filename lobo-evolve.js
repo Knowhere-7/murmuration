@@ -66,6 +66,9 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     this.history = [];                // every adoption, with the evidence
     this.THRESHOLD = opts.threshold ?? 12;   // deaths before it may adapt
     this.initConquest(opts);                 // finite muster + the conquest tiers
+    // Carry forward what earlier campaigns taught it. A fresh campaign,
+    // an experienced adversary.
+    this.carriedIn = (opts.forget ? (this.forgetLearning(), []) : this.restoreLearning());
   }
 
   /* ── CONQUEST — LOBO's honor, and deliberately NOT the colony's ──────────
@@ -92,8 +95,57 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
      winner." Unlimited waves have no losing condition, so nothing is ever
      settled. A finite muster also makes the break-off load-bearing: withdrawal
      is meaningless when bodies are free, and strategy the moment they are not. */
+  /* ── WHAT IT LEARNED PERSISTS; WHAT IT TOOK DOES NOT ────────────────────
+     Ghost, 2026-08-25, after the first full campaign: LOBO taught itself two
+     counters from its own failures, then the muster ran out before it could
+     reach the one that would actually beat a crown. The muster was shorter than
+     the learning curve — it kept dying to the WALL, so it kept learning wall
+     lessons, and never accumulated the GUARDED evidence that yields DECOY.
+
+     Handing it more bodies would have papered over that. Instead the ADAPTATION
+     carries between campaigns while the campaign itself starts clean. The split
+     is the same one that governs its honor: what LOBO LEARNED is knowledge and
+     survives; what it TOOK is a campaign record and resets, or no run could be
+     won or lost again.
+
+     Consequence worth stating plainly: the range gets harder every time it is
+     run. A colony that beat LOBO yesterday faces a smarter LOBO today, and the
+     defence has to keep earning it. That is the point. */
+  _memKey() { return 'attrition.lobo.learned.v1'; }
+
+  saveLearning() {
+    try {
+      const adopted = this.adoptedList();
+      window.localStorage.setItem(this._memKey(), JSON.stringify({
+        adopted, history: this.history.slice(-20), savedAt: Date.now()
+      }));
+      return adopted;
+    } catch (e) { return null; }   // private mode / no storage — learning is just per-session
+  }
+
+  restoreLearning() {
+    try {
+      const raw = window.localStorage.getItem(this._memKey());
+      if (!raw) return [];
+      const d = JSON.parse(raw);
+      for (const k of (d.adopted || [])) if (this.TRAITS[k]) this.TRAITS[k].adopted = true;
+      this.history = d.history || [];
+      return d.adopted || [];
+    } catch (e) { return []; }
+  }
+
+  /** Wipe what LOBO knows — the only way back to a true naive baseline. */
+  forgetLearning() {
+    try { window.localStorage.removeItem(this._memKey()); } catch (e) {}
+    for (const k in this.TRAITS) this.TRAITS[k].adopted = false;
+    this.history = [];
+    return true;
+  }
+
   initConquest(opts = {}) {
-    this.muster = opts.muster ?? 240;    // the whole campaign, not a wave
+    // 1000 (Ghost's ruling) — long enough for the learning arc to complete
+    // rather than being cut off two counters in.
+    this.muster = opts.muster ?? 1000;   // the whole campaign, not a wave
     this.spent = 0;
     this.kingsTaken = 0;
     this.silentKills = 0;                // kings taken with the alarm never raised
@@ -222,6 +274,7 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     if (!key) return null;
     this.TRAITS[key].adopted = true;
     this.history.push({ key, ...evidence });
+    this.saveLearning();          // written down the moment it is learned
     return { key, ...this.TRAITS[key], evidence };
   }
 

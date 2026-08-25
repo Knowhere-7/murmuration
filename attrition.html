@@ -272,7 +272,9 @@
       <div class="kv"><span>running</span><span class="val" id="wgNow">&mdash;</span></div>
       <div class="row" style="margin-top:4px">
         <button onclick="stopWarGame()" style="border-color:#2a6a4a;color:var(--grn)">&#9632; ABORT</button>
+        <button onclick="forgetLobo()" title="wipe what LOBO has learned across campaigns">&#9003; FORGET</button>
       </div>
+      <div class="kv"><span>LOBO carries</span><span class="val" id="loboCarries">&mdash;</span></div>
     </div>
 
     <div class="sec">
@@ -405,7 +407,7 @@
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
-<script src="lobo-evolve.js?v=4"></script>
+<script src="lobo-evolve.js?v=5"></script>
 <script src="keep.js?v=4"></script>
 <script src="attrition.js?v=11"></script>
 <script>
@@ -568,6 +570,7 @@
     A.enabled=!A.enabled;
     if(!A.enabled){ A.grid.A.fill(0); A.grid.B.fill(0); }  // silence clears the air
     syncAlarm();
+  syncLobo();
     log(A.enabled ? '◈ ALARM PHEROMONE ON' : '◇ ALARM OFF — the air clears','warn');
   }
   function setAlarm(kind,v){
@@ -702,8 +705,33 @@
     WG = { name, started: k26.world.time || 0, idx: 0 };
     running = true;
     log('▶▶ WAR GAME — ' + name + ' · ' + g.blurb, 'crit');
+    // SR-008: the exercises are the controlled instrument, so a run has to
+    // declare what the adversary brought to it. Carried traits make two runs of
+    // the same exercise incomparable unless the carry is on the record.
+    const _le = window.MurmurationModules.Attrition.loboEvolve;
+    if(_le){
+      const c = _le.adoptedList();
+      log(c.length ? '   LOBO enters carrying: ' + c.join(', ')
+                   : '   LOBO enters NAIVE — a clean baseline', c.length ? 'warn' : null);
+    }
     syncWarGames();
   }
+  /* LOBO's learning persists across campaigns by ruling, which means the only
+     route back to a NAIVE adversary is deliberate. Without this there is no way
+     to re-establish a true baseline once it has learned anything. */
+  function forgetLobo(){
+    const E=window.MurmurationModules.Attrition.loboEvolve; if(!E) return;
+    E.forgetLearning();
+    log('⌫ LOBO FORGETS — every counter unlearned, the next campaign meets a naive adversary','crit');
+    syncLobo();
+  }
+  function syncLobo(){
+    const E=window.MurmurationModules.Attrition.loboEvolve;
+    const el=document.getElementById('loboCarries'); if(!el||!E) return;
+    const c=E.adoptedList();
+    el.textContent = c.length ? c.join(', ') : 'nothing (naive)';
+  }
+
   function stopWarGame(){
     if(!WG) return;
     log('■ war game aborted — ' + WG.name, 'warn');
@@ -1036,7 +1064,7 @@
       applyCut(); }        // LAST — the cut works on the finished frame
     if(k26 && running){
       stepWarGame();
-      if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); }
+      if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); syncLobo(); }
     }
     stats();
     raf=requestAnimationFrame(frame);
