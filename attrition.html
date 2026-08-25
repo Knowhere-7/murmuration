@@ -191,6 +191,27 @@
       <input type="range" id="wTax" min="0" max="1" step="0.01" value="0" oninput="setWorld('tax',this.value)">
     </div>
 
+    <!-- ALARM PHEROMONE — the colonies' own sense, so it lives on their panel.
+         LOBO is deaf and mute to it by ruling, which is why there is no
+         mirror of this control on the adversary side. -->
+    <div class="sec">
+      <h2>Alarm pheromone</h2>
+      <div class="row">
+        <button id="alToggle" onclick="toggleAlarm()">&#9210; ALARM: ON</button>
+        <span class="val" id="alLevel" style="margin-left:auto">&mdash;</span>
+      </div>
+      <div class="kv"><span>answer strength</span><span class="val" id="alFollowVal">1.0&times;</span></div>
+      <input type="range" id="alFollow" min="0" max="3" step="0.1" value="1"
+             oninput="setAlarm('follow',this.value)">
+      <div class="kv"><span>spread rate</span><span class="val" id="alDiffVal">0.38</span></div>
+      <input type="range" id="alDiff" min="0.02" max="0.6" step="0.01" value="0.38"
+             oninput="setAlarm('diffuse',this.value)">
+      <div style="font-size:10px;color:var(--dim);margin-bottom:6px">
+        guards and the wounded release it &mdash; never the king. it spreads
+        outward, so the far side of a colony always hears late.
+      </div>
+    </div>
+
     <div class="sec">
       <h2>KNOWHERE &middot; pressure</h2>
       <div class="kv"><span>terrain pull</span><span class="val" id="wTerrAVal">1.00</span></div>
@@ -383,8 +404,9 @@
 <script src="wealth.js"></script>
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
+<script src="alarm.js?v=3"></script>
 <script src="keep.js?v=2"></script>
-<script src="attrition.js?v=7"></script>
+<script src="attrition.js?v=8"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -495,6 +517,34 @@
       case 'abun':   if(k26.economy) k26.economy['abundance'+col]=v;
                      show('wAbun'+col+'Val', v.toFixed(2)); break;
     }
+  }
+
+  /* ── ALARM PHEROMONE ─────────────────────────────────────────────────── */
+  function toggleAlarm(){
+    const A=window.MurmurationModules.Attrition.alarm; if(!A) return;
+    A.enabled=!A.enabled;
+    if(!A.enabled){ A.grid.A.fill(0); A.grid.B.fill(0); }  // silence clears the air
+    syncAlarm();
+    log(A.enabled ? '◈ ALARM PHEROMONE ON' : '◇ ALARM OFF — the air clears','warn');
+  }
+  function setAlarm(kind,v){
+    const A=window.MurmurationModules.Attrition.alarm; if(!A) return;
+    v=parseFloat(v);
+    if(kind==='follow'){ A.FOLLOW=v;
+      document.getElementById('alFollowVal').textContent=v.toFixed(1)+'×'; }
+    if(kind==='diffuse'){ A.DIFFUSE=v;
+      document.getElementById('alDiffVal').textContent=v.toFixed(2); }
+  }
+  function syncAlarm(){
+    const A=window.MurmurationModules.Attrition.alarm; if(!A) return;
+    const b=document.getElementById('alToggle');
+    if(b){ b.textContent=(A.enabled?'◉':'○')+' ALARM: '+(A.enabled?'ON':'OFF');
+           b.style.borderColor=A.enabled?'var(--grn)':'var(--line)';
+           b.style.color=A.enabled?'var(--grn)':'var(--dim)'; }
+    const l=document.getElementById('alLevel');
+    if(l){ const s=A.stats();
+      l.textContent = (s.A+s.B) < 0.05 ? 'quiet'
+        : 'KN '+s.A.toFixed(1)+' · ML '+s.B.toFixed(1); }
   }
 
   /* ── WEATHER ─────────────────────────────────────────────────────────────
@@ -853,6 +903,18 @@
       // keeps step LAST: the king is planted by kings.step() above, and the
       // walls are enforced as position corrections, so they must have the
       // final word on where an attacker actually ended up this tick.
+      // ALARM before the keeps: the field is laid down by this tick's contact,
+      // then answered, then the walls have the final word on where anyone
+      // actually ended up.
+      const _al=window.MurmurationModules.Attrition.alarm;
+      if(_al){
+        _al.step();
+        // THE CALL TO ARMS — a pull the flock argues with, not a teleport.
+        for(const a of k26.world.agents){
+          const p=_al.pull(a);
+          if(p){ a.vx += p.x; a.vy += p.y; }
+        }
+      }
       const _kp=window.MurmurationModules.Attrition.keeps;
       if(_kp) for(const k of _kp) k.step();
       }
@@ -860,6 +922,9 @@
     if(k26){ k26.draw();
       const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));
       if(ctx && window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.draw(ctx);
+      // alarm haze lowest — it is air, everything else stands in it
+      const _ad=window.MurmurationModules.Attrition.alarm;
+      if(ctx && _ad) _ad.draw(ctx);
       // keep walls under the crown marker — architecture, then the king on it
       const _kd=window.MurmurationModules.Attrition.keeps;
       if(ctx && _kd) for(const k of _kd) k.draw(ctx);
@@ -868,7 +933,7 @@
       applyCut(); }        // LAST — the cut works on the finished frame
     if(k26 && running){
       stepWarGame();
-      if((k26.world.time|0) % 30 === 0) syncWeather();   // live front count
+      if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); }
     }
     stats();
     raf=requestAnimationFrame(frame);
@@ -879,6 +944,7 @@
   autoStowPanels();
   syncWeather();
   syncWarGames();
+  syncAlarm();
   frame();
 </script>
 </body>

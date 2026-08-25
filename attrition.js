@@ -151,6 +151,11 @@ window.MurmurationModules.Attrition = {
     this.tic = new window.MurmurationModules.AttritionTIC(world, this.kings, this.reactions, this.lobo);
     this.bleed.tic = this.tic;   // §6 honor drains in proportion to §7 disrespect
     this.mortality = new window.MurmurationModules.AttritionMortality(world, this.kings);
+    // WASP ALARM — the colony's own nervous system. Colony-only in both
+    // directions: LOBO neither releases it nor senses it (Ghost's ruling).
+    if (window.MurmurationModules.AlarmField) {
+      this.alarm = new window.MurmurationModules.AlarmField(world);
+    }
     // ONE KEEP PER CROWN — the king's last line of defence. Centre is sampled
     // live from the kings system, so a re-crowned king brings his walls with
     // him rather than leaving them standing around an empty floor.
@@ -163,7 +168,7 @@ window.MurmurationModules.Attrition = {
         }
       }).enable());
     }
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps };
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm };
   },
 };
 
