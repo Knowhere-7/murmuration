@@ -18,7 +18,27 @@
   // Exported so the engine can plant kings and size arenas from the SAME
   // numbers the contours are drawn from; a map whose landmarks are declared
   // twice drifts apart the first time either copy is edited.
-  const BASIN = { A: { x: 0.24, y: 0.50 }, B: { x: 0.76, y: 0.50 } };
+  /* DIAGONALLY OPPOSED (Ghost, 2026-08-25): "what if we moved the kings to the
+     north and south sides of the map to solve our gate use issue and it would
+     make the map feel larger than what it is. only thing we change is where the
+     king and its zone exists."
+
+     Both true, and measured before the change: crown separation goes 0.520 to
+     0.794 — half again as far on the same board, which is the whole "feels
+     larger" effect and costs nothing. And the gate each colony sits nearest
+     stops being the SAME one: KNOWHERE's is now NORTH, MAINLAND's is SOUTH,
+     where before both crowns sat level with CENTRE and everything naturally
+     drained through it.
+
+     One thing it does NOT change, and should not be claimed: a direct
+     crown-to-crown assault still prefers CENTRE (0.794 against 0.976), because
+     the centre gate lies on the straight line between diagonal corners. That
+     reads as a feature rather than a miss — each colony's own gate serves its
+     own business, and the centre becomes the aggressor's road.
+
+     Because kings, keeps and basins all read this one landmark, moving it moves
+     the crowns, their defences and the terrain together. */
+  const BASIN = { A: { x: 0.24, y: 0.20 }, B: { x: 0.76, y: 0.80 } };
   /* Saddle passes through the meridian ridge — the only ways across, and they
      MUST sit exactly where the wall's gates are.
 
@@ -105,13 +125,13 @@
     // a colony toward every gate rather than only the one it happens to touch.
     // It is deliberately gentle — a hint in the ground, not a conveyor belt,
     // so which gate a colony commits to stays their decision.
-    // Each gate is funnelled INDIVIDUALLY, and the outer ones are cut deeper.
-    // The centre gate lies on the line between the two basins, so the ground is
-    // naturally lower there — world.js says as much, calling north and south "a
-    // committed detour". Left alone that reads as one obvious door and two
-    // afterthoughts. Scaling the cut by distance from mid-height pays the outer
-    // gates back what the basins take from them, so all three cost about the
-    // same to reach and the choice is tactical rather than gravitational.
+    // Each gate is funnelled INDIVIDUALLY, the outer ones cut deeper. This was
+    // written when both crowns sat at mid-height and the centre was the cheapest
+    // ground by default. With the crowns moved to the diagonal it now lands the
+    // other way — measured 0.398 north, 0.467 centre, 0.405 south — so the
+    // centre is the DEAREST crossing while remaining the shortest crown-to-crown
+    // line. Those two pull against each other, which is better than either
+    // alone: the short road is the costly one, and no gate is simply correct.
     const nearSeam = Math.exp(-((nx - 0.5) ** 2) / 0.045);
     for (const py of PASS_Y) {
       const m = Math.exp(-((ny - py) ** 2) / 0.0034);
@@ -128,8 +148,11 @@
     // and a wall.
     v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.32) ** 2) / 0.004));
     v += 0.55 * Math.exp(-(((nx - 0.50) ** 2 + (ny - 0.68) ** 2) / 0.004));
-    v += 0.40 * Math.exp(-(((nx - 0.36) ** 2 + (ny - 0.30) ** 2) / 0.003));
-    v += 0.40 * Math.exp(-(((nx - 0.64) ** 2 + (ny - 0.70) ** 2) / 0.003));
+    // Re-seated for the diagonal crowns: at 0.36,0.30 and 0.64,0.70 these sat
+    // on the new basins' inner slope and quietly filled the bowls they are
+    // meant to sit beside.
+    v += 0.40 * Math.exp(-(((nx - 0.30) ** 2 + (ny - 0.72) ** 2) / 0.003));
+    v += 0.40 * Math.exp(-(((nx - 0.70) ** 2 + (ny - 0.28) ** 2) / 0.003));
 
     // NO CENTRAL PULL (Ghost, 2026-08-24). The old field lifted the border so
     // drift leaned toward the middle of the map. Under twin sinks that is
@@ -145,7 +168,7 @@
   // that drives movement, so the pair travels together.
   const FIELDS = {
     classic:  { fn: rawClassic,  off: 2.000, span: 5.600 },
-    composed: { fn: rawComposed, off: 2.944, span: 5.338 }  // 400x400 sweep: [-2.944, 2.395]
+    composed: { fn: rawComposed, off: 2.860, span: 5.339 }  // 400x400 sweep: [-2.860, 2.479]
   };
   let MODE = 'classic';   // the live open world keeps the surface it was measured on
 
