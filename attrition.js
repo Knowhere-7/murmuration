@@ -151,10 +151,18 @@ window.MurmurationModules.Attrition = {
     this.tic = new window.MurmurationModules.AttritionTIC(world, this.kings, this.reactions, this.lobo);
     this.bleed.tic = this.tic;   // §6 honor drains in proportion to §7 disrespect
     this.mortality = new window.MurmurationModules.AttritionMortality(world, this.kings);
+    // LOBO ADAPTATION — the adversary is a subject of the test too, so it
+    // evolves from what actually beat it rather than from a ladder we wrote.
+    if (window.MurmurationModules.LoboEvolve) {
+      this.loboEvolve = new window.MurmurationModules.LoboEvolve(world);
+    }
     // WASP ALARM — the colony's own nervous system. Colony-only in both
     // directions: LOBO neither releases it nor senses it (Ghost's ruling).
     if (window.MurmurationModules.AlarmField) {
-      this.alarm = new window.MurmurationModules.AlarmField(world);
+      // Starts LOCKED — the reactions ladder owns whether the colony has this
+      // sense yet, so the baseline is real rather than a setting someone
+      // remembered to switch off.
+      this.alarm = new window.MurmurationModules.AlarmField(world, { enabled: false });
     }
     // ONE KEEP PER CROWN — the king's last line of defence. Centre is sampled
     // live from the kings system, so a re-crowned king brings his walls with
@@ -168,7 +176,7 @@ window.MurmurationModules.Attrition = {
         }
       }).enable());
     }
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm };
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm, loboEvolve: this.loboEvolve };
   },
 };
 
@@ -338,6 +346,17 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       { id:'biofilmShield', trait:'Biofilm Shield (P. aeruginosa)', kind:'defense',
         unlocked:true, dur:180, cd:120,
         desc:'the colony tightens into a collective shell around the king — protection is emergent, no one cell makes it' },
+      // WASP ALARM — the first UNLOCKABLE rung, and deliberately so. It changes
+      // colony behaviour globally, so if it were innate there would be no run in
+      // which the colony is observed WITHOUT it and the control condition would
+      // not exist. Locked at open, every session carries its own baseline and
+      // the unlock is a known tick where behaviour visibly changes — which is
+      // also what makes a deviation legible instead of just surprising.
+      // It sits AFTER quorum on purpose: the signal needs a threshold already in
+      // place, or a call to arms is just a stampede.
+      { id:'waspAlarm', trait:'Wasp Alarm Pheromone (Vespula)', kind:'signal',
+        unlocked:false,
+        desc:'guards and the wounded release a call to arms that spreads outward — distance becomes delay, and the gradient says which way' },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
         unlocked:false, dur:120, cd:200,
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },

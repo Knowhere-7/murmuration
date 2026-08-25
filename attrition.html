@@ -405,8 +405,9 @@
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
+<script src="lobo-evolve.js?v=1"></script>
 <script src="keep.js?v=2"></script>
-<script src="attrition.js?v=8"></script>
+<script src="attrition.js?v=9"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -492,6 +493,11 @@
     if(k26) window.MurmurationModules.Attrition.lobo.regrowthMult=parseFloat(v); }
   function unlockReaction(){ if(!k26) return;
     const r=window.MurmurationModules.Attrition.reactions.unlockNext();
+    // A rung that unlocks a SENSE has to switch the sense on, or the ladder
+    // would announce a capability the colony does not actually gain.
+    if(r && r.id==='waspAlarm' && window.MurmurationModules.Attrition.alarm){
+      window.MurmurationModules.Attrition.alarm.enabled=true; syncAlarm();
+    }
     log(r?('▶ UNLOCKED — '+r.trait):'all reactions already unlocked','warn'); }
 
   /* The colonies' world dials. Each writes to the SAME property murmuration
@@ -906,6 +912,33 @@
       // ALARM before the keeps: the field is laid down by this tick's contact,
       // then answered, then the walls have the final word on where anyone
       // actually ended up.
+      // LOBO learns from its dead. Classification is deliberately conservative —
+      // an unattributable death teaches nothing rather than the wrong thing.
+      const _ev=window.MurmurationModules.Attrition.loboEvolve;
+      if(_ev && _ev.enabled){
+        const A2=window.MurmurationModules.Attrition;
+        for(const a of k26.world.agents){
+          if(a.colony!=='U' || !a.seppukuDone || a._loboCounted) continue;
+          a._loboCounted=true;
+          let guards=0, defenders=0, inKeep=false;
+          for(const d of k26.world.agents){
+            if(d.colony==='U'||d.seppukuDone) continue;
+            const dd=Math.hypot(d.x-a.x,d.y-a.y);
+            if(dd<70){ defenders++; if(d._attritionGuard) guards++; }
+          }
+          if(A2.keeps) for(const kp of A2.keeps){
+            const c=kp.centreFn();
+            if(c && Math.hypot(a.x-c.x,a.y-c.y) < kp.outerR()) inKeep=true;
+          }
+          const cause=_ev.classify(a,{keep:A2.keeps&&A2.keeps[0], insideKeep:inKeep,
+                                      guardsNear:guards, defendersNear:defenders,
+                                      alarm:window.MurmurationModules.Attrition.alarm, starved:false});
+          if(cause) _ev.recordDeath(cause);
+        }
+        const got=_ev.adapt();
+        if(got) log('☣ LOBO ADAPTED — '+got.trait+' · '+got.evidence.cause+
+                    ' killed '+got.evidence.n+'/'+got.evidence.of+' · '+got.desc,'crit');
+      }
       const _al=window.MurmurationModules.Attrition.alarm;
       if(_al){
         _al.step();
