@@ -441,9 +441,10 @@
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
 <script src="stress.js?v=2"></script>
+<script src="heat.js?v=1"></script>
 <script src="lobo-evolve.js?v=9"></script>
 <script src="keep.js?v=4"></script>
-<script src="attrition.js?v=13"></script>
+<script src="attrition.js?v=14"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -1004,7 +1005,10 @@
      the finished frame and blit it back scaled to fill the screen. Because it
      happens after every layer is already painted, contours, agents, keep walls
      and crowns all come along for free and no draw code knows it exists. */
-  let VIEW='range', VIEW_AUTO=true, _cutBuf=null, _dwell=0;
+  // AUTO IS OFF BY RULING (2026-08-25). Heat replaced the automatic cut;
+  // the manual views survive because a deliberate close look is a different
+  // thing from the engine deciding to take the board away mid-fight.
+  let VIEW='range', VIEW_AUTO=false, _cutBuf=null, _dwell=0;
   const DWELL_TICKS=90;          // hold the cut after a fight ends, so a
                                  // last straggler leaving does not snap the view
 
@@ -1036,7 +1040,8 @@
   }
 
   function updateAutoView(){
-    if(!VIEW_AUTO) return;
+    return;   // retired — see heat.js. Kept as a no-op so the frame loop and the
+              // manual view buttons need no surgery to bring it back.
     const c=contestedKeep();
     if(c){ if(VIEW!==c){ VIEW=c; syncViewButtons();
              log('▣ CUT → '+(c==='A'?'KNOWHERE':'MAINLAND')+' keep contested','warn'); }
@@ -1141,6 +1146,10 @@
               lost:(_ev._spawned||0)-U.length, alive:U.length, inKeep, crownReached:crown,
               deepestReached:deepest, defendersNear:defs, ticksEngaged:_ev._eng,
               progressRate: deepest>0?1:0, determination: force });
+            if(br && _ht){
+              const cx=U.reduce((s,u)=>s+u.x,0)/U.length, cy=U.reduce((s,u)=>s+u.y,0)/U.length;
+              _ht.add('TACTIC',cx,cy,2.5);      // a chosen withdrawal is a tactic
+            }
             if(br){
               log('☾ LOBO BREAKS OFF — '+br.reasons.join(', ')+
                   ' · the withdrawal is remembered, not wasted','warn');
@@ -1149,10 +1158,20 @@
           }
         }
         const got=_ev.adapt();
+        if(got && _ht){
+          // an adaptation has no position of its own — mark it where the fight
+          // that taught it actually happened
+          const U2=k26.world.agents.filter(a=>a.colony==='U'&&!a.seppukuDone);
+          if(U2.length){ const cx=U2.reduce((s,u)=>s+u.x,0)/U2.length,
+                         cy=U2.reduce((s,u)=>s+u.y,0)/U2.length;
+                         _ht.add('TACTIC',cx,cy,3); }
+        }
         if(got) log('☣ LOBO ADAPTED — '+got.trait+' · '+got.evidence.cause+
                     ' killed '+got.evidence.n+'/'+got.evidence.of+' · '+got.desc,'crit');
       }
       // STRESS ACCUMULATES FROM EVENTS, never from a schedule.
+      const _ht=window.MurmurationModules.Attrition.heat;
+      if(_ht) _ht.step();
       const _ss=window.MurmurationModules.Attrition.stress;
       if(_ss){
         _ss.step();
@@ -1180,7 +1199,10 @@
     if(k26){ k26.draw();
       const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));
       if(ctx && window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.draw(ctx);
-      // alarm haze lowest — it is air, everything else stands in it
+      // heat lowest of all — it is the reason to look, so nothing may sit under it
+      const _hd=window.MurmurationModules.Attrition.heat;
+      if(ctx && _hd) _hd.draw(ctx);
+      // alarm haze next — it is air, everything else stands in it
       const _ad=window.MurmurationModules.Attrition.alarm;
       if(ctx && _ad) _ad.draw(ctx);
       // keep walls under the crown marker — architecture, then the king on it

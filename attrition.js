@@ -153,6 +153,10 @@ window.MurmurationModules.Attrition = {
     this.mortality = new window.MurmurationModules.AttritionMortality(world, this.kings);
     // LOBO ADAPTATION — the adversary is a subject of the test too, so it
     // evolves from what actually beat it rather than from a ladder we wrote.
+    // HEAT — where the map is hot, shown in place. Replaces the screen cut.
+    if (window.MurmurationModules.HeatMap) {
+      this.heat = new window.MurmurationModules.HeatMap(world);
+    }
     // MENTAL STRESS — biases thresholds, never adds behaviour.
     if (window.MurmurationModules.ColonyStress) {
       this.stress = new window.MurmurationModules.ColonyStress(world);
@@ -180,7 +184,7 @@ window.MurmurationModules.Attrition = {
         }
       }).enable());
     }
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm, loboEvolve: this.loboEvolve, stress: this.stress };
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm, loboEvolve: this.loboEvolve, stress: this.stress, heat: this.heat };
   },
 };
 
