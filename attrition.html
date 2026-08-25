@@ -439,12 +439,12 @@
 <script src="wealth.js"></script>
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
-<script src="alarm.js?v=3"></script>
+<script src="alarm.js?v=4"></script>
 <script src="stress.js?v=2"></script>
 <script src="heat.js?v=1"></script>
 <script src="lobo-evolve.js?v=9"></script>
 <script src="keep.js?v=4"></script>
-<script src="attrition.js?v=15"></script>
+<script src="attrition.js?v=16"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -485,9 +485,14 @@
     if(!window.MurmurationModules.Attrition){ log('attrition module failed to load','crit'); return; }
     window.MurmurationModules.Attrition.attach(k26.world);
     // Inherit from any previous campaign that earned GEA — before the run starts.
-    const _inh = window.MurmurationModules.Attrition.reactions.restoreInheritance();
-    if(_inh) log('⬡ INHERITED — this colony remembers a previous one: '+
-                 _inh.unlocked.join(', '), 'warn');
+    for(const _c of ['A','B']){
+      const _inh = window.MurmurationModules.Attrition.reactions.restoreInheritance(_c);
+      if(_inh){
+        log('⬡ INHERITED — colony '+_c+' remembers a previous one: '+_inh.unlocked.join(', '),'warn');
+        if(_inh.unlocked.includes('waspAlarm') && window.MurmurationModules.Attrition.alarm)
+          window.MurmurationModules.Attrition.alarm.grantTo(_c);
+      }
+    }
     window.MurmurationModules.AttritionKnowledge.reset();
     buildGates();
     log('range armed · 120 agents · two colonies','warn');
@@ -569,18 +574,23 @@
     if(k26) window.MurmurationModules.Attrition.reactions.quorum=parseInt(v); }
   function setRel(v){ document.getElementById('relVal').textContent=parseFloat(v).toFixed(1)+'×';
     if(k26) window.MurmurationModules.Attrition.lobo.regrowthMult=parseFloat(v); }
-  function unlockReaction(){ if(!k26) return;
-    const r=window.MurmurationModules.Attrition.reactions.unlockNext();
+  function unlockReaction(colony){ if(!k26) return;
+    // Defaults to BOTH only if no colony is named, so the old one-click habit
+    // still works — but naming one is now the interesting move: it is how you
+    // get a colony with the alarm beside one without it, in the same run.
+    if(!colony){ unlockReaction('A'); unlockReaction('B'); return; }
+    const r=window.MurmurationModules.Attrition.reactions.unlockNext(colony);
     // A rung that unlocks a SENSE has to switch the sense on, or the ladder
     // would announce a capability the colony does not actually gain.
     if(r && r.id==='waspAlarm' && window.MurmurationModules.Attrition.alarm){
-      window.MurmurationModules.Attrition.alarm.enabled=true; syncAlarm();
+      // the SENSE is per colony now, matching the field it reads
+      window.MurmurationModules.Attrition.alarm.grantTo(colony); syncAlarm();
     }
     // GEA takes effect the moment it is earned: the colony writes down what it
     // has, so the NEXT campaign has something to inherit. Unlocking it and
     // saving nothing would make it a promise rather than a trait.
     if(r && r.id==='gea'){
-      const rec=window.MurmurationModules.Attrition.reactions.saveInheritance();
+      const rec=window.MurmurationModules.Attrition.reactions.saveInheritance(colony);
       log('⬡ GEA — this colony stops starting over. '+
           (rec? rec.unlocked.length+' unlocks recorded; disposition carried forward'
               : 'record unavailable in this browser'), 'crit');
@@ -928,8 +938,8 @@
     if(R){ const box=document.getElementById('reactions');
       const active=new Set(Object.entries(R.active).filter(([k,v])=>v>0).map(([k])=>k.split(':')[1]));
       box.innerHTML=R.reactions.map(r=>{
-        const col=!r.unlocked?'var(--dim)':(active.has(r.id)?'var(--red)':(r.kind==='offense'?'var(--amber)':'var(--grn)'));
-        const tag=!r.unlocked?'🔒':(active.has(r.id)?'▶':(r.kind==='gate'?'◆':'○'));
+        const col=!r.unlocked.A&&!r.unlocked.B?'var(--dim)':(active.has(r.id)?'var(--red)':(r.kind==='offense'?'var(--amber)':'var(--grn)'));
+        const tag=!r.unlocked.A&&!r.unlocked.B?'🔒':(active.has(r.id)?'▶':(r.kind==='gate'?'◆':'○'));
         return '<div style="color:'+col+';margin:1px 0" title="'+r.desc+'">'+tag+' '+r.trait+'</div>';
       }).join('');
     }

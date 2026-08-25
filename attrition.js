@@ -349,10 +349,10 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     // locked and are revealed one per evolution cycle by the unlock pass.
     this.reactions = [
       { id:'quorumSensing', trait:'Quorum Sensing (Vibrio fischeri)', kind:'gate',
-        unlocked:true,
+        unlocked:{A:true,B:true}, _innate:true,
         desc:'consensus threshold — nothing fires until a quorum independently confirms the threat' },
       { id:'biofilmShield', trait:'Biofilm Shield (P. aeruginosa)', kind:'defense',
-        unlocked:true, dur:180, cd:120,
+        unlocked:{A:true,B:true}, _innate:true, dur:180, cd:120,
         desc:'the colony tightens into a collective shell around the king — protection is emergent, no one cell makes it' },
       // WASP ALARM — the first UNLOCKABLE rung, and deliberately so. It changes
       // colony behaviour globally, so if it were innate there would be no run in
@@ -363,7 +363,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       // It sits AFTER quorum on purpose: the signal needs a threshold already in
       // place, or a call to arms is just a stampede.
       { id:'waspAlarm', trait:'Wasp Alarm Pheromone (Vespula)', kind:'signal',
-        unlocked:false,
+        unlocked:{A:false,B:false},
         desc:'guards and the wounded release a call to arms that spreads outward — distance becomes delay, and the gradient says which way' },
       /* GEA — Ghost, 2026-08-25: "the next unlockable i want... and this may seem
          incorrect at first, but it should be GEA."
@@ -390,16 +390,16 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
          actually develops in, and the reverse would be memory with nothing yet
          worth recording. */
       { id:'gea', trait:'GEA — Genetic Evolution Architecture', kind:'inheritance',
-        unlocked:false,
+        unlocked:{A:false,B:false},
         desc:'the colony stops starting over: unlocks carry between campaigns and new agents inherit what their predecessors learned' },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
-        unlocked:false, dur:120, cd:200,
+        unlocked:{A:false,B:false}, dur:120, cd:200,
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
       { id:'bombardierBeetle', trait:'Bombardier Beetle (Brachinus)', kind:'offense',
-        unlocked:false, dur:1, cd:260,
+        unlocked:{A:false,B:false}, dur:1, cd:260,
         desc:'multi-signal convergence fires a coordinated burst at the crown — structurally cannot misfire' },
       { id:'wolfPack', trait:'Wolf Pack (Canis lupus)', kind:'offense',
-        unlocked:false, dur:220, cd:180,
+        unlocked:{A:false,B:false}, dur:220, cd:180,
         desc:'a hunting party breaks off under a tactician and runs the attackers down' },
     ];
   }
@@ -412,36 +412,53 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
      Gated on the GEA rung itself: until it is unlocked, none of this runs and
      the colony genuinely does start naive. That keeps the baseline honest —
      memory has to be EARNED before it can be relied on. */
-  _geaKey(){ return 'attrition.colony.gea.v1'; }
+  _geaKey(colony){ return 'attrition.colony.gea.v2.' + colony; }
 
-  geaActive(){ const r = this.byId('gea'); return !!(r && r.unlocked); }
+  /* PER-COLONY FROM HERE DOWN (Ghost, 2026-08-25): "how does this effect
+     pheromones if the colonies start learning everything simultaneously."
 
-  saveInheritance(){
-    if (!this.geaActive()) return null;
+     It was one shared ladder, so both colonies gained every sense in the same
+     instant. The alarm's FIELD was already per-colony — KNOWHERE's panic cannot
+     move MAINLAND — but the CAPABILITY was not, and that is worse than it
+     sounds. It made the one question worth asking unaskable: what is the alarm
+     actually worth? You could never run a colony that had it beside one that did
+     not, against the same LOBO, in the same run.
+
+     GEA compounded it. Both colonies inherited from a single record, so they did
+     not merely learn together — they became permanently identical. Two colonies,
+     one lineage, no divergence, which is the opposite of evolving a genome.
+
+     Now each colony owns its unlocks and its own inheritance record. Two
+     lineages that can diverge, and every run carries its own control group. */
+  geaActive(colony){ const r = this.byId('gea'); return !!(r && r.unlocked[colony]); }
+
+  saveInheritance(colony){
+    if (!this.geaActive(colony)) return null;
     try {
-      const unlocked = this.reactions.filter(r=>r.unlocked).map(r=>r.id);
+      const unlocked = this.reactions.filter(r=>r.unlocked[colony]).map(r=>r.id);
       // #14: the learned BIAS, not the individuals — a colony inherits a
       // disposition, never a roster.
-      const live = this.world.agents.filter(a=>a.colony!=='U' && !a.seppukuDone);
+      const live = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone);
       const trust = live.length
         ? live.reduce((s,a)=>s+(a.trustCharge||0),0)/live.length : null;
-      window.localStorage.setItem(this._geaKey(), JSON.stringify({
+      window.localStorage.setItem(this._geaKey(colony), JSON.stringify({
         unlocked, trustBias: trust, savedAt: Date.now()
       }));
       return { unlocked, trustBias: trust };
     } catch(e){ return null; }
   }
 
-  restoreInheritance(){
+  restoreInheritance(colony){
     try {
-      const raw = window.localStorage.getItem(this._geaKey());
+      const raw = window.localStorage.getItem(this._geaKey(colony));
       if (!raw) return null;
       const d = JSON.parse(raw);
       // A colony can only inherit if the PREVIOUS colony earned GEA — the record
       // itself carries the right to read it.
       if (!(d.unlocked||[]).includes('gea')) return null;
-      for (const id of d.unlocked){ const r = this.byId(id); if (r) r.unlocked = true; }
-      this.inheritedTrust = d.trustBias;
+      for (const id of d.unlocked){ const r = this.byId(id); if (r) r.unlocked[colony] = true; }
+      this.inheritedTrust = this.inheritedTrust || {};
+      this.inheritedTrust[colony] = d.trustBias;
       return d;
     } catch(e){ return null; }
   }
@@ -449,27 +466,34 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
   /** #14 — a newly born agent inherits the colony's learned disposition rather
       than the default it would otherwise be handed. */
   applyInheritance(agent){
-    if (!this.geaActive() || this.inheritedTrust == null || !agent) return false;
-    agent.trustCharge = this.inheritedTrust;
+    const c = agent && agent.colony;
+    if (!agent || !this.geaActive(c)) return false;
+    const t = this.inheritedTrust && this.inheritedTrust[c];
+    if (t == null) return false;
+    agent.trustCharge = t;
     agent._inherited = true;
     return true;
   }
 
-  forgetInheritance(){
-    try { window.localStorage.removeItem(this._geaKey()); } catch(e){}
-    this.inheritedTrust = null;
+  forgetInheritance(colony){
+    for (const c of (colony ? [colony] : ['A','B'])) {
+      try { window.localStorage.removeItem(this._geaKey(c)); } catch(e){}
+      if (this.inheritedTrust) this.inheritedTrust[c] = null;
+      for (const r of this.reactions) if (!r._innate) r.unlocked[c] = false;
+    }
     return true;
   }
 
   byId(id){ return this.reactions.find(r=>r.id===id); }
-  unlockedList(){ return this.reactions.filter(r=>r.unlocked); }
-  lockedList(){ return this.reactions.filter(r=>!r.unlocked); }
+  unlockedList(colony){ return this.reactions.filter(r=>r.unlocked[colony]); }
+  lockedList(colony){ return this.reactions.filter(r=>!r.unlocked[colony]); }
 
   /** Reveal the next locked reaction — called once per evolution cycle (item 5). */
-  unlockNext(){
-    const next = this.reactions.find(r=>!r.unlocked);
-    if(next){ next.unlocked = true;
-      this.fireLog.unshift({ t:this.world.time, id:next.id, msg:'UNLOCKED ' + next.trait }); }
+  unlockNext(colony){
+    const next = this.reactions.find(r=>!r.unlocked[colony]);
+    if(next){ next.unlocked[colony] = true;
+      this.fireLog.unshift({ t:this.world.time, id:next.id, colony,
+        msg:'UNLOCKED ' + next.trait + ' — colony ' + colony }); }
     return next || null;
   }
 
@@ -513,7 +537,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       if(!confirmed) continue;
 
       // fire any unlocked, off-cooldown reaction whose face suits the moment.
-      for(const r of this.unlockedList()){
+      for(const r of this.unlockedList(colony)){
         if(r.kind==='gate') continue;
         const key = colony+':'+r.id;
         if(this.active[key]>0) continue;

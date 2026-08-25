@@ -50,7 +50,15 @@ window.MurmurationModules.AlarmField = class AlarmField {
     // a flag.
     this._fixedCell = !!opts.cell;        // an explicit cell wins, for tests
     this.cell = opts.cell || 0;           // 0 = derive from the world
-    this.enabled = opts.enabled !== false;
+    // PER-COLONY SENSE. The field was always separate; the CAPABILITY now is
+    // too, so one colony can hold the alarm while the other does not — which is
+    // the only way to ever measure what it is worth.
+    this.granted = { A: opts.enabled === true, B: opts.enabled === true };
+    Object.defineProperty(this, 'enabled', {
+      get(){ return this.granted.A || this.granted.B; },
+      set(v){ this.granted.A = this.granted.B = !!v; },
+      configurable: true
+    });
 
     // How fast the news travels, and how fast it goes stale.
     this.DIFFUSE = opts.diffuse ?? 0.38;  // share passed to neighbours per tick
@@ -98,6 +106,9 @@ window.MurmurationModules.AlarmField = class AlarmField {
     return { x: gx, y: gy };
   }
 
+  grantTo(colony){ if (colony==='A'||colony==='B') this.granted[colony] = true; return this.granted; }
+  hasSense(colony){ return !!this.granted[colony]; }
+
   _isColonist(a) {
     return a && !a.seppukuDone && !a.isSentinel && (a.colony === 'A' || a.colony === 'B');
   }
@@ -117,6 +128,7 @@ window.MurmurationModules.AlarmField = class AlarmField {
       for (const a of agents) {
         if (!this._isColonist(a)) continue;
         if (a.isKing) continue;                       // the crown stays silent
+        if (!this.granted[a.colony]) continue;        // a colony without the sense cannot release
         const guard = !!a._attritionGuard;
         let near = 0;
         for (const e of enemies) {
@@ -161,7 +173,8 @@ window.MurmurationModules.AlarmField = class AlarmField {
    * answers an alarm should still look like a colony moving, not iron filings.
    */
   pull(a) {
-    if (!this.enabled || !this._isColonist(a) || a.isKing) return null;
+    if (!this._isColonist(a) || a.isKing) return null;
+    if (!this.granted[a.colony]) return null;     // cannot hear what it never gained
     const here = this.sample(a.colony, a.x, a.y);
     // A wasp does not need a lungful to react. The threshold is the faintest
     // trace that still carries a direction — set too high, the far side of a
