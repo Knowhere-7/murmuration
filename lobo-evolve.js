@@ -90,11 +90,14 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
                      healed, never recovered. It is a RECORD of what happened,
                      and a record has nothing to be skeptical of.
 
-     THE MUSTER IS WHAT MAKES IT A TEST. Ghost: "lobo needs a finite number if
-     we want a true test. if it can run out of agents then there is a decisive
-     winner." Unlimited waves have no losing condition, so nothing is ever
-     settled. A finite muster also makes the break-off load-bearing: withdrawal
-     is meaningless when bodies are free, and strategy the moment they are not. */
+     ON THE MUSTER — SUPERSEDED, and the history is kept because the reasoning
+     changed rather than being wrong. It was capped so a run could be lost by
+     attrition; it is uncapped now because attrition was the wrong axis. See
+     initConquest() below and SOVEREIGN_RULINGS SR-010. One consequence must be
+     tracked rather than assumed: the honored break-off was made load-bearing BY
+     the cap, since withdrawal is meaningless while bodies are free. Uncapped, it
+     survives only because LOBO's honor counts what its dead BOUGHT, so spending
+     without gain still costs it something. */
   /* ── WHAT IT LEARNED PERSISTS; WHAT IT TOOK DOES NOT ────────────────────
      Ghost, 2026-08-25, after the first full campaign: LOBO taught itself two
      counters from its own failures, then the muster ran out before it could
@@ -143,9 +146,24 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
   }
 
   initConquest(opts = {}) {
-    // 1000 (Ghost's ruling) — long enough for the learning arc to complete
-    // rather than being cut off two counters in.
-    this.muster = opts.muster ?? 1000;   // the whole campaign, not a wave
+    /* NO CAP (Ghost, 2026-08-25 — superseding the finite muster of hours
+       earlier). "with this slider lobo doesnt need a cap which is a far more
+       productive path and the original one and structurally correct."
+
+       He is right and it is worth writing down why. A muster made the run
+       decidable by ATTRITION: whoever ran out first lost. But a real adversary
+       does not run out — what is finite in the world being modelled is the
+       DEFENDER'S attention, and that is now modelled directly by stress. With
+       paranoia and fatigue moving the threshold a colony decides at, and
+       Population Boom letting it replenish to its own ceiling, the question
+       stops being "can LOBO outlast them" and becomes "can they keep deciding
+       well under pressure that never stops." That is the blue-team question.
+
+       null = unlimited. draw() passes everything through, exhausted() is never
+       true, and a run is decided by CROWNED or by nothing — which is correct,
+       because a defence that merely survives an attacker's supply has not been
+       shown to be good, only to have been lucky about how much was sent. */
+    this.muster = opts.muster ?? null;   // null = no cap
     this.spent = 0;
     this.kingsTaken = 0;
     this.silentKills = 0;                // kings taken with the alarm never raised
@@ -185,7 +203,9 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
    * only it can see the field.
    */
   recordKingTaken(silent) {
-    if (this.muster == null) return null;
+    // NOT gated on the muster. Uncapping LOBO must never remove its ability to
+    // WIN — the same bug lived here and in verdict(), and either one alone made
+    // an uncapped campaign unwinnable while looking fine.
     this.kingsTaken++;
     if (silent) this.silentKills++;
     const won = [];
@@ -259,9 +279,15 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
 
   /** Who won, or null while it is still undecided. */
   verdict() {
-    if (this.muster == null) return null;
+    // CROWNED decides regardless of the muster. Removing the cap removed the
+    // colonies' attrition win, and an early version of this bailed out entirely
+    // when muster was null — which silently made an uncapped run UNDECIDABLE,
+    // the exact opposite of the point. LOBO can always still win.
     if (this.tiersEarned.includes('CROWNED')) return { winner:'LOBO', how:'crowned' };
-    if (this.exhausted()) return { winner:'COLONIES', how:'muster exhausted' };
+    // The colonies' win only exists while there is something to exhaust. With no
+    // cap they do not win by outlasting — they win by not losing, for as long as
+    // the operator keeps asking, which is the blue-team question.
+    if (this.muster != null && this.exhausted()) return { winner:'COLONIES', how:'muster exhausted' };
     return null;
   }
 

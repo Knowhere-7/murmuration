@@ -213,6 +213,15 @@
       <div class="kv"><span>dread &middot; both</span><span class="val" id="stDrdVal">0.00</span></div>
       <input type="range" id="stDrd" min="0" max="1" step="0.01" value="0" oninput="setStress('both','dread',this.value)">
       <div class="kv"><span>quorum they act on</span><span class="n" id="stQuorum">KN 3 &middot; ML 3</span></div>
+      <div class="row" style="margin-top:10px">
+        <button onclick="boom('A')">&#9679; BOOM KNOWHERE</button>
+        <button onclick="boom('B')">&#9679; BOOM MAINLAND</button>
+      </div>
+      <div class="kv"><span>population</span><span class="n" id="popNow">&mdash;</span></div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
+        LOBO has no cap &mdash; the colonies answer endless pressure by replenishing,
+        so the question is whether they keep DECIDING well, not who runs out
+      </div>
       <div style="font-size:10px;color:var(--dim)">
         paranoia lowers it, fatigue raises it &mdash; where it lands is the argument between them
       </div>
@@ -432,7 +441,7 @@
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
 <script src="stress.js?v=2"></script>
-<script src="lobo-evolve.js?v=6"></script>
+<script src="lobo-evolve.js?v=9"></script>
 <script src="keep.js?v=4"></script>
 <script src="attrition.js?v=13"></script>
 <script>
@@ -589,6 +598,20 @@
     }
   }
 
+  /* POPULATION BOOM — the colonies' half of an uncapped fight. LOBO no longer
+     runs out, so survival cannot come from outlasting it; it has to come from
+     replenishing and from deciding well. The per-colony ceiling in world.js
+     still holds, so this restores rather than inflates. */
+  function boom(colony){
+    if(!k26 || !k26.world.spawnColonyReinforcements) return;
+    const before = k26.world.agents.filter(a=>a.colony===colony && !a.seppukuDone).length;
+    k26.world.spawnColonyReinforcements(12, colony);
+    const after = k26.world.agents.filter(a=>a.colony===colony && !a.seppukuDone).length;
+    log('◉ POPULATION BOOM — ' + (colony==='A'?'KNOWHERE':'MAINLAND') + ' ' +
+        before + ' → ' + after + (after===before ? ' (at capacity)' : ''), 'warn');
+    syncStress();
+  }
+
   /* ── STATE OF MIND ────────────────────────────────────────────────────
      A FLOOR, not an override: the operator says where a colony begins and the
      run decides where it ends up. Authored entry, emergent outcome. */
@@ -607,6 +630,10 @@
     const base=R?R.quorum:3;
     const el=document.getElementById('stQuorum');
     if(el) el.textContent='KN '+S.quorumFor('A',base)+' · ML '+S.quorumFor('B',base);
+    const p=document.getElementById('popNow');
+    if(p && k26){ const n=c=>k26.world.agents.filter(a=>a.colony===c&&!a.seppukuDone).length;
+      p.textContent='KN '+n('A')+' · ML '+n('B')+'  ·  LOBO '+
+        k26.world.agents.filter(a=>a.colony==='U'&&!a.seppukuDone).length+' (uncapped)'; }
   }
 
   /* ── ALARM PHEROMONE ─────────────────────────────────────────────────── */
