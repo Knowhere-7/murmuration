@@ -194,6 +194,30 @@
     <!-- ALARM PHEROMONE — the colonies' own sense, so it lives on their panel.
          LOBO is deaf and mute to it by ruling, which is why there is no
          mirror of this control on the adversary side. -->
+    <!-- STATE OF MIND — the operator sets where a colony STARTS; lived events
+         still accumulate above it. Paranoia leads because it is the oldest and
+         most-used modifier here, and because in murmuration it is the scenario
+         name attached to ELECTRORECEPTION (#33) — a sense that finds threats by
+         correlating faint signals, which is what paranoia biologically is. -->
+    <div class="sec">
+      <h2>State of mind</h2>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
+        these move the colony&rsquo;s decision THRESHOLD, never its behaviour
+      </div>
+      <div class="kv"><span>paranoia &middot; KNOWHERE</span><span class="val" id="stParAVal">0.00</span></div>
+      <input type="range" id="stParA" min="0" max="1" step="0.01" value="0" oninput="setStress('A','paranoia',this.value)">
+      <div class="kv"><span>paranoia &middot; MAINLAND</span><span class="val" id="stParBVal">0.00</span></div>
+      <input type="range" id="stParB" min="0" max="1" step="0.01" value="0" oninput="setStress('B','paranoia',this.value)">
+      <div class="kv"><span>alarm fatigue &middot; both</span><span class="val" id="stFatVal">0.00</span></div>
+      <input type="range" id="stFat" min="0" max="1" step="0.01" value="0" oninput="setStress('both','fatigue',this.value)">
+      <div class="kv"><span>dread &middot; both</span><span class="val" id="stDrdVal">0.00</span></div>
+      <input type="range" id="stDrd" min="0" max="1" step="0.01" value="0" oninput="setStress('both','dread',this.value)">
+      <div class="kv"><span>quorum they act on</span><span class="n" id="stQuorum">KN 3 &middot; ML 3</span></div>
+      <div style="font-size:10px;color:var(--dim)">
+        paranoia lowers it, fatigue raises it &mdash; where it lands is the argument between them
+      </div>
+    </div>
+
     <div class="sec">
       <h2>Alarm pheromone</h2>
       <div class="row">
@@ -407,7 +431,7 @@
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
-<script src="stress.js?v=1"></script>
+<script src="stress.js?v=2"></script>
 <script src="lobo-evolve.js?v=6"></script>
 <script src="keep.js?v=4"></script>
 <script src="attrition.js?v=13"></script>
@@ -565,6 +589,26 @@
     }
   }
 
+  /* ── STATE OF MIND ────────────────────────────────────────────────────
+     A FLOOR, not an override: the operator says where a colony begins and the
+     run decides where it ends up. Authored entry, emergent outcome. */
+  function setStress(who, factor, v){
+    const S=window.MurmurationModules.Attrition.stress; if(!S) return;
+    v=parseFloat(v);
+    (who==='both'?['A','B']:[who]).forEach(c=>S.setFloor(c,factor,v));
+    const id = factor==='paranoia' ? ('stPar'+who+'Val')
+             : factor==='fatigue'  ? 'stFatVal' : 'stDrdVal';
+    const el=document.getElementById(id); if(el) el.textContent=v.toFixed(2);
+    syncStress();
+  }
+  function syncStress(){
+    const S=window.MurmurationModules.Attrition.stress; if(!S) return;
+    const R=window.MurmurationModules.Attrition.reactions;
+    const base=R?R.quorum:3;
+    const el=document.getElementById('stQuorum');
+    if(el) el.textContent='KN '+S.quorumFor('A',base)+' · ML '+S.quorumFor('B',base);
+  }
+
   /* ── ALARM PHEROMONE ─────────────────────────────────────────────────── */
   function toggleAlarm(){
     const A=window.MurmurationModules.Attrition.alarm; if(!A) return;
@@ -572,6 +616,7 @@
     if(!A.enabled){ A.grid.A.fill(0); A.grid.B.fill(0); }  // silence clears the air
     syncAlarm();
   syncLobo();
+  syncStress();
     log(A.enabled ? '◈ ALARM PHEROMONE ON' : '◇ ALARM OFF — the air clears','warn');
   }
   function setAlarm(kind,v){
@@ -1077,7 +1122,7 @@
       applyCut(); }        // LAST — the cut works on the finished frame
     if(k26 && running){
       stepWarGame();
-      if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); syncLobo(); }
+      if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); syncLobo(); syncStress(); }
     }
     stats();
     raf=requestAnimationFrame(frame);

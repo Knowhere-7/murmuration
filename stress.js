@@ -65,7 +65,42 @@ window.MurmurationModules.ColonyStress = class ColonyStress {
     this.BASE_QUORUM = null;   // captured on first use — never assumed
   }
 
+  /* ── THE OPERATOR'S FLOOR ────────────────────────────────────────────────
+     Ghost, 2026-08-25: "stress as a slider ... i keep going back to that
+     particular slider because it was the first and most frequent behavior
+     modifier."
+
+     Paranoia has lineage here. In murmuration it is the scenario name attached
+     to ELECTRORECEPTION (#33, cross-correlation detection) — a sense that finds
+     threats by correlating faint signals, which is what paranoia biologically
+     IS. This is that dial, given its own hand.
+
+     A floor rather than an override: the operator sets the state of mind a
+     colony STARTS from, and lived events still accumulate above it. So "show me
+     a paranoid colony under attack" is a setting, while what that colony then
+     becomes is still earned. Authored entry, emergent outcome — which is the
+     correct shape for a range, where a scenario must be repeatable but its
+     result must not be. */
+  setFloor(colony, factor, v) {
+    this.floors = this.floors || { A:{}, B:{} };
+    if (!this.floors[colony]) this.floors[colony] = {};
+    this.floors[colony][factor] = Math.max(0, Math.min(1, v));
+    return this.floors[colony][factor];
+  }
+  floorOf(colony, factor) {
+    return (this.floors && this.floors[colony] && this.floors[colony][factor]) || 0;
+  }
+
+  // The LIVED state only. The operator's floor is added by effective(), never
+  // written into it — so lowering a slider genuinely lowers the colony's mind
+  // instead of leaving a permanent residue nothing can undo.
   _c(colony) { return this.state[colony] || this.state.A; }
+
+  /** What the colony is ACTUALLY feeling: lived stress over the operator floor. */
+  effective(colony, factor) {
+    const s = this.state[colony] || this.state.A;
+    return Math.max(0, Math.min(1, (s[factor] || 0) + this.floorOf(colony, factor)));
+  }
 
   /** The colony answered an alarm and found nothing. */
   falseAlarm(colony) {
@@ -107,15 +142,15 @@ window.MurmurationModules.ColonyStress = class ColonyStress {
   quorumFor(colony, baseQuorum) {
     if (this.BASE_QUORUM == null) this.BASE_QUORUM = baseQuorum;
     if (!this.enabled) return baseQuorum;
-    const s = this._c(colony);
-    const shift = (s.fatigue * 3.0) - (s.paranoia * 2.5);
+    const shift = (this.effective(colony,'fatigue') * 3.0)
+                - (this.effective(colony,'paranoia') * 2.5);
     return Math.max(1, Math.min(6, Math.round(baseQuorum + shift)));
   }
 
   /** Dread's only effect: a tighter colony. Also never a behaviour. */
   cohesionBias(colony) {
     if (!this.enabled) return 0;
-    return this._c(colony).dread * 0.10;
+    return this.effective(colony,'dread') * 0.10;
   }
 
   step() {
@@ -129,11 +164,10 @@ window.MurmurationModules.ColonyStress = class ColonyStress {
   }
 
   stats(colony) {
-    const s = this._c(colony);
     return {
-      paranoia: +s.paranoia.toFixed(3),
-      fatigue:  +s.fatigue.toFixed(3),
-      dread:    +s.dread.toFixed(3),
+      paranoia: +this.effective(colony,'paranoia').toFixed(3),
+      fatigue:  +this.effective(colony,'fatigue').toFixed(3),
+      dread:    +this.effective(colony,'dread').toFixed(3),
       quorum:   this.quorumFor(colony, this.BASE_QUORUM ?? 3)
     };
   }
