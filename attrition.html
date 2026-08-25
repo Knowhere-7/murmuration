@@ -405,7 +405,7 @@
 <script src="predator.js"></script>
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=3"></script>
-<script src="lobo-evolve.js?v=1"></script>
+<script src="lobo-evolve.js?v=2"></script>
 <script src="keep.js?v=2"></script>
 <script src="attrition.js?v=9"></script>
 <script>
@@ -916,6 +916,8 @@
       // an unattributable death teaches nothing rather than the wrong thing.
       const _ev=window.MurmurationModules.Attrition.loboEvolve;
       if(_ev && _ev.enabled){
+        _ev._spawned = Math.max(_ev._spawned||0,
+          k26.world.agents.filter(a=>a.colony==='U').length);
         const A2=window.MurmurationModules.Attrition;
         for(const a of k26.world.agents){
           if(a.colony!=='U' || !a.seppukuDone || a._loboCounted) continue;
@@ -934,6 +936,37 @@
                                       guardsNear:guards, defendersNear:defenders,
                                       alarm:window.MurmurationModules.Attrition.alarm, starved:false});
           if(cause) _ev.recordDeath(cause);
+        }
+        // THE BREAK-OFF — offered once the wave has been engaged long enough to
+        // have honest evidence about itself. Never imposed: LOBO may refuse.
+        _ev._eng = (_ev._eng||0) + 1;
+        if(_ev._eng % 120 === 0){
+          const U=k26.world.agents.filter(a=>a.colony==='U'&&!a.seppukuDone);
+          if(U.length){
+            let inKeep=0, crown=false, defs=0, deepest=0;
+            const A3=window.MurmurationModules.Attrition;
+            for(const u of U){
+              if(A3.keeps) for(const kp of A3.keeps){
+                const c=kp.centreFn(); if(!c) continue;
+                const d=Math.hypot(u.x-c.x,u.y-c.y);
+                if(d<kp.outerR()) inKeep++;
+                if(d<kp.innerR) crown=true;
+                deepest=Math.max(deepest, kp.stats().deepestRingCleared||0);
+              }
+            }
+            for(const d of k26.world.agents)
+              if(d.colony!=='U' && !d.seppukuDone &&
+                 U.some(u=>Math.hypot(d.x-u.x,d.y-u.y)<70)) defs++;
+            const br=_ev.evaluateBreakOff({
+              lost:(_ev._spawned||0)-U.length, alive:U.length, inKeep, crownReached:crown,
+              deepestReached:deepest, defendersNear:defs, ticksEngaged:_ev._eng,
+              progressRate: deepest>0?1:0, determination: force });
+            if(br){
+              log('☾ LOBO BREAKS OFF — '+br.reasons.join(', ')+
+                  ' · the withdrawal is remembered, not wasted','warn');
+              for(const u of U){ u._loboWithdraw=true; }
+            }
+          }
         }
         const got=_ev.adapt();
         if(got) log('☣ LOBO ADAPTED — '+got.trait+' · '+got.evidence.cause+

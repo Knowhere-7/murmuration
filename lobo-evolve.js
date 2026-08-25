@@ -111,6 +111,62 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     return { key, ...this.TRAITS[key], evidence };
   }
 
+  /* ── THE BREAK-OFF — LOBO's honored exit ──────────────────────────────
+     Ghost, 2026-08-24, correcting a lazier phrasing of his own: what he meant
+     was "more akin to how we encouraged seppuku to be accepted."
+
+     agent.js states the principle exactly: "Honor requires choice. The system
+     cannot impose it." evaluateSeppuku() never commands — it hands the agent
+     honest criteria to recognise its own situation and lets it decide, and the
+     culture names that decision honored rather than failed.
+
+     So this is not a reward for tactics we happen to like. It is the EXIT LOBO
+     DOES NOT HAVE. Today it can only press until dead, and an adversary that
+     cannot withdraw is not cunning, it is a battering ram. Seppuku made chosen
+     death honorable instead of a failure; this makes a chosen break-off
+     honorable instead of a rout — the same move, pointed the other way.
+
+     And as sacred ground remembers where honor was chosen, a break-off leaves a
+     TRACE: the reason is recorded as evidence, so the next wave inherits what
+     this one learned instead of walking into it again. Withdrawal feeds the
+     adaptation loop rather than ending in nothing.
+
+     Criteria mirror evaluateSeppuku's shape deliberately — including its
+     wisest one, that a prolonged unresolved engagement is ITSELF proof there is
+     no path through. */
+  evaluateBreakOff(ctx) {
+    if (!this.enabled || !ctx) return null;
+    let criteria = 0;
+    const reasons = [];
+
+    // Spent heavily and touched nothing — the dead bought no ground.
+    if (ctx.lost >= 6 && ctx.deepestReached === 0) { criteria++; reasons.push('no ground taken'); }
+    // The wall is holding: many inside the keep, none at the crown.
+    if (ctx.inKeep >= 3 && !ctx.crownReached) { criteria++; reasons.push('keep unbreached'); }
+    // Defenders arriving faster than they can be spent — a fight already lost.
+    if (ctx.defendersNear > ctx.alive * 1.5) { criteria++; reasons.push('outnumbered at the point'); }
+    // Prolonged engagement with no progress is itself the proof.
+    if (ctx.ticksEngaged > 900 && ctx.progressRate <= 0) { criteria++; reasons.push('no progress in a long engagement'); }
+
+    if (criteria < 2) return null;      // two independent signals, never one
+
+    // OFFERED, NOT ORDERED. LOBO may still press — determination is exactly the
+    // willingness to spend more than the situation warrants, and a break-off
+    // that cannot be refused is not a choice.
+    const willing = Math.min(0.9, 0.25 * criteria) * (1 - (ctx.determination ?? 0.5));
+    if (Math.random() > willing) return null;
+
+    const trace = { at: this.world.time, reasons, criteria,
+                    lost: ctx.lost, cause: reasons[0] };
+    this.breakOffs = this.breakOffs || [];
+    this.breakOffs.push(trace);
+    // The withdrawal site remembers: its reason becomes evidence, so the next
+    // wave adapts from it rather than repeating it.
+    if (ctx.inKeep >= 3 && !ctx.crownReached) this.recordDeath('WALLED');
+    else if (ctx.defendersNear > ctx.alive * 1.5) this.recordDeath('COORDINATED');
+    return trace;
+  }
+
   has(key) { return !!(this.TRAITS[key] && this.TRAITS[key].adopted); }
   adoptedList() { return Object.keys(this.TRAITS).filter(k => this.TRAITS[k].adopted); }
 
