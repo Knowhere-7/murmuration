@@ -241,38 +241,38 @@
         }
       }
 
-      /* ELEVATION AS HUE (Ghost, 2026-08-25: "how can we color code to express
-         the elevation the map attempts to convey").
+      /* ELEVATION AS A WHITE GRADIENT — brightest at the top of each hill.
+         Ghost, 2026-08-25: "gradient white, with it being brightest at the top
+         of each hill... as to not disturb or compete with any of the endless
+         other color variations."
 
-         The height was already here — `hot` runs 0 low to 1 high — but it only
-         drove BRIGHTNESS inside one cyan, so a basin and a ridge differed by
-         luminance alone and the map read as texture rather than terrain. Height
-         now moves the HUE, which is the channel the eye reads as a category
-         rather than as intensity.
+         An earlier pass ramped the hue instead — violet basins through cyan to
+         amber ridges — and it was wrong for a reason worth keeping. This field
+         already carries cyan bond strings, magenta strain, violet stress, blood
+         orange for LOBO, green and amber colonies, a storm palette and the alarm
+         haze. Every one of those is a SIGNAL. Giving the terrain a hue ramp puts
+         the background into competition with all of them at once, and the map
+         stops being ground and starts being another thing to read.
 
-         The ramp follows how a real relief map is read, and it is not arbitrary
-         against this world: deep violet in the basins where each king stands,
-         through cyan and green at the traversable middle where the passes and
-         the circuit sit, to amber and finally white on the meridian ridge that
-         cannot be crossed. Low is where you live, bright is where you cannot go. */
+         White spends NO hue channel, so it cannot compete with a coloured signal
+         no matter how bright it gets. Height becomes pure luminance: basins sit
+         almost dark, the ridge glows. The eye reads relief without the terrain
+         ever claiming a colour that means something else. */
       const hot = li / (levels.length - 1);      // 0 low → 1 high
-      // 275 violet → 190 cyan → 120 green → 45 amber, then desaturating to white
-      const hue = 275 - hot * 230;
-      const sat = 85 - Math.max(0, hot - 0.82) * 300;   // the crest washes out
-      const lum = 46 + hot * 26;
+      // A curve, not a line: the low bands stay genuinely dim so the crest can
+      // be unmistakably the brightest thing without washing the middle out.
+      const lift = hot * hot;
 
-      // outer glow — the band's own colour, wide and faint
-      ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${0.07 + hot * 0.07})`;
+      // outer glow — wide, faint, gives the ridgeline its halo
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.025 + lift * 0.085})`;
       ctx.lineWidth = 5;
       ctx.stroke(path);
-      // mid — where the colour actually reads
-      ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${0.22 + hot * 0.20})`;
+      // mid — the body of the contour
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.07 + lift * 0.26})`;
       ctx.lineWidth = 1.8;
       ctx.stroke(path);
-      // core — hot ground keeps the white hairline, low ground keeps its colour,
-      // so the ridge still reads as the brightest thing without flattening the
-      // basins into the same white.
-      ctx.strokeStyle = `hsla(${hue}, ${Math.max(0, sat - 40)}%, ${72 + hot * 24}%, ${0.30 + hot * 0.48})`;
+      // core hairline — near-invisible in a basin, brilliant on a summit
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.10 + lift * 0.72})`;
       ctx.lineWidth = 0.9;
       ctx.stroke(path);
     }
