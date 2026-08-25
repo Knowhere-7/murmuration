@@ -258,21 +258,43 @@
          no matter how bright it gets. Height becomes pure luminance: basins sit
          almost dark, the ridge glows. The eye reads relief without the terrain
          ever claiming a colour that means something else. */
-      const hot = li / (levels.length - 1);      // 0 low → 1 high
-      // A curve, not a line: the low bands stay genuinely dim so the crest can
-      // be unmistakably the brightest thing without washing the middle out.
-      const lift = hot * hot;
+      /* THE ENDS CARRY THE MEANING (Ghost, 2026-08-25): "the fade gradient
+         should be exaggerated more with emphasis on extremities. should be
+         almost neon glowing white at top and a couple of shades darker than
+         what it currently at the base."
 
-      // outer glow — wide, faint, gives the ridgeline its halo
-      ctx.strokeStyle = `rgba(255, 255, 255, ${0.025 + lift * 0.085})`;
+         A gentler ramp spread its contrast across the middle, where the least
+         is at stake — the ground between a basin and a ridge is just ground.
+         The information lives at the ENDS: where a king stands, and where the
+         map cannot be crossed. So the curve is steep (hot^2.9), which buys the
+         extremities their separation by giving up resolution in the middle,
+         and that is a trade worth making here. */
+      const hot = li / (levels.length - 1);      // 0 low → 1 high
+      const lift = Math.pow(hot, 2.9);
+
+      // NEON BLOOM — summits only. A wide, soft halo under the line is what
+      // makes white read as GLOWING rather than merely bright; the band has to
+      // spill past its own stroke or the eye reads a hard edge.
+      if (hot > 0.66) {
+        const bloom = (hot - 0.66) / 0.34;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.05 * bloom})`;
+        ctx.lineWidth = 16;
+        ctx.stroke(path);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.09 * bloom})`;
+        ctx.lineWidth = 9;
+        ctx.stroke(path);
+      }
+
+      // outer glow — the halo proper
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.008 + lift * 0.15})`;
       ctx.lineWidth = 5;
       ctx.stroke(path);
       // mid — the body of the contour
-      ctx.strokeStyle = `rgba(255, 255, 255, ${0.07 + lift * 0.26})`;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.022 + lift * 0.40})`;
       ctx.lineWidth = 1.8;
       ctx.stroke(path);
-      // core hairline — near-invisible in a basin, brilliant on a summit
-      ctx.strokeStyle = `rgba(255, 255, 255, ${0.10 + lift * 0.72})`;
+      // core hairline — all but gone in a basin, near-solid white on a summit
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.030 + lift * 0.97})`;
       ctx.lineWidth = 0.9;
       ctx.stroke(path);
     }
