@@ -670,6 +670,33 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
       const pawns = this._pawnsFor(colony);
       if (!pawns.length) { this.plan[colony] = 'SPENT'; continue; }
       const home = this.kings.home(colony);
+
+      /* ── THE ADVANCE ON THE CROWN ──────────────────────────────────────
+         Found by Ghost's first full campaign, 2026-08-25: the colonies beat
+         LOBO without unlocking a single trait. Measuring it showed the
+         adversary was not being killed — 22 sent, 17 alive after 400 ticks,
+         colony casualties ZERO — it was milling at 213-228 units from a crown
+         it never approached. Only 3 of 22 ever entered the keep's zone.
+
+         The reason was not balance. NOTHING DROVE THEM AT THE CROWN. An
+         OCCUPATION wave targets commons zones, and no drive existed to press a
+         king, so the keep was never assaulted — it was walked past. Every
+         defensive number I measured was answering a question nobody asked.
+
+         Scaled against the world's ambient current (0.19), because this engine
+         has already been caught by that once: the circuit drive shipped 8x
+         weaker than the current and only 2 of 108 agents ever advanced. Below
+         half determination the advance is genuinely drowned and the unaligned
+         drift as before; at full determination it clearly dominates. That is
+         what makes the dial mean something rather than merely count bodies. */
+      const adv = 0.08 + force * 0.22;         // 0.19 == parity with the current
+      for (const p of pawns) {
+        const dx = home.x - p.x, dy = home.y - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < 12) continue;                  // already on the crown
+        p.vx += (dx / d) * adv;
+        p.vy += (dy / d) * adv;
+      }
       const captured = this.kings.captured[colony];
       const underFire = this._underFire(colony);
       // reassess the lane only when a withdrawal forces a rethink; otherwise

@@ -156,6 +156,31 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     return null;
   }
 
+  /* ── A STALL IS EVIDENCE TOO ──────────────────────────────────────────────
+     Found by Ghost's first full campaign, 2026-08-25: the colonies beat LOBO
+     without unlocking a single trait, and the reason was not strength. LOBO was
+     not DYING at the keep, it was STANDING at it — 22 sent, 17 still alive after
+     400 ticks, colony casualties zero, every attacker pinned at 67 units from a
+     crown it had to reach 50 to take. That is the first ring's outer face
+     exactly, held there by the wall.
+
+     Which exposed a worse bug than the stall. SAPPER — the counter to being
+     walled — is adopted after twelve WALLED *deaths*, so an adversary that is
+     merely held forever accumulates no evidence, never learns it is walled, and
+     can never adopt the one trait that would answer it. The adaptation loop had
+     a hole exactly where the colony was strongest.
+
+     A stall is the same lesson as a death and must be counted as one. An
+     attacker pinned against a wall making no progress toward the crown has
+     learned precisely what a dead one learned: this way does not work. */
+  recordStall(cause) {
+    if (!this.enabled || !this.CAUSES[cause]) return;
+    // Half-weight: a stall is real evidence but not as sharp as a body, and
+    // full weight would let a single long standoff dominate the whole tally.
+    this.deaths[cause] = (this.deaths[cause] || 0) + 0.5;
+    this.total += 0.5;
+  }
+
   /** Record why one attacker died. Called by whoever kills it. */
   recordDeath(cause) {
     if (!this.enabled || !this.CAUSES[cause]) return;

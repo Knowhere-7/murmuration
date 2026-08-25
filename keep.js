@@ -131,7 +131,21 @@ window.MurmurationModules.Keep = class Keep {
       if (isKing) continue;
 
       const defender = this._isDefender(a);
-      if (!defender) this._delayTicks++;               // an attacker is paying rent
+      if (!defender) {
+        this._delayTicks++;                            // an attacker is paying rent
+        // A STALL IS EVIDENCE. Track how long this attacker has been inside the
+        // keep without getting closer to the crown; a standoff teaches the same
+        // lesson as a death and must reach the adaptation loop, or LOBO can be
+        // held forever and never learn it is being held.
+        a._keepBest = Math.min(a._keepBest == null ? Infinity : a._keepBest, d);
+        a._keepTicks = (a._keepTicks || 0) + 1;
+        if (a._keepTicks > 240 && !a._stallLogged && d > this.innerR * 1.5) {
+          a._stallLogged = true;
+          const ev = window.MurmurationModules.Attrition &&
+                     window.MurmurationModules.Attrition.loboEvolve;
+          if (ev && ev.recordStall) ev.recordStall('WALLED');
+        }
+      }
 
       const ang = Math.atan2(dy, dx);
       // Walls, outermost inward. A defender passes freely — GUARDS CAN BE
@@ -146,6 +160,34 @@ window.MurmurationModules.Keep = class Keep {
             const cleared = this.rings - i;
             if (cleared > this._deepest) this._deepest = cleared;
             continue;
+          }
+          // SAPPER — "patience at the wall: hold the gap line instead of
+          // battering the ring." Until this is adopted an attacker refused by a
+          // wall simply stands there: real agents drive at the crown and have no
+          // idea a gap exists, which is why Ghost's first campaign ended 22 sent,
+          // 17 alive, every one pinned at the first ring's face. The trait is
+          // what turns a battering ram into something that looks for the door.
+          //
+          // It steers ALONG the wall toward the gap's bearing rather than opening
+          // it — the keep is not weakened, it is merely no longer invisible.
+          const ev = window.MurmurationModules.Attrition &&
+                     window.MurmurationModules.Attrition.loboEvolve;
+          if (ev && ev.has && ev.has('SAPPER')) {
+            // AIM AT THE DOOR, do not shuffle toward it. The first version
+            // nudged tangentially along the wall and measured identical to no
+            // trait at all: a sideways hint loses to the flock's cohesion and to
+            // being re-pinned on the ring every tick. Steering at the gap's
+            // actual coordinates gives the agent a destination instead of a
+            // lean, which is what "hold the gap line" always meant.
+            const gx = c.x + Math.cos(this.gaps[i]) * R;
+            const gy = c.y + Math.sin(this.gaps[i]) * R;
+            const gdx = gx - a.x, gdy = gy - a.y;
+            const gd = Math.hypot(gdx, gdy) || 1;
+            a.vx += (gdx / gd) * 0.65;
+            a.vy += (gdy / gd) * 0.65;
+            a.x += (gdx / gd) * 1.2;                 // and commit to the move,
+            a.y += (gdy / gd) * 1.2;                 // since the wall re-pins position
+            continue;                                 // not refused — it is walking to the door
           }
           // refused: push back out along the radius and kill inward velocity
           const nx = dx / (d || 1), ny = dy / (d || 1);
