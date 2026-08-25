@@ -929,6 +929,32 @@ window.MurmurationModules.World = class World {
           // mid-lap would strand the flock partway round a circuit that no
           // longer exists, which is the sphere mandate's failure exactly: a
           // waypoint it is charged for and cannot reach.
+          /* ROUTE FATIGUE — Ghost, 2026-08-25: "i do not wish to allow them to
+             become lazy or complacent counting on a single path."
+
+             Not by adding urgency. The circuit drive is deliberately tuned
+             under the ambient current so it biases a flock instead of tearing
+             agents out of it, and pushing it harder would disturb exactly the
+             learning curve he wants left alone.
+
+             So the ground answers instead, on the rule the genome already
+             states at trait #3: "successful paths strengthen, failed paths
+             decay — trail decay IS the intelligence." A route run over and
+             over yields less; a route left to rest recovers. Nothing tells a
+             colony to vary its path. Varying it is simply worth more, and the
+             urgency emerges from the difference.
+
+             It also gives the gates a reason to exist beyond crossing: a colony
+             that can alternate box and outer loop keeps both fresh, while one
+             locked to a single box slowly starves on it. */
+          const prevPhase = (this._lapPhase && this._lapPhase[col]) || 'BOX';
+          this._routeUse = this._routeUse || { A:{BOX:0,OUTER:0}, B:{BOX:0,OUTER:0} };
+          const use = this._routeUse[col];
+          use[prevPhase] = Math.min(6, (use[prevPhase] || 0) + 1);
+          // the route NOT just run recovers a little
+          const other = prevPhase === 'BOX' ? 'OUTER' : 'BOX';
+          use[other] = Math.max(0, (use[other] || 0) - 0.75);
+
           const phase = this.advanceLap(col);
           if (window.logLine) {
             window.logLine(phase === 'OUTER'
@@ -950,8 +976,20 @@ window.MurmurationModules.World = class World {
         ? 1
         : Math.max(0.35, 1 - ((stalled - grace) / 2400) * 0.65);
 
+      /* Route fatigue folds into the SAME multiplier the traversal bill uses,
+         rather than becoming a second bill. It is applied on yield and never as
+         an energy debit — the sphere mandate killed a whole cohort by charging
+         energy directly and bypassing the 0.05 floor, and a worn path must make
+         a colony hungry, never able to starve it outright.
+         Floored at 0.55 so a well-walked route still feeds; the point is a
+         reason to vary, not a punishment for having a home. */
+      const _use = (this._routeUse && this._routeUse[col]) || null;
+      const _phase = (this._lapPhase && this._lapPhase[col]) || 'BOX';
+      const _fatigue = _use ? Math.max(0.55, 1 - (_use[_phase] || 0) * 0.075) : 1;
+
       for (const a of members) {
-        a._traversalMult = mult;
+        a._traversalMult = mult * _fatigue;
+        a._routeFatigue = _fatigue;     // readable, so a worn path can be SEEN
         a._cpIdx = st.idx;              // steer toward the COLONY's waypoint
         a._cpLaps = st.laps;
       }

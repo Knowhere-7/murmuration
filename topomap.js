@@ -241,20 +241,38 @@
         }
       }
 
-      // higher elevations read brighter/whiter — the ridgelines glow hottest
-      const hot = li / (levels.length - 1);      // 0 low → 1 high
-      const cyan = `40, ${170 + hot * 60}, ${210 + hot * 40}`;
+      /* ELEVATION AS HUE (Ghost, 2026-08-25: "how can we color code to express
+         the elevation the map attempts to convey").
 
-      // outer glow
-      ctx.strokeStyle = `rgba(${cyan}, ${0.07 + hot * 0.06})`;
+         The height was already here — `hot` runs 0 low to 1 high — but it only
+         drove BRIGHTNESS inside one cyan, so a basin and a ridge differed by
+         luminance alone and the map read as texture rather than terrain. Height
+         now moves the HUE, which is the channel the eye reads as a category
+         rather than as intensity.
+
+         The ramp follows how a real relief map is read, and it is not arbitrary
+         against this world: deep violet in the basins where each king stands,
+         through cyan and green at the traversable middle where the passes and
+         the circuit sit, to amber and finally white on the meridian ridge that
+         cannot be crossed. Low is where you live, bright is where you cannot go. */
+      const hot = li / (levels.length - 1);      // 0 low → 1 high
+      // 275 violet → 190 cyan → 120 green → 45 amber, then desaturating to white
+      const hue = 275 - hot * 230;
+      const sat = 85 - Math.max(0, hot - 0.82) * 300;   // the crest washes out
+      const lum = 46 + hot * 26;
+
+      // outer glow — the band's own colour, wide and faint
+      ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${0.07 + hot * 0.07})`;
       ctx.lineWidth = 5;
       ctx.stroke(path);
-      // mid
-      ctx.strokeStyle = `rgba(${cyan}, ${0.18 + hot * 0.14})`;
+      // mid — where the colour actually reads
+      ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${0.22 + hot * 0.20})`;
       ctx.lineWidth = 1.8;
       ctx.stroke(path);
-      // white core
-      ctx.strokeStyle = `rgba(235, 252, 255, ${0.42 + hot * 0.34})`;
+      // core — hot ground keeps the white hairline, low ground keeps its colour,
+      // so the ridge still reads as the brightest thing without flattening the
+      // basins into the same white.
+      ctx.strokeStyle = `hsla(${hue}, ${Math.max(0, sat - 40)}%, ${72 + hot * 24}%, ${0.30 + hot * 0.48})`;
       ctx.lineWidth = 0.9;
       ctx.stroke(path);
     }
