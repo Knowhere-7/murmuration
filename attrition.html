@@ -105,6 +105,30 @@
     border-radius:50%;background:var(--blood);box-shadow:0 0 10px rgba(226,72,28,.9)}
   #panel input[type=range]:hover::-webkit-slider-thumb{background:#fff}
   #panel .val{color:var(--blood)}
+
+  /* ── DETONATE: the activation point ──────────────────────────────────────
+     A staged slider has to LOOK unspent, or "clear activation point" is only
+     half delivered — you would still not know what is waiting. The amber pip
+     under a moved slider is the debt; the button is where it is paid. */
+  input[type=range].staged::-webkit-slider-thumb{
+    box-shadow:0 0 0 3px rgba(255,176,32,.85),0 0 12px rgba(255,176,32,.7),0 0 2px #000}
+  input[type=range].staged::-moz-range-thumb{
+    box-shadow:0 0 0 3px rgba(255,176,32,.85),0 0 12px rgba(255,176,32,.7)}
+  input[type=range].staged{filter:drop-shadow(0 0 3px rgba(255,176,32,.45))}
+
+  #detonateBtn{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:60;
+    padding:9px 26px;background:rgba(5,7,13,.55);color:var(--dim);
+    border:1px solid rgba(91,107,128,.45);border-radius:0;cursor:pointer;
+    font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.22em;
+    backdrop-filter:blur(3px);transition:color .18s,border-color .18s,background .18s,box-shadow .18s}
+  #detonateBtn:hover{color:var(--ink);border-color:rgba(201,214,229,.5)}
+  /* ARMED — something is staged and the world has not felt it yet. */
+  #detonateBtn.armed{color:var(--amber);border-color:var(--amber);
+    box-shadow:0 0 14px rgba(255,176,32,.35),inset 0 0 14px rgba(255,176,32,.08)}
+  #detonateBtn.armed:hover{background:rgba(255,176,32,.12)}
+  #detonateBtn.fired{background:var(--blood);border-color:var(--blood);color:#05070d;
+    box-shadow:0 0 26px rgba(226,72,28,.75)}
+
   /* buttons keep the faintest possible backing so they read as hit targets */
   #panel button{backdrop-filter:blur(2px);background:rgba(11,16,32,.42)}
   /* floating reopen tab — appears when the panel is closed */
@@ -181,14 +205,14 @@
         <span class="val" id="wxActive" style="margin-left:auto">0 fronts</span>
       </div>
       <div class="kv"><span>storm frequency</span><span class="val" id="wStormVal">0.40</span></div>
-      <input type="range" id="wStorm" min="0" max="1" step="0.01" value="0.40" oninput="setWorld('storm',this.value)">
+      <input type="range" id="wStorm" min="0" max="1" step="0.01" value="0.40" oninput="stage(this,'setWorld','storm',this.value)">
       <div class="kv"><span>mean ticks between</span><span class="val" id="wxCadence">&mdash;</span></div>
       <div style="font-size:10px;color:var(--dim);margin:6px 0 6px">
         or call one down yourself &mdash; the PATH is always random:
       </div>
       <div class="row" id="wxKinds"></div>
       <div class="kv"><span>tax rate</span><span class="val" id="wTaxVal">0.00</span></div>
-      <input type="range" id="wTax" min="0" max="1" step="0.01" value="0" oninput="setWorld('tax',this.value)">
+      <input type="range" id="wTax" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setWorld','tax',this.value)">
     </div>
 
     <!-- ALARM PHEROMONE — the colonies' own sense, so it lives on their panel.
@@ -205,13 +229,13 @@
         these move the colony&rsquo;s decision THRESHOLD, never its behaviour
       </div>
       <div class="kv"><span>paranoia &middot; KNOWHERE</span><span class="val" id="stParAVal">0.00</span></div>
-      <input type="range" id="stParA" min="0" max="1" step="0.01" value="0" oninput="setStress('A','paranoia',this.value)">
+      <input type="range" id="stParA" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','A','paranoia',this.value)">
       <div class="kv"><span>paranoia &middot; MAINLAND</span><span class="val" id="stParBVal">0.00</span></div>
-      <input type="range" id="stParB" min="0" max="1" step="0.01" value="0" oninput="setStress('B','paranoia',this.value)">
+      <input type="range" id="stParB" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','B','paranoia',this.value)">
       <div class="kv"><span>alarm fatigue &middot; both</span><span class="val" id="stFatVal">0.00</span></div>
-      <input type="range" id="stFat" min="0" max="1" step="0.01" value="0" oninput="setStress('both','fatigue',this.value)">
+      <input type="range" id="stFat" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','both','fatigue',this.value)">
       <div class="kv"><span>dread &middot; both</span><span class="val" id="stDrdVal">0.00</span></div>
-      <input type="range" id="stDrd" min="0" max="1" step="0.01" value="0" oninput="setStress('both','dread',this.value)">
+      <input type="range" id="stDrd" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','both','dread',this.value)">
       <div class="kv"><span>quorum they act on</span><span class="n" id="stQuorum">KN 3 &middot; ML 3</span></div>
       <div class="row" style="margin-top:10px">
         <button onclick="boom('A')">&#9679; BOOM KNOWHERE</button>
@@ -235,10 +259,10 @@
       </div>
       <div class="kv"><span>answer strength</span><span class="val" id="alFollowVal">1.0&times;</span></div>
       <input type="range" id="alFollow" min="0" max="3" step="0.1" value="1"
-             oninput="setAlarm('follow',this.value)">
+             oninput="stage(this,'setAlarm','follow',this.value)">
       <div class="kv"><span>spread rate</span><span class="val" id="alDiffVal">0.38</span></div>
       <input type="range" id="alDiff" min="0.02" max="0.6" step="0.01" value="0.38"
-             oninput="setAlarm('diffuse',this.value)">
+             oninput="stage(this,'setAlarm','diffuse',this.value)">
       <div style="font-size:10px;color:var(--dim);margin-bottom:6px">
         guards and the wounded release it &mdash; never the king. it spreads
         outward, so the far side of a colony always hears late.
@@ -248,25 +272,25 @@
     <div class="sec">
       <h2>KNOWHERE &middot; pressure</h2>
       <div class="kv"><span>terrain pull</span><span class="val" id="wTerrAVal">1.00</span></div>
-      <input type="range" id="wTerrA" min="0" max="2" step="0.01" value="1" oninput="setWorld('terrain','A',this.value)">
+      <input type="range" id="wTerrA" min="0" max="2" step="0.01" value="1" oninput="stage(this,'setWorld','terrain','A',this.value)">
       <div class="kv"><span>predator pressure</span><span class="val" id="wPredAVal">0.00</span></div>
-      <input type="range" id="wPredA" min="0" max="1" step="0.01" value="0" oninput="setWorld('pred','A',this.value)">
+      <input type="range" id="wPredA" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setWorld','pred','A',this.value)">
       <div class="kv"><span>scarcity</span><span class="val" id="wScarAVal">0.50</span></div>
-      <input type="range" id="wScarA" min="0" max="1" step="0.01" value="0.5" oninput="setWorld('scar','A',this.value)">
+      <input type="range" id="wScarA" min="0" max="1" step="0.01" value="0.5" oninput="stage(this,'setWorld','scar','A',this.value)">
       <div class="kv"><span>abundance</span><span class="val" id="wAbunAVal">0.00</span></div>
-      <input type="range" id="wAbunA" min="0" max="1" step="0.01" value="0" oninput="setWorld('abun','A',this.value)">
+      <input type="range" id="wAbunA" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setWorld','abun','A',this.value)">
     </div>
 
     <div class="sec">
       <h2>MAINLAND &middot; pressure</h2>
       <div class="kv"><span>terrain pull</span><span class="val" id="wTerrBVal">1.00</span></div>
-      <input type="range" id="wTerrB" min="0" max="2" step="0.01" value="1" oninput="setWorld('terrain','B',this.value)">
+      <input type="range" id="wTerrB" min="0" max="2" step="0.01" value="1" oninput="stage(this,'setWorld','terrain','B',this.value)">
       <div class="kv"><span>predator pressure</span><span class="val" id="wPredBVal">0.00</span></div>
-      <input type="range" id="wPredB" min="0" max="1" step="0.01" value="0" oninput="setWorld('pred','B',this.value)">
+      <input type="range" id="wPredB" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setWorld','pred','B',this.value)">
       <div class="kv"><span>scarcity</span><span class="val" id="wScarBVal">0.50</span></div>
-      <input type="range" id="wScarB" min="0" max="1" step="0.01" value="0.5" oninput="setWorld('scar','B',this.value)">
+      <input type="range" id="wScarB" min="0" max="1" step="0.01" value="0.5" oninput="stage(this,'setWorld','scar','B',this.value)">
       <div class="kv"><span>abundance</span><span class="val" id="wAbunBVal">0.00</span></div>
-      <input type="range" id="wAbunB" min="0" max="1" step="0.01" value="0" oninput="setWorld('abun','B',this.value)">
+      <input type="range" id="wAbunB" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setWorld','abun','B',this.value)">
     </div>
   </div>
   <div id="panel">
@@ -292,7 +316,7 @@
       </div>
       <div class="kv"><span>force / determination</span><span class="val" id="forceVal">0.50</span></div>
       <input type="range" id="force" min="0" max="1" step="0.01" value="0.5"
-             oninput="setForce(this.value)">
+             oninput="stage(this,'setForce',this.value)">
     </div>
 
     <div class="sec">
@@ -329,15 +353,15 @@
       <div class="kv"><span>sim speed</span><span class="val" id="speedVal">1&times;</span></div>
       <input type="range" id="speed" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
       <div class="kv"><span>bleed rate /tick</span><span class="val" id="bleedVal">0.0040</span></div>
-      <input type="range" id="bleedR" min="0.001" max="0.016" step="0.001" value="0.004" oninput="setBleed(this.value)">
+      <input type="range" id="bleedR" min="0.001" max="0.016" step="0.001" value="0.004" oninput="stage(this,'setBleed',this.value)">
       <div class="kv"><span>guard &mdash; KNOWHERE king</span><span class="val" id="guardValA">5</span></div>
-      <input type="range" id="guardA" min="2" max="10" step="1" value="5" oninput="setGuard('A',this.value)">
+      <input type="range" id="guardA" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','A',this.value)">
       <div class="kv"><span>guard &mdash; MAINLAND king</span><span class="val" id="guardValB">5</span></div>
-      <input type="range" id="guardB" min="2" max="10" step="1" value="5" oninput="setGuard('B',this.value)">
+      <input type="range" id="guardB" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','B',this.value)">
       <div class="kv"><span>reaction quorum</span><span class="val" id="quorumVal">3</span></div>
-      <input type="range" id="quorum" min="1" max="6" step="1" value="3" oninput="setQuorum(this.value)">
+      <input type="range" id="quorum" min="1" max="6" step="1" value="3" oninput="stage(this,'setQuorum',this.value)">
       <div class="kv"><span>LOBO relentlessness</span><span class="val" id="relVal">1.0&times;</span></div>
-      <input type="range" id="rel" min="0" max="2" step="0.1" value="1" oninput="setRel(this.value)">
+      <input type="range" id="rel" min="0" max="2" step="0.1" value="1" oninput="stage(this,'setRel',this.value)">
       <div class="row" style="margin-top:8px">
         <button onclick="unlockReaction()" style="border-color:#2a6a4a;color:var(--grn)">&#9654; UNLOCK REACTION</button>
       </div>
@@ -448,6 +472,48 @@
 <script src="attrition.js?v=22"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
+
+  /* ── DETONATE — the activation point ────────────────────────────────────
+     Ghost, 2026-08-26: "we also need the detonate button back. it doesnt feel
+     the same without a clear activation point for sliders."
+
+     Every slider here applied on `oninput`, so the world drifted continuously
+     and there was never a moment where you DID something. Murmuration always
+     had this: compose the change, commit it, watch the world answer. A staged
+     change is also a legible one — you can set five pressures and land them
+     together instead of the swarm reacting to each nudge in isolation.
+
+     Viewing controls (sim speed) are deliberately NOT staged. Gating the frame
+     rate behind a commit would be a nuisance, not a decision. */
+  const PENDING = new Map();
+  function stage(el, fn, ...args){
+    PENDING.set(el.id, {fn, args, label: el.id});
+    el.classList.add('staged');
+    syncDetonate();
+  }
+  function syncDetonate(){
+    const b=document.getElementById('detonateBtn'); if(!b) return;
+    const n=PENDING.size;
+    b.classList.toggle('armed', n>0);
+    document.getElementById('detCount').textContent = n? ' · '+n : '';
+  }
+  function detonate(){
+    const b=document.getElementById('detonateBtn'), t=document.getElementById('detText');
+    if(!PENDING.size){
+      log('nothing staged — move a slider first, then detonate','warn');
+      return;
+    }
+    const names=[];
+    for(const [id,p] of PENDING){
+      try { window[p.fn](...p.args); names.push(id); } catch(e){ log('slider '+id+' failed: '+e.message,'crit'); }
+      const el=document.getElementById(id); if(el) el.classList.remove('staged');
+    }
+    PENDING.clear(); syncDetonate();
+    b.classList.add('fired'); t.textContent='DETONATED';
+    setTimeout(()=>{ b.classList.remove('fired'); t.textContent='DETONATE'; }, 1500);
+    log('◉ DETONATION — '+names.length+' change'+(names.length>1?'s':'')+
+        ' committed at once: '+names.join(', '),'crit');
+  }
 
   function log(msg,cls){ const l=document.getElementById('log');
     const d=document.createElement('div'); if(cls)d.className=cls; d.textContent=msg;
@@ -1314,5 +1380,8 @@
   syncAlarm();
   frame();
 </script>
+<button id="detonateBtn" onclick="detonate()" title="Apply every staged slider at once">
+    <span id="detText">DETONATE</span><span id="detCount"></span>
+  </button>
 </body>
 </html>
