@@ -18,12 +18,23 @@
   capability it does not have.
 -->
 <style>
-  :root{--bg:#05070d;--ink:#c9d6e5;--dim:#5b6b80;--red:#ff4d5e;--amber:#ffb020;
+  /* --dim was #5b6b80: 3.70:1 against the background, under the 4.5:1
+     readability floor — and it carried the SLIDER LABELS, the text you most
+     need to read to know what you are about to change. Ghost, 2026-08-26:
+     "there is some darker writing in the panels thats very hard to read."
+     Lifted to 6.04:1. It stays clearly subordinate to --ink (13.65:1), so the
+     hierarchy is unchanged; it is simply legible now. */
+  :root{--bg:#05070d;--ink:#c9d6e5;--dim:#7d8ea6;--red:#ff4d5e;--amber:#ffb020;
         --grn:#39d98a;--cy:#38e0d8;--vio:#c9a0ff;--panel:#0b1020;--line:#1b2740;
         /* blood orange — LOBO's colour. Deeper and more arterial than --amber,
            so the adversary's controls never read as the same family as the
            colonies' violet. */
-        --blood:#e2481c}
+        --blood:#e2481c;
+        /* Blood orange is right for a slider thumb and marginal for TEXT —
+           #e2481c reads 4.97:1, technically passing and genuinely hard at 11px.
+           Readouts use this lifted variant (6.25:1); the chrome keeps the
+           arterial original, so nothing changes character. */
+        --blood-text:#f2603a}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
             font:13px/1.5 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}
@@ -104,7 +115,7 @@
   #panel input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;
     border-radius:50%;background:var(--blood);box-shadow:0 0 10px rgba(226,72,28,.9)}
   #panel input[type=range]:hover::-webkit-slider-thumb{background:#fff}
-  #panel .val{color:var(--blood)}
+  #panel .val{color:var(--blood-text)}
 
   /* ── DETONATE: the activation point ──────────────────────────────────────
      A staged slider has to LOOK unspent, or "clear activation point" is only
