@@ -355,6 +355,11 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     const evidence = { cause, n, of: this.total, at: this.world.time };
     this.deaths = {}; this.total = 0;
     if (!key) return null;
+    /* ANTIGENIC DRIFT. Re-adopting a trait means LOBO changed it — the shape
+       the colony learned no longer quite matches. Fired BEFORE adoption so the
+       old antibody degrades against the version that is being replaced. */
+    if (this.TRAITS[key]._shed && typeof this.onDrift === 'function') this.onDrift(key);
+    this.TRAITS[key]._shed = false;
     this.TRAITS[key].adopted = true;
     this.history.push({ key, ...evidence });
     this.saveLearning();          // written down the moment it is learned
@@ -417,7 +422,61 @@ window.MurmurationModules.LoboEvolve = class LoboEvolve {
     return trace;
   }
 
-  has(key) { return !!(this.TRAITS[key] && this.TRAITS[key].adopted); }
+  /* ── SHEDDING UNDER PRESSURE — what makes drift real ─────────────────────
+     A trait the colony has learned to neutralise is no longer paying for
+     itself. LOBO drops it, and the next adaptation may bring it back CHANGED —
+     which is when onDrift fires and the colony's antibody loses its match.
+
+     This is the coupling that turns two separate systems into an arms race:
+     immune pressure is the selection pressure that drives antigenic variation.
+     Without it `drift()` would never fire and the immune system would be a
+     one-way ratchet — the exact failure it was built to prevent, pointed the
+     other way.
+
+     Note it sheds on NEUTRALISATION, not on losses. LOBO abandons a tool that
+     stopped working; it does not abandon one that is merely costly. */
+  shedNeutralised(immunity, threshold = 0.5) {
+    if (!immunity) return [];
+    /* AT MOST ONE PER CHECK, worst first. The first real campaign shed every
+       adopted trait on the same tick and left LOBO carrying nothing — which is
+       not an arms race, it is the same one-way ratchet aimed the other way. A
+       pathogen under total immune pressure does not vanish; it varies. */
+    let worstKey = null, worstVal = 0;
+    for (const k in this.TRAITS) {
+      if (!this.TRAITS[k].adopted) continue;
+      const v = Math.max(immunity.neutralisation('A', k),
+                         immunity.neutralisation('B', k));
+      if (v >= threshold && v > worstVal) { worstVal = v; worstKey = k; }
+    }
+    const shed = [];
+    if (worstKey) {
+      this.TRAITS[worstKey].adopted = false;
+      this.TRAITS[worstKey]._shed = true;   // re-adoption will count as drift
+      shed.push({ key: worstKey, neutralised: +worstVal.toFixed(3), at: this.world.time });
+    }
+    if (shed.length) { this.history.push({ shed, at: this.world.time }); this.saveLearning(); }
+    return shed;
+  }
+
+  /* EXPRESSION. A trait is USED at the moment something asks for it and the
+     answer is yes — so the record is made here rather than at each call site,
+     where a future one could forget. This is what the colony's immune system is
+     allowed to see: a tactic LOBO merely CARRIES has not been used on anyone and
+     must teach nobody anything. */
+  has(key) {
+    const t = this.TRAITS[key];
+    if (!t || !t.adopted) return false;
+    t.expressedAt = this.world.time;
+    return true;
+  }
+
+  /** Traits actually exercised recently — the only legitimate antigens. */
+  expressedList(within = 600) {
+    const now = this.world.time;
+    return Object.keys(this.TRAITS).filter(k =>
+      this.TRAITS[k].adopted && this.TRAITS[k].expressedAt != null &&
+      (now - this.TRAITS[k].expressedAt) <= within);
+  }
   adoptedList() { return Object.keys(this.TRAITS).filter(k => this.TRAITS[k].adopted); }
 
   stats() {

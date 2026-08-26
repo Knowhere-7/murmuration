@@ -441,10 +441,11 @@
 <script src="k26.js?v=20"></script>
 <script src="alarm.js?v=4"></script>
 <script src="stress.js?v=2"></script>
+<script src="immunity.js?v=2"></script>
 <script src="heat.js?v=1"></script>
-<script src="lobo-evolve.js?v=9"></script>
+<script src="lobo-evolve.js?v=11"></script>
 <script src="keep.js?v=4"></script>
-<script src="attrition.js?v=16"></script>
+<script src="attrition.js?v=18"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -488,9 +489,14 @@
     for(const _c of ['A','B']){
       const _inh = window.MurmurationModules.Attrition.reactions.restoreInheritance(_c);
       if(_inh){
-        log('⬡ INHERITED — colony '+_c+' remembers a previous one: '+_inh.unlocked.join(', '),'warn');
-        if(_inh.unlocked.includes('waspAlarm') && window.MurmurationModules.Attrition.alarm)
-          window.MurmurationModules.Attrition.alarm.grantTo(_c);
+        // KNOWLEDGE ONLY (SR-011). No ability is granted here — the colony
+        // wakes remembering what it met, and must earn every unlock again.
+        const _k = Object.keys(_inh.encounters||{}).filter(k=>k!=='_last');
+        log('⬡ INHERITED — colony '+_c+' remembers: '
+            + (_k.length ? _k.map(k=>k+'×'+_inh.encounters[k]).join(', ') : 'nothing yet'),'warn');
+        // Immune MEMORY travels; circulating antibody does not.
+        const _IM = window.MurmurationModules.Attrition.immunity;
+        if(_IM && _inh.immune) _IM.seedKnowledge(_c, _inh.immune);
       }
     }
     window.MurmurationModules.AttritionKnowledge.reset();
@@ -582,6 +588,10 @@
     const r=window.MurmurationModules.Attrition.reactions.unlockNext(colony);
     // A rung that unlocks a SENSE has to switch the sense on, or the ladder
     // would announce a capability the colony does not actually gain.
+    if(r && r.id==='adaptiveImmunity' && window.MurmurationModules.Attrition.immunity){
+      window.MurmurationModules.Attrition.immunity.grantTo(colony);
+      log('⬢ ADAPTIVE IMMUNITY — colony '+colony+' can now learn a specific counter to a specific tactic. The first use of anything still lands.','warn');
+    }
     if(r && r.id==='waspAlarm' && window.MurmurationModules.Attrition.alarm){
       // the SENSE is per colony now, matching the field it reads
       window.MurmurationModules.Attrition.alarm.grantTo(colony); syncAlarm();
@@ -1236,6 +1246,19 @@
       applyCut(); }        // LAST — the cut works on the finished frame
     if(k26 && running){
       stepWarGame();
+      /* IMMUNITY — the response builds and wanes every tick; shedding is checked
+         rarely, because abandoning a tool is a decision, not a reflex. */
+      const _IM=window.MurmurationModules.Attrition.immunity;
+      if(_IM){
+        _IM.step();
+        if((k26.world.time|0) % 300 === 0){
+          const _E=window.MurmurationModules.Attrition.loboEvolve;
+          if(_E){
+            const _s=_E.shedNeutralised(_IM);
+            for(const x of _s) log('⟲ LOBO SHEDS '+x.key+' — neutralised '+(x.neutralised*100).toFixed(0)+'%. It may return changed.','warn');
+          }
+        }
+      }
       if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); syncLobo(); syncStress(); }
     }
     stats();

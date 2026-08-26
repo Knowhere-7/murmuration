@@ -172,6 +172,13 @@ window.MurmurationModules.Attrition = {
       // remembered to switch off.
       this.alarm = new window.MurmurationModules.AlarmField(world, { enabled: false });
     }
+    // ADAPTIVE IMMUNITY — the fifth founding word. Starts LOCKED; the ladder
+    // owns whether the colony has learned to learn yet.
+    if (window.MurmurationModules.AdaptiveImmunity) {
+      this.immunity = new window.MurmurationModules.AdaptiveImmunity(world, { enabled: false });
+      // LOBO drifts an antigen whenever it re-adopts a trait — the arms race.
+      if (this.loboEvolve) this.loboEvolve.onDrift = (k) => this.immunity.drift(k);
+    }
     // ONE KEEP PER CROWN — the king's last line of defence. Centre is sampled
     // live from the kings system, so a re-crowned king brings his walls with
     // him rather than leaving them standing around an empty floor.
@@ -184,7 +191,7 @@ window.MurmurationModules.Attrition = {
         }
       }).enable());
     }
-    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm, loboEvolve: this.loboEvolve, stress: this.stress, heat: this.heat };
+    return { adversary: this.adversary, kings: this.kings, reactions: this.reactions, lobo: this.lobo, bleed: this.bleed, tic: this.tic, mortality: this.mortality, keeps: this.keeps, alarm: this.alarm, loboEvolve: this.loboEvolve, stress: this.stress, heat: this.heat, immunity: this.immunity };
   },
 };
 
@@ -285,6 +292,14 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
         !a.seppukuDone && pred(a) &&
         Math.hypot(a.x - home.x, a.y - home.y) < this.captureR).length;
       const attackers = atKing(a => a.colony === 'U');
+      /* AN ENCOUNTER, NOT A SIGNAL. The alarm may have brought them here;
+         being here is what teaches. Reached through the module singleton — this
+         class does not own the reaction ladder, and a `this.reactions` guard
+         here would be a no-op that never fires and never complains. */
+      if (attackers >= 1 && (this.world.time % 60 === 0)) {
+        const _A = window.MurmurationModules.Attrition;
+        if (_A && _A.reactions) _A.reactions.recordEncounter(c, 'assault', { at: this.world.time });
+      }
       const guardsHere = atKing(a => a._attritionGuard);
       if (attackers >= 3 && attackers > guardsHere) {
         if (!this.captured[c]) {
@@ -391,7 +406,10 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
          worth recording. */
       { id:'gea', trait:'GEA — Genetic Evolution Architecture', kind:'inheritance',
         unlocked:{A:false,B:false},
-        desc:'the colony stops starting over: unlocks carry between campaigns and new agents inherit what their predecessors learned' },
+        desc:'the colony stops starting over: what it LEARNED carries between campaigns. Abilities do not travel (SR-011) — every unlock is earned again' },
+      { id:'adaptiveImmunity', trait:'Adaptive Immunity (human immune system)', kind:'inheritance',
+        unlocked:{A:false,B:false},
+        desc:"the fifth founding word — the only one that LEARNS. Meets a LOBO tactic, builds a specific counter to THAT tactic, and remembers it. The first use always lands; the second is met. Never total, wanes unused, and refuses to bind self" },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
         unlocked:{A:false,B:false}, dur:120, cd:200,
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
@@ -412,39 +430,67 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
      Gated on the GEA rung itself: until it is unlocked, none of this runs and
      the colony genuinely does start naive. That keeps the baseline honest —
      memory has to be EARNED before it can be relied on. */
-  _geaKey(colony){ return 'attrition.colony.gea.v2.' + colony; }
+  /* ── GEA CARRIES KNOWLEDGE, NOT ABILITIES ────────────────────────────────
+     Ghost, 2026-08-25: "compartmentalization! THATS the key. gea only effects
+     knowledge not abilities per say. meaning pheromones arent teaching anything
+     new. the encounter that it leads to does. and the only knowledge that
+     crosses both colonies happens off map."
 
-  /* PER-COLONY FROM HERE DOWN (Ghost, 2026-08-25): "how does this effect
-     pheromones if the colonies start learning everything simultaneously."
+     This corrects a category error in the first version, which inherited the
+     UNLOCK LIST — so a colony was born already holding the alarm. That is an
+     ability, and an ability has to be earned in the campaign that uses it.
+     Otherwise the ladder decays into a save file and no run starts honest.
 
-     It was one shared ladder, so both colonies gained every sense in the same
-     instant. The alarm's FIELD was already per-colony — KNOWHERE's panic cannot
-     move MAINLAND — but the CAPABILITY was not, and that is worse than it
-     sounds. It made the one question worth asking unaskable: what is the alarm
-     actually worth? You could never run a colony that had it beside one that did
-     not, against the same LOBO, in the same run.
+     What survives is what was LEARNED. And the pheromone teaches nothing: it is
+     transport, not instruction. Alarm to convergence to ENCOUNTER — the meeting
+     is where anything is learned, and only encounters are written down.
 
-     GEA compounded it. Both colonies inherited from a single record, so they did
-     not merely learn together — they became permanently identical. Two colonies,
-     one lineage, no divergence, which is the opposite of evolving a genome.
+     THREE COMPARTMENTS, and knowledge only moves the way each allows:
+       within a colony ..... encounters accumulate as they happen
+       across campaigns .... one colony's own encounters, if it earned GEA
+       across colonies ..... NEVER on the map. Only through the
+                             AttritionKnowledge seam, which is off-map, versioned
+                             and explicit. Two colonies standing in the same
+                             field learn nothing from each other. */
+  _geaKey(colony){ return 'attrition.colony.knowledge.v3.' + colony; }
 
-     Now each colony owns its unlocks and its own inheritance record. Two
-     lineages that can diverge, and every run carries its own control group. */
   geaActive(colony){ const r = this.byId('gea'); return !!(r && r.unlocked[colony]); }
+
+  /** An ENCOUNTER — the only thing that counts as learning. Called when a colony
+      actually meets something, never when it merely signals. */
+  recordEncounter(colony, kind, detail) {
+    this.encounters = this.encounters || { A:{}, B:{} };
+    const e = this.encounters[colony] || (this.encounters[colony] = {});
+    e[kind] = (e[kind] || 0) + 1;
+    if (detail) { e._last = e._last || {}; e._last[kind] = detail; }
+    return e[kind];
+  }
+
+  /** What a colony KNOWS: how often it has met each thing before. */
+  knowledgeOf(colony) { return (this.encounters && this.encounters[colony]) || {}; }
+
+  /** Familiarity with one kind of encounter, 0..1. Knowledge SHORTENS
+      recognition; it never hands over a capability. A colony that has met this
+      before confirms it faster — it still needs the sense to notice at all. */
+  familiarity(colony, kind) {
+    const n = this.knowledgeOf(colony)[kind] || 0;
+    return Math.min(1, n / 8);
+  }
 
   saveInheritance(colony){
     if (!this.geaActive(colony)) return null;
     try {
-      const unlocked = this.reactions.filter(r=>r.unlocked[colony]).map(r=>r.id);
-      // #14: the learned BIAS, not the individuals — a colony inherits a
-      // disposition, never a roster.
-      const live = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone);
-      const trust = live.length
-        ? live.reduce((s,a)=>s+(a.trustCharge||0),0)/live.length : null;
+      const enc = { ...this.knowledgeOf(colony) };
+      /* Immune MEMORY is knowledge and travels. Circulating antibody (titre) is
+         a present capability and does not — a colony inherits knowing how to
+         build the response, never the response already built (SR-011). */
+      const _IM = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.immunity;
+      const imm = _IM ? _IM.knowledgeFor(colony) : null;
+      // Deliberately NOT the unlock list. Abilities do not travel.
       window.localStorage.setItem(this._geaKey(colony), JSON.stringify({
-        unlocked, trustBias: trust, savedAt: Date.now()
+        encounters: enc, immune: imm, savedAt: Date.now()
       }));
-      return { unlocked, trustBias: trust };
+      return { encounters: enc, immune: imm };
     } catch(e){ return null; }
   }
 
@@ -453,32 +499,40 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const raw = window.localStorage.getItem(this._geaKey(colony));
       if (!raw) return null;
       const d = JSON.parse(raw);
-      // A colony can only inherit if the PREVIOUS colony earned GEA — the record
-      // itself carries the right to read it.
-      if (!(d.unlocked||[]).includes('gea')) return null;
-      for (const id of d.unlocked){ const r = this.byId(id); if (r) r.unlocked[colony] = true; }
-      this.inheritedTrust = this.inheritedTrust || {};
-      this.inheritedTrust[colony] = d.trustBias;
-      return d;
+      this.encounters = this.encounters || { A:{}, B:{} };
+      this.encounters[colony] = { ...(d.encounters || {}) };
+      this._inheritedImmune = d.immune || null;
+      // The colony wakes KNOWING things and ABLE to do nothing extra. Every
+      // unlock, including GEA itself, must be earned again this campaign.
+      return { encounters: this.encounters[colony], immune: d.immune || null };
     } catch(e){ return null; }
   }
 
-  /** #14 — a newly born agent inherits the colony's learned disposition rather
-      than the default it would otherwise be handed. */
-  applyInheritance(agent){
-    const c = agent && agent.colony;
-    if (!agent || !this.geaActive(c)) return false;
-    const t = this.inheritedTrust && this.inheritedTrust[c];
-    if (t == null) return false;
-    agent.trustCharge = t;
-    agent._inherited = true;
-    return true;
+  /** OFF-MAP ONLY. The single sanctioned route by which one colony's knowledge
+      can reach the other — through the versioned seam, never through the field.
+      Two colonies standing in the same pheromone still learn nothing from each
+      other; this is a debrief, and it happens somewhere else. */
+  shareOffMap(fromColony, toColony) {
+    const src = this.knowledgeOf(fromColony);
+    if (!Object.keys(src).length) return null;
+    window.MurmurationModules.AttritionKnowledge.recordOutcome({
+      event: 'off_map_debrief', from: fromColony, to: toColony,
+      encounters: { ...src }
+    });
+    this.encounters = this.encounters || { A:{}, B:{} };
+    const dst = this.encounters[toColony] || (this.encounters[toColony] = {});
+    for (const k in src) {
+      if (k === '_last') continue;
+      // Second-hand knowledge is worth less than having been there.
+      dst[k] = (dst[k] || 0) + Math.floor(src[k] * 0.5);
+    }
+    return { from: fromColony, to: toColony, shared: Object.keys(src).length };
   }
 
   forgetInheritance(colony){
     for (const c of (colony ? [colony] : ['A','B'])) {
       try { window.localStorage.removeItem(this._geaKey(c)); } catch(e){}
-      if (this.inheritedTrust) this.inheritedTrust[c] = null;
+      if (this.encounters) this.encounters[c] = {};
       for (const r of this.reactions) if (!r._innate) r.unlocked[c] = false;
     }
     return true;
@@ -520,7 +574,12 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     const _st = window.MurmurationModules.Attrition &&
                 window.MurmurationModules.Attrition.stress;
     const q = _st ? _st.quorumFor(colony, this.quorum) : this.quorum;
-    return sensing >= Math.max(1, q - bonus);
+    /* FAMILIARITY IS KNOWLEDGE DOING ITS ONLY JOB. A colony that has met this
+       before confirms it faster — at most one fewer confirmation. It does not
+       gain a sense, cannot notice what it has no sense for, and a colony without
+       the alarm is exactly as deaf as before no matter how much it knows. */
+    const fam = this.familiarity(colony, 'assault');
+    return sensing >= Math.max(1, q - bonus - Math.round(fam));
   }
 
   step(){
