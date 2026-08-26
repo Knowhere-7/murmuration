@@ -442,10 +442,10 @@
 <script src="alarm.js?v=4"></script>
 <script src="stress.js?v=2"></script>
 <script src="immunity.js?v=3"></script>
-<script src="heat.js?v=1"></script>
+<script src="heat.js?v=10"></script>
 <script src="lobo-evolve.js?v=11"></script>
 <script src="keep.js?v=4"></script>
-<script src="attrition.js?v=21"></script>
+<script src="attrition.js?v=22"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -993,6 +993,27 @@
       // RADIANCE — three widening passes of the colony's own colour. A crown has
       // to spill light, not merely be drawn in a bright ink, or it reads as a
       // small hot dot instead of a place.
+      /* A READABILITY FLOOR UNDER THE CROWN. Ghost, 2026-08-26: "the glow is
+         entirely too powerful i can barely see the king or its location when
+         that glow starts to appear."
+
+         The crown's own radiance was never the problem — measured, MAINLAND had
+         18 agents inside 50 units of its king against KNOWHERE's 6, and every
+         one of them draws an additive glow. Eighteen stacked saturates to flat
+         white and the king vanishes into the crowd defending it.
+
+         Guards SHOULD ring their king, so this does not thin them. It seats the
+         crown on a small dark disc first, so there is always contrast between
+         the king and whatever has piled up behind it. The marker stays findable
+         at any density, which is the whole job of a landmark. */
+      ctx.globalCompositeOperation = 'source-over';
+      const _seat = ctx.createRadialGradient(x, y, 0, x, y, 21);
+      _seat.addColorStop(0,    'rgba(2,4,10,0.80)');
+      _seat.addColorStop(0.55, 'rgba(2,4,10,0.55)');
+      _seat.addColorStop(1,    'rgba(2,4,10,0)');
+      ctx.fillStyle = _seat;
+      ctx.beginPath(); ctx.arc(x, y, 21, 0, Math.PI*2); ctx.fill();
+
       const pulse = 0.86 + 0.14 * Math.sin(k26.world.time * 0.05);
       ctx.globalCompositeOperation = 'lighter';
       for (const [r, a] of [[26, 0.10], [16, 0.16], [9, 0.26]]) {
@@ -1138,6 +1159,12 @@
       // LOBO learns from its dead. Classification is deliberately conservative —
       // an unattributable death teaches nothing rather than the wrong thing.
       const _ev=window.MurmurationModules.Attrition.loboEvolve;
+      /* DECLARED HERE, not further down. `const _ht` sat BELOW its own uses in
+         this same block, so every reference to it was inside the temporal dead
+         zone. The first time LOBO broke off or adapted, this threw and killed
+         the animation frame — the range froze at the exact moment something
+         interesting finally happened, which is why every quiet test passed. */
+      const _ht=window.MurmurationModules.Attrition.heat;
       if(_ev && _ev.enabled){
         _ev._spawned = Math.max(_ev._spawned||0,
           k26.world.agents.filter(a=>a.colony==='U').length);
@@ -1208,7 +1235,6 @@
                     ' killed '+got.evidence.n+'/'+got.evidence.of+' · '+got.desc,'crit');
       }
       // STRESS ACCUMULATES FROM EVENTS, never from a schedule.
-      const _ht=window.MurmurationModules.Attrition.heat;
       if(_ht) _ht.step();
       const _ss=window.MurmurationModules.Attrition.stress;
       if(_ss){

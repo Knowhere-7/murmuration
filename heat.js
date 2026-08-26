@@ -47,8 +47,7 @@ window.MurmurationModules.HeatMap = class HeatMap {
        and the point of this is to be readable at a glance. */
     this.KIND = {
       CONTEST: { h: 32,  name: 'contested' },
-      BREACH:  { h: 0,   name: 'crown reached' },
-      ALARM:   { h: 140, name: 'alarm raised' },
+      BREACH:  { h: 0,   name: 'crown reached', hollow: true },
       TACTIC:  { h: 55,  name: 'tactic' }
     };
   }
@@ -62,7 +61,7 @@ window.MurmurationModules.HeatMap = class HeatMap {
     // one plane per kind, so two reasons in one place blend rather than
     // overwrite — a contested crown under alarm should look like both.
     this.g = {};
-    for (const k of ['CONTEST','BREACH','ALARM','TACTIC']) this.g[k] = new Float32Array(n);
+    for (const k of ['CONTEST','BREACH','TACTIC']) this.g[k] = new Float32Array(n);
     this._w = W; this._h = H;
   }
 
@@ -108,16 +107,19 @@ window.MurmurationModules.HeatMap = class HeatMap {
         if (near.length) this.add('BREACH', home.x, home.y, 0.35 * Math.min(4, near.length));
       }
     }
-    // ALARM — the colony's own nervous system, shown where it actually is.
-    if (A && A.alarm && A.alarm.enabled) {
-      for (const c of ['A','B']) {
-        const g = A.alarm.grid[c]; if (!g) continue;
-        for (let r = 0; r < A.alarm.rows; r++) for (let col = 0; col < A.alarm.cols; col++) {
-          const v = g[r * A.alarm.cols + col];
-          if (v > 0.25) this.add('ALARM', (col+0.5)*A.alarm.cell, (r+0.5)*A.alarm.cell, v * 0.05);
-        }
-      }
-    }
+    /* ALARM IS NOT DRAWN HERE ANY MORE. Ghost, 2026-08-26: "the glow is
+       entirely too powerful i can barely see the king or its location when that
+       glow starts to appear."
+
+       Measured mid-campaign: CONTEST 1.39, BREACH 0, ALARM 296.34 — the alarm
+       plane was carrying two hundred times the weight of everything else and
+       washing the board out. The cause was duplication, not tuning: alarm.js
+       ALREADY draws the pheromone field as its own haze, and this added a second
+       green copy of the same field on top of it every tick. Every cell above a
+       low floor contributed, every tick, across the whole diffused field.
+
+       One signal, one channel. The alarm owns its haze; heat stays for things
+       that have no other way to be seen. */
 
     for (const k in this.g) {
       const g = this.g[k];
@@ -143,9 +145,24 @@ window.MurmurationModules.HeatMap = class HeatMap {
           const cx = (c + 0.5) * s, cy = (r + 0.5) * s;
           const rad = s * (0.8 + t * 1.5);
           const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-          // hot centres wash toward white, the way heat actually looks
-          grd.addColorStop(0, `hsla(${hue}, ${white?40:95}%, ${52 + t*38}%, ${0.05 + t*0.30})`);
-          grd.addColorStop(1, `hsla(${hue}, ${white?40:95}%, ${50}%, 0)`);
+          const sat = white ? 40 : 95, lum = 52 + t * 38;
+          /* HOLLOW CENTRE. Ghost, 2026-08-26: "the glow is entirely too powerful
+             i can barely see the king or its location when that glow starts to
+             appear." BREACH sits on the crown by definition, so a filled disc
+             saturates exactly the thing it exists to point at — the heat map
+             defeating its own rule that it must never obscure what you then look
+             at. Drawn as a RING it still pulls the eye, and leaves the crown
+             legible inside it. */
+          if (this.KIND[k].hollow) {
+            grd.addColorStop(0.00, `hsla(${hue}, ${sat}%, ${lum}%, 0)`);
+            grd.addColorStop(0.42, `hsla(${hue}, ${sat}%, ${lum}%, 0)`);
+            grd.addColorStop(0.66, `hsla(${hue}, ${sat}%, ${lum}%, ${0.04 + t*0.22})`);
+            grd.addColorStop(1.00, `hsla(${hue}, ${sat}%, ${lum}%, 0)`);
+          } else {
+            // hot centres wash toward white, the way heat actually looks
+            grd.addColorStop(0, `hsla(${hue}, ${sat}%, ${lum}%, ${0.04 + t*0.22})`);
+            grd.addColorStop(1, `hsla(${hue}, ${sat}%, 50%, 0)`);
+          }
           ctx.fillStyle = grd;
           ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI*2); ctx.fill();
         }
@@ -156,7 +173,6 @@ window.MurmurationModules.HeatMap = class HeatMap {
 
   stats() {
     const tot = k => { let t = 0; const g = this.g[k]; for (let i=0;i<g.length;i++) t += g[i]; return +t.toFixed(2); };
-    return { CONTEST: tot('CONTEST'), BREACH: tot('BREACH'),
-             ALARM: tot('ALARM'), TACTIC: tot('TACTIC') };
+    return { CONTEST: tot('CONTEST'), BREACH: tot('BREACH'), TACTIC: tot('TACTIC') };
   }
 };
