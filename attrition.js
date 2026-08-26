@@ -274,6 +274,23 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
         .map(a => ({ a, d: Math.hypot(a.x - home.x, a.y - home.y) }))
         .sort((p, q) => p.d - q.d)
         .slice(0, this.guardCount[c]);
+      /* DECOY (Plover) — "draw the detail off the crown before committing".
+         LOBO's counter to GUARDED, and inert until now. A feigned threat away
+         from the crown peels the outermost guards off the shell, thinning it
+         where the real approach comes. It takes the OUTERMOST first — the ones
+         already furthest from the king are the ones a distraction reaches — and
+         it can never strip the detail entirely: a crown left with no guard at
+         all would make DECOY a win condition rather than a tactic. */
+      const _e2 = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.loboEvolve;
+      const _i2 = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.immunity;
+      if (_e2 && _e2.has && _e2.has('DECOY') && detail.length > 2) {
+        const pot = _i2 ? _i2.potency(c, 'DECOY') : 1;
+        const pull = Math.min(detail.length - 2, Math.round(detail.length * 0.4 * pot));
+        for (let i = 0; i < pull; i++) {
+          const g = detail.pop();          // outermost first
+          if (g) { g.a._decoyed = true; g.a._attritionGuard = false; }
+        }
+      }
       const guardSet = new Set(detail.map(g => g.a));
       for (const a of this._living(c)) a._attritionGuard = guardSet.has(a);
       for (const { a, d } of detail) {
@@ -561,8 +578,24 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     // QUORUM: count independent colony members who can also sense the threat.
     // Consensus, not a single alarm — the false-positive gate.
     if(threat.length===0) return false;
+    /* FEINT (Anglerfish) — "split into probes too small to confirm". LOBO's
+       counter to QUORUM, and until now it was ADOPTED BUT INERT: LOBO could
+       adapt into a trait that did nothing at all.
+
+       It works by shrinking the window in which two defenders count as having
+       seen the SAME thing, so the same bodies no longer add up to a consensus.
+       Scaled by potency, so a colony that has learned this tactic sees through
+       it — which is the first place neutralisation blunts a tactic IN PLAY
+       rather than merely deciding whether LOBO should drop it. */
+    let _sr = this.threatR * 0.6;
+    const _ev = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.loboEvolve;
+    const _im = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.immunity;
+    if (_ev && _ev.has && _ev.has('FEINT')) {
+      const pot = _im ? _im.potency(colony, 'FEINT') : 1;
+      _sr *= (1 - 0.45 * pot);
+    }
     const sensing = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone &&
-      threat.some(u=>Math.hypot(a.x-u.x,a.y-u.y) < this.threatR*0.6)).length;
+      threat.some(u=>Math.hypot(a.x-u.x,a.y-u.y) < _sr)).length;
     // §7 TIC muster lowers the confirmation bar — the colony fires on a hair-trigger under alarm
     const bonus = (this.musterBonus && this.musterBonus[colony]) || 0;
     /* THE COLONY'S STATE OF MIND DECIDES THE THRESHOLD, not us.
@@ -1324,8 +1357,20 @@ window.MurmurationModules.AttritionMortality = class AttritionMortality {
       const near = this.world.getNeighbors ? this.world.getNeighbors(a, this.contactR) : [];
       for (const b of near) { if (this._hostile(a, b)) { a.integrity -= this.contactDmg; harmed = true; break; } }
 
-      // STARVATION — an empty belly is a wound
-      if (a.energy != null && a.energy < this.starveAt) { a.integrity -= this.starveDmg; harmed = true; }
+      /* STARVATION — an empty belly is a wound.
+         FORAGE (Locust) — "sustain in the field; a siege no longer runs out
+         before the colony does". LOBO's counter to STARVED, and inert until
+         now. The unaligned feed themselves, so hunger stops being the thing
+         that lifts a siege. Blunted by whichever colony has learned it. */
+      let _sd = this.starveDmg;
+      if (a.colony === 'U') {
+        const _e = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.loboEvolve;
+        const _i = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.immunity;
+        if (_e && _e.has && _e.has('FORAGE')) {
+          _sd *= (1 - 0.80 * (_i ? _i.potencyAny('FORAGE') : 1));
+        }
+      }
+      if (a.energy != null && a.energy < this.starveAt) { a.integrity -= _sd; harmed = true; }
 
       // DEEP GRIEF — despair wears the body (grief contributes, no longer gates)
       if ((a.griefLevel || 0) > this.griefAt) { a.integrity -= this.griefDmg; harmed = true; }

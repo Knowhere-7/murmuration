@@ -210,6 +210,19 @@ window.MurmurationModules.AdaptiveImmunity = class AdaptiveImmunity {
     return Math.min(this.MAX_NEUTRALISE, r.titre * r.affinity);
   }
 
+  /** How well a tactic still WORKS against this colony, 1 down to 1-MAX.
+      Until now neutralisation only decided whether LOBO should shed something;
+      the tactic itself kept working at full strength right up to the moment it
+      was dropped. This is what lets learning blunt a tactic IN PLAY, which is
+      what "closes any gap lobo may gain" actually requires. */
+  potency(colony, traitKey) { return 1 - this.neutralisation(colony, traitKey); }
+
+  /** Worst-case potency across both colonies — for effects that are not aimed
+      at one colony in particular. */
+  potencyAny(traitKey) {
+    return Math.min(this.potency('A', traitKey), this.potency('B', traitKey));
+  }
+
   /* ── WHAT GEA MAY CARRY (SR-011) ─────────────────────────────────────────
      Memory and affinity are KNOWLEDGE: what this colony learned by meeting the
      thing. Titre is a circulating antibody — a present capability — and does NOT
