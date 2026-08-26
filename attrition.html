@@ -445,7 +445,7 @@
 <script src="heat.js?v=1"></script>
 <script src="lobo-evolve.js?v=11"></script>
 <script src="keep.js?v=4"></script>
-<script src="attrition.js?v=19"></script>
+<script src="attrition.js?v=21"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -601,8 +601,13 @@
     // saving nothing would make it a promise rather than a trait.
     if(r && r.id==='gea'){
       const rec=window.MurmurationModules.Attrition.reactions.saveInheritance(colony);
+      // KNOWLEDGE ONLY (SR-011). `rec.unlocked` no longer exists — reading it
+      // here threw the moment GEA was unlocked, which is the whole rung.
+      const _n = rec ? Object.keys(rec.encounters||{}).filter(k=>k!=='_last').length : 0;
+      const _im = rec && rec.immune ? Object.keys(rec.immune).length : 0;
       log('⬡ GEA — this colony stops starting over. '+
-          (rec? rec.unlocked.length+' unlocks recorded; disposition carried forward'
+          (rec? _n+' kinds of encounter recorded'+(_im?', '+_im+' immune memories':'')+
+               '; abilities are NOT carried — every unlock is earned again'
               : 'record unavailable in this browser'), 'crit');
     }
     log(r?('▶ UNLOCKED — '+r.trait):'all reactions already unlocked','warn'); }
@@ -1248,6 +1253,16 @@
       stepWarGame();
       /* IMMUNITY — the response builds and wanes every tick; shedding is checked
          rarely, because abandoning a tool is a decision, not a reflex. */
+      /* GEA MUST KEEP WRITING. Saving only at the moment GEA is unlocked
+         captured an EMPTY record every time — the rung is earned BEFORE the
+         campaign that teaches anything, so the colony wrote down what it knew
+         (nothing) and never wrote again. A live browser campaign ended with
+         22 attackers dead, real antigens raised, and a saved record of {}.
+         The colony now writes down what it has learned as it learns it. */
+      if((k26.world.time|0) > 0 && (k26.world.time|0) % 200 === 0){
+        const _R=window.MurmurationModules.Attrition.reactions;
+        for(const _c of ['A','B']) if(_R.geaActive(_c)) _R.saveInheritance(_c);
+      }
       const _IM=window.MurmurationModules.Attrition.immunity;
       if(_IM){
         _IM.step();

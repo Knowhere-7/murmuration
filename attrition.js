@@ -281,6 +281,7 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
          already furthest from the king are the ones a distraction reaches — and
          it can never strip the detail entirely: a crown left with no guard at
          all would make DECOY a win condition rather than a tactic. */
+      for (const _a of this._living(c)) _a._decoyed = false;   // per-tick, not a brand
       const _e2 = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.loboEvolve;
       const _i2 = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.immunity;
       if (_e2 && _e2.has && _e2.has('DECOY') && detail.length > 2) {
