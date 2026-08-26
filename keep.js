@@ -147,6 +147,25 @@ window.MurmurationModules.Keep = class Keep {
         }
       }
 
+      /* PREVIOUS POSITION, PER KEEP. Ghost, 2026-08-26: "now theyre just
+         floating past the walls surrounding the king."
+
+         He was right and it was a tunneling bug. A wall only acted on an agent
+         SAMPLED within wallPush*2.2 — 3.3 units — of the ring radius. Anything
+         moving faster than that in a tick stepped clean over the test and was
+         never refused: the walls were tripwires, not barriers. Measured before
+         the fix: 156 breaches on MAINLAND, 44 on KNOWHERE, and every ring
+         cleared. Traps had the same fault against a 9-unit point test, which is
+         why the snare count was zero for the entire life of the keep.
+
+         The cure is to stop asking WHERE the agent is and start asking WHAT IT
+         CROSSED since the last tick. */
+      const _pk = '_keepPrev' + this.colony;
+      const _prev = a[_pk];
+      const pd = _prev ? _prev.d : null;
+      const px = _prev ? _prev.x : a.x, py = _prev ? _prev.y : a.y;
+      a[_pk] = { d: d, x: a.x, y: a.y };
+
       const ang = Math.atan2(dy, dx);
       // Walls, outermost inward. A defender passes freely — GUARDS CAN BE
       // ADDED, and a guard detail that could not reach its own king would be
@@ -154,7 +173,10 @@ window.MurmurationModules.Keep = class Keep {
       if (!defender) {
         for (let i = this.rings - 1; i >= 0; i--) {
           const R = this.ringR(i);
-          if (Math.abs(d - R) > this.wallPush * 2.2) continue;   // not at this wall
+          const atWall    = Math.abs(d - R) <= this.wallPush * 2.2;
+          const crossedIn  = pd != null && pd >= R && d <  R;
+          const crossedOut = pd != null && pd <= R && d >  R;
+          if (!atWall && !crossedIn && !crossedOut) continue;   // did not touch this wall
           let diff = Math.abs(((ang - this.gaps[i] + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
           if (diff < this.gapArc * 0.5) {              // through the gap
             const cleared = this.rings - i;
@@ -191,7 +213,11 @@ window.MurmurationModules.Keep = class Keep {
           }
           // refused: push back out along the radius and kill inward velocity
           const nx = dx / (d || 1), ny = dy / (d || 1);
-          const side = d < R ? -1 : 1;                 // hold them on the side they came from
+          /* Hold them on the side they came FROM. Reading that off the current
+             position is only right for an agent still touching the wall — a
+             crosser is already through, so its position reports the wrong side
+             and the refusal would shove it further in. */
+          const side = (pd != null ? pd > R : d > R) ? 1 : -1;
           a.x = c.x + nx * (R + side * this.wallPush * 2.2);
           a.y = c.y + ny * (R + side * this.wallPush * 2.2);
           const radial = a.vx * nx + a.vy * ny;
@@ -207,7 +233,16 @@ window.MurmurationModules.Keep = class Keep {
         for (const t of this.traps) {
           if (t.cool > 0) continue;
           const tx = c.x + Math.cos(t.ang) * t.r, ty = c.y + Math.sin(t.ang) * t.r;
-          if (Math.hypot(a.x - tx, a.y - ty) < 9) {
+          /* Distance from the trap to the agent's PATH this tick, not to where
+             it happened to land. A point test misses anyone who stepped over
+             the trap, which was every fast attacker — hence a lifetime snare
+             count of zero. */
+          const sx = a.x - px, sy = a.y - py;
+          const seg = sx * sx + sy * sy;
+          let u = seg > 0 ? (((tx - px) * sx + (ty - py) * sy) / seg) : 0;
+          u = u < 0 ? 0 : (u > 1 ? 1 : u);
+          const nearest = Math.hypot(tx - (px + sx * u), ty - (py + sy * u));
+          if (nearest < 9) {
             this._snared.set(a, this.TRAP_TICKS);
             t.cool = this.TRAP_COOLDOWN;
             break;
