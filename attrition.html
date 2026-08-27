@@ -662,6 +662,20 @@
       log('✖ MUSTER SPENT — LOBO has nothing left to send. The colonies hold.','crit');
       return;
     }
+    /* THE SPAWN SIDE MUST FOLLOW THE CONTRACT. Ghost, 2026-08-27: "lobo just
+       runs past everything and captures the king of knowhere, and bypasses
+       mainland."
+
+       sendWave stamps each attacker's CONTRACT (_loboTarget) correctly, but
+       world.spawnUnaligned picks its spawn edge from `world.unalignedTarget` —
+       which attrition never set, so it sat at its constructor default 'both'
+       for the life of the range. Half of every wave therefore appeared on the
+       FAR side of the map and walked diagonally across the whole board to reach
+       the crown it was contracted to, straight through the other colony's
+       ground. They were not bypassing MAINLAND as a tactic; they were commuting
+       through it. murmuration's own page sets this before every wave
+       (index.html) — attrition simply never did. */
+    k26.world.unalignedTarget = target;
     const r=window.MurmurationModules.Attrition.adversary.sendWave(tier,target);
     if(r.error){ log('wave error: '+r.error,'crit'); return; }
     log('⚠ WAVE '+r.wave+' · '+r.label+' ×'+r.count+' → '+r.target.toUpperCase()
