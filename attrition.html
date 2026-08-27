@@ -653,6 +653,39 @@
     });
   }
 
+  /* ── THE TARGET PICKER WAS DEAD ──────────────────────────────────────────
+     Ghost, 2026-08-27: "no change. they still only target knowhere."
+
+     The three target buttons have been in the panel since the range was built,
+     with MAINLAND rendered as selected — and NOTHING was listening. No onclick,
+     and `data-t` was never read by any code. They looked live, they looked
+     answered, and they did nothing.
+
+     So the only thing that has ever set `target` is a WAR GAME script, and one
+     of them ("LOBO all-in on KNOWHERE") sets it to 'A' three times. After that
+     ran, every wave for the rest of the session went at KNOWHERE, silently,
+     with a panel still showing MAINLAND as the target. That is what he watched
+     all night, and clicking the button to change it could never have helped.
+
+     Now they set it, show it, and carry it to the world. */
+  function setTarget(t, quiet){
+    if(t!=='A' && t!=='B' && t!=='both') return;
+    target = t;
+    if(k26 && k26.world) k26.world.unalignedTarget = t;
+    const row=document.getElementById('tgt');
+    if(row) Array.from(row.querySelectorAll('button')).forEach(b =>
+      b.classList.toggle('on', b.dataset.t===t));
+    if(!quiet) log('◈ TARGET — the unaligned are now contracted to '+
+      (t==='both'?'BOTH crowns':(t==='A'?'KNOWHERE':'MAINLAND')),'warn');
+  }
+  (function wireTargetPicker(){
+    const row=document.getElementById('tgt');
+    if(!row) return;
+    Array.from(row.querySelectorAll('button')).forEach(b =>
+      b.onclick = () => setTarget(b.dataset.t));
+    setTarget(target, true);          // make the panel tell the truth at boot
+  })();
+
   function wave(tier){
     if(!k26) return;
     // THE MUSTER IS FINITE — a campaign that can run out is a campaign that can
@@ -998,6 +1031,9 @@
     while(WG.idx < g.steps.length && elapsed >= g.steps[WG.idx].t){
       const s = g.steps[WG.idx++];
       try { s.do(); } catch(e) { log('war game step failed: '+e.message,'crit'); }
+      // a script that changes the target must SHOW it — this is exactly how the
+      // panel came to display MAINLAND while every wave went at KNOWHERE
+      setTarget(target, true);
       log('   · ' + s.why, 'warn');
     }
     if(WG.idx >= g.steps.length){
