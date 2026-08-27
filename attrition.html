@@ -508,22 +508,73 @@
     b.classList.toggle('armed', n>0);
     document.getElementById('detCount').textContent = n? ' · '+n : '';
   }
+  /* WHICH COLONY DID THIS LAND ON? Read from the staged call itself: most
+     handlers take the colony as their first argument, and the rest carry it in
+     the slider's id (stParA, wTerrB, guardA...). A change that touches neither
+     is a world-wide pressure and the sky answers over both. */
+  function _colonyOf(p){
+    if(p.args && (p.args[0]==='A'||p.args[0]==='B')) return [p.args[0]];
+    if(p.args && p.args[0]==='both') return ['A','B'];
+    const m=/([AB])$/.exec(p.label||''); if(m) return [m[1]];
+    return ['A','B'];
+  }
+
   function detonate(){
     const b=document.getElementById('detonateBtn'), t=document.getElementById('detText');
     if(!PENDING.size){
       log('nothing staged — move a slider first, then detonate','warn');
       return;
     }
-    const names=[];
+    const names=[], hit={A:false,B:false};
+    let force=0;
     for(const [id,p] of PENDING){
-      try { window[p.fn](...p.args); names.push(id); } catch(e){ log('slider '+id+' failed: '+e.message,'crit'); }
+      try {
+        window[p.fn](...p.args); names.push(id);
+        for(const c of _colonyOf(p)) hit[c]=true;
+        const v=parseFloat(p.args[p.args.length-1]);
+        if(!isNaN(v)) force=Math.max(force, Math.min(1, Math.abs(v)));
+      } catch(e){ log('slider '+id+' failed: '+e.message,'crit'); }
       const el=document.getElementById(id); if(el) el.classList.remove('staged');
     }
     PENDING.clear(); syncDetonate();
+
+    /* ── THE WORLD ANSWERS ───────────────────────────────────────────────────
+       Ghost, 2026-08-26: "it doesnt carry the reactions that the other sims
+       have when detonate is hit."
+
+       He is right, and the first version missed the point of his own request.
+       DETONATE in murmuration is not a commit button — the sky objects. Three
+       or more pressures at once electrifies it white-blue even with no paranoia
+       in the mix, because "the world itself objects". Attrition already loads
+       world.js and seed.js, so all of this was sitting here unused; the button
+       was applying numbers in silence.
+
+       Scale follows what was actually committed: how many changes, how hard,
+       and over which colony. A single nudge gets a flicker; a five-slider
+       broadside gets the compound storm. */
+    const n=names.length, compound = n>=3;
+    const w = k26 && k26.world;
+    if(w && w.strikeLightning){
+      for(const c of ['A','B']) if(hit[c])
+        w.strikeLightning(c, Math.max(0.35, force||0.5), {compound});
+    }
+    // and mark it on the heat map — an operator action is a TACTIC, the one
+    // heat channel reserved for something deliberate having just happened
+    const H = window.MurmurationModules.Attrition.heat;
+    if(H && w){
+      for(const c of ['A','B']){
+        if(!hit[c]) continue;
+        const home=window.MurmurationModules.Attrition.kings.home(c);
+        H.add('TACTIC', home.x, home.y, compound? 4 : 2);
+      }
+    }
+
     b.classList.add('fired'); t.textContent='DETONATED';
     setTimeout(()=>{ b.classList.remove('fired'); t.textContent='DETONATE'; }, 1500);
-    log('◉ DETONATION — '+names.length+' change'+(names.length>1?'s':'')+
-        ' committed at once: '+names.join(', '),'crit');
+
+    const where = (hit.A&&hit.B)? 'both colonies' : (hit.A? 'KNOWHERE' : 'MAINLAND');
+    log('◉ DETONATION — '+n+' change'+(n>1?'s':'')+' committed at once on '+
+        where+(compound? ' · THE SKY OBJECTS':'')+': '+names.join(', '),'crit');
   }
 
   function log(msg,cls){ const l=document.getElementById('log');
