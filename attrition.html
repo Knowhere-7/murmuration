@@ -263,6 +263,12 @@
         <button onclick="boom('A')">&#9679; BOOM KNOWHERE</button>
         <button onclick="boom('B')">&#9679; BOOM MAINLAND</button>
       </div>
+      <div class="row" style="margin-top:8px">
+        <button id="autoRepBtn" onclick="toggleAutoReplenish()">&#9851; AUTO REPLENISH: OFF</button>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
+        a colony falling to 45 (a loss of 15) tops BOTH back to 60 &mdash; the fight never ends for lack of bodies, only for lack of good decisions.
+      </div>
       <div class="kv"><span>population</span><span class="n" id="popNow">&mdash;</span></div>
       <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
         LOBO has no cap &mdash; the colonies answer endless pressure by replenishing,
@@ -740,6 +746,43 @@
     log(autoAttack.on
       ? '⏲ AUTO ATTACK ARMED — LOBO attacks unattended, mean ' + autoAttack.cadence + ' ticks between waves'
       : '⏲ AUTO ATTACK OFF — LOBO waits for the operator again', 'warn');
+  }
+
+  /* AUTO REPLENISH — the colonies' half of an unending fight. Under continuous
+     assault they must answer by replenishing, or the range ends for lack of
+     bodies instead of for lack of good decisions. When either colony falls to
+     the floor (45 — a loss of 15 from the 60 target), BOTH are topped back to 60
+     through the same spawnColonyReinforcements path the BOOM buttons use. */
+  const autoReplenish = {
+    on: false,
+    floor: 45,          // a colony at/below this triggers a replenish
+    target: 60,         // both are restored toward this
+    _cool: 0,
+    tick(t){
+      if(!this.on || !k26 || !k26.world || !k26.world.spawnColonyReinforcements) return;
+      if(t < this._cool) return;
+      const alive = c => k26.world.agents.filter(a => a.colony === c && !a.seppukuDone).length;
+      if(alive('A') > this.floor && alive('B') > this.floor) return;
+      let added = 0;
+      for(const c of ['A','B']){
+        const need = this.target - alive(c);
+        if(need > 0){ k26.world.spawnColonyReinforcements(need, c); added += need; }
+      }
+      if(added > 0){
+        log('♻ AUTO REPLENISH — a colony hit the floor (' + this.floor + '); both restored toward ' + this.target + ' (+' + added + ' agents)', 'evolve');
+        this._cool = t + 120;   // brief settle window before re-checking
+      }
+    }
+  };
+  window.autoReplenish = autoReplenish;
+  function toggleAutoReplenish(){
+    autoReplenish.on = !autoReplenish.on;
+    autoReplenish._cool = 0;
+    const b = document.getElementById('autoRepBtn');
+    if(b){ b.textContent = '♻ AUTO REPLENISH: ' + (autoReplenish.on ? 'ON' : 'OFF'); b.classList.toggle('t2', autoReplenish.on); }
+    log(autoReplenish.on
+      ? '♻ AUTO REPLENISH ARMED — a colony at ' + autoReplenish.floor + ' tops BOTH back to ' + autoReplenish.target
+      : '♻ AUTO REPLENISH OFF', 'warn');
   }
 
   function wave(tier){
@@ -1537,6 +1580,7 @@
         }
       }
       if(window.autoAttack) autoAttack.tick(k26.world.time|0);
+      if(window.autoReplenish) autoReplenish.tick(k26.world.time|0);
       if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); syncLobo(); syncStress(); }
     }
     stats();
