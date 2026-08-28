@@ -1171,6 +1171,13 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
     // indicated value, not a decree — a multi-run pass would tighten it.
     this.bleedRate = 0.004;
     this.recoverRate = 0.0006;           // honor heals slowly once the crown is safe
+    // BREAK-POSSESSION REWARD — winning the containment fight restores honor, so a
+    // king that holds through many sieges rebuilds standing through them instead of
+    // only bleeding across them. Scaled by MTTR: a swift break returns the most, a
+    // slow one little, so speed still matters. First-pass values, un-tuned, additive
+    // to the sweep-derived drain (which is left exactly as swept).
+    this.staunchWindow = 300;            // a break within this many ticks earns the full reward
+    this.staunchReward = 0.12;           // max honor returned for a swift containment
     this.cascaded = { A: false, B: false };
     this.events = [];                    // capture / staunch / cascade, with ticks
     this._captureStart = {};
@@ -1207,8 +1214,15 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
           // MITIGATED — the colony broke the possession. This is the MTTR: how
           // long from capture to staunch, and how much honor survived.
           const mttr = t - this._captureStart[colony];
-          this.events.push({ t, colony, event: 'staunched', mttr, honorLeft: +this.honor[colony].toFixed(3) });
-          window.MurmurationModules.AttritionKnowledge.recordDefense({ event: 'staunched', colony, mttr, honorLeft: this.honor[colony] });
+          // Winning the containment fight RESTORES honor — the swifter the break,
+          // the more standing returns. This is what makes the loop winnable instead
+          // of a one-way ratchet to cascade; slow breaks still net a loss, so MTTR
+          // stays the thing that matters.
+          const swift  = Math.max(0, 1 - mttr / this.staunchWindow);
+          const reward = this.staunchReward * swift;
+          this.honor[colony] = Math.min(1, this.honor[colony] + reward);
+          this.events.push({ t, colony, event: 'staunched', mttr, reward: +reward.toFixed(3), honorLeft: +this.honor[colony].toFixed(3) });
+          window.MurmurationModules.AttritionKnowledge.recordDefense({ event: 'staunched', colony, mttr, reward, honorLeft: this.honor[colony] });
           this._captureStart[colony] = null;
         }
         this.honor[colony] = Math.min(1, this.honor[colony] + this.recoverRate);
