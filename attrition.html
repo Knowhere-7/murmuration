@@ -339,6 +339,15 @@
       <div class="kv"><span>force / determination</span><span class="val" id="forceVal">0.50</span></div>
       <input type="range" id="force" min="0" max="1" step="0.01" value="0.5"
              oninput="stage(this,'setForce',this.value)">
+      <div class="row" style="margin-top:10px">
+        <button id="autoAtkBtn" onclick="toggleAutoAttack()">&#9202; AUTO ATTACK: OFF</button>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
+        no hand at the controls &mdash; LOBO probes and strikes on its own, like the weather. the range never sleeps, so the genome is tested around the clock.
+      </div>
+      <div class="kv"><span>attack cadence &middot; mean ticks between</span><span class="val" id="autoCadVal">1800</span></div>
+      <input type="range" id="autoCad" min="300" max="6000" step="50" value="1800"
+             oninput="autoAttack.cadence=+this.value;document.getElementById('autoCadVal').textContent=this.value">
     </div>
 
     <div class="sec">
@@ -698,6 +707,40 @@
       b.onclick = () => setTarget(b.dataset.t));
     setTarget(target, true);          // make the panel tell the truth at boot
   })();
+
+  /* AUTO ATTACK — the adversary with no hand at the controls. Modelled on the
+     weather: a self-rescheduling cadence (mean ticks between, ±50%) that fires a
+     wave through the SAME wave() path the buttons use — same contracts, logging,
+     muster, verdict. Off by default. The mix is probe-heavy with periodic strikes
+     and the rarer heavy occupation, targets balanced across both crowns with an
+     occasional two-front — so the genome meets a realistic, unending assault. */
+  const autoAttack = {
+    on: false,
+    cadence: 1800,                       // mean ticks between waves
+    next: 0,
+    _tiers:   [1,1,1,1, 2,2,2, 3,3],     // RECON 4/9 · STRIKE 3/9 · OCCUPATION 2/9
+    _targets: ['A','A','B','B','both'],  // each crown 2/5 · both 1/5
+    tick(t){
+      if(!this.on || !k26 || !k26.world) return;
+      if(this.next === 0){ this.next = t + Math.round(this.cadence * (0.5 + Math.random())); return; }
+      if(t < this.next) return;
+      const tier   = this._tiers[(Math.random() * this._tiers.length) | 0];
+      const target = this._targets[(Math.random() * this._targets.length) | 0];
+      setTarget(target, true);           // quiet — the wave log line already names the target
+      wave(tier);
+      this.next = t + Math.round(this.cadence * (0.5 + Math.random()));
+    }
+  };
+  window.autoAttack = autoAttack;
+  function toggleAutoAttack(){
+    autoAttack.on = !autoAttack.on;
+    autoAttack.next = 0;                  // reschedule from now
+    const b = document.getElementById('autoAtkBtn');
+    if(b){ b.textContent = '⏲ AUTO ATTACK: ' + (autoAttack.on ? 'ON' : 'OFF'); b.classList.toggle('t3', autoAttack.on); }
+    log(autoAttack.on
+      ? '⏲ AUTO ATTACK ARMED — LOBO attacks unattended, mean ' + autoAttack.cadence + ' ticks between waves'
+      : '⏲ AUTO ATTACK OFF — LOBO waits for the operator again', 'warn');
+  }
 
   function wave(tier){
     if(!k26) return;
@@ -1493,6 +1536,7 @@
           }
         }
       }
+      if(window.autoAttack) autoAttack.tick(k26.world.time|0);
       if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); syncLobo(); syncStress(); }
     }
     stats();
