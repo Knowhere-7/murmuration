@@ -86,6 +86,17 @@
     background:var(--vio);border-radius:0}
   #worldpanel input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;
     border-radius:50%;background:var(--vio);box-shadow:0 0 10px rgba(201,160,255,.9)}
+  /* Knowhere (A) turquoise · Mainland (B) pink — match the agents so each colony's
+     hand on the range reads at a glance (Ghost, 2026-08-27). #worldpanel ids end A/B by colony;
+     the unaligned adversary + shared world controls stay violet, LOBO's panel stays blood-orange. */
+  #worldpanel input[type=range][id$="A"]::-webkit-slider-runnable-track{background:#40e8d0}
+  #worldpanel input[type=range][id$="A"]::-webkit-slider-thumb{background:#40e8d0;box-shadow:0 0 10px rgba(64,232,208,.9),0 0 2px #000}
+  #worldpanel input[type=range][id$="A"]::-moz-range-track{background:#40e8d0}
+  #worldpanel input[type=range][id$="A"]::-moz-range-thumb{background:#40e8d0}
+  #worldpanel input[type=range][id$="B"]::-webkit-slider-runnable-track{background:#ff5cc8}
+  #worldpanel input[type=range][id$="B"]::-webkit-slider-thumb{background:#ff5cc8;box-shadow:0 0 10px rgba(255,92,200,.9),0 0 2px #000}
+  #worldpanel input[type=range][id$="B"]::-moz-range-track{background:#ff5cc8}
+  #worldpanel input[type=range][id$="B"]::-moz-range-thumb{background:#ff5cc8}
   #worldpanel input[type=range]:hover::-webkit-slider-thumb{background:#fff}
   #worldpanel button{backdrop-filter:blur(2px);background:rgba(11,16,32,.42)}
   #worldpanel .val{color:var(--vio)}
@@ -444,8 +455,8 @@
 <!-- topomap FIRST: k26.drawBackground self-heals the contour layer by calling
      window.buildTopoMap, so without this the range renders on bare black. -->
 <script src="topomap.js?v=8"></script>
-<script src="agent.js?v=6"></script>
-<script src="world.js?v=26"></script>
+<script src="agent.js?v=7"></script>
+<script src="world.js?v=27"></script>
 <script src="seed.js?v=2"></script>
 <script src="interaction.js?v=3"></script>
 <script src="evolution.js"></script>
@@ -480,6 +491,8 @@
 <script src="heat.js?v=10"></script>
 <script src="lobo-evolve.js?v=11"></script>
 <script src="keep.js?v=7"></script>
+<script src="gea-writer.js?v=1"></script>
+<script src="archons.js?v=1"></script>
 <script src="attrition.js?v=22"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
@@ -715,7 +728,9 @@
         +' (force '+r.force.toFixed(2)+')', tier===3?'crit':'warn');
     if(_E){
       _E.draw(r.count);
-      log('   muster: '+_E.remaining()+' of '+_E.muster+' left', 'warn');
+      log(_E.muster == null
+        ? '   muster: ∞ uncapped — decided at the crown, not by attrition'
+        : '   muster: '+_E.remaining()+' of '+_E.muster+' left', 'warn');
       const v=_E.verdict();
       if(v) log('■■ DECIDED — '+v.winner+' ('+v.how+')','crit');
     }

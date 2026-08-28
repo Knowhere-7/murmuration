@@ -699,6 +699,12 @@ window.MurmurationModules.World = class World {
     );
   }
 
+  /** Archon layer helper — locate an agent by id (for gnosis transmission). */
+  byId(id) {
+    for (const a of this.agents) if (a.id === id) return a;
+    return null;
+  }
+
   /**
    * ST-2: Install a new grief sentinel.
    * Previous sentinel is finally retired (griefState → 'RETIRED').
@@ -999,6 +1005,12 @@ window.MurmurationModules.World = class World {
   advanceStep() {
     // Exclude seppuku-complete agents from belief/action — they are memory, not participants
     const active = this.agents.filter(a => !a.seppukuDone);
+
+    // ── ARCHON LAYER — interior-drift patterns + the SR-012 colony-discretion gate.
+    //    Runs first so bondage-distortions (panic scatter / compassion pull) ride the
+    //    same integration. Emits GEA experiences at gnosis / redeem / apoptosis.
+    const _Arch = window.MurmurationModules && window.MurmurationModules.Archons;
+    if (_Arch) for (const a of active) _Arch.tickArchons(a, this);
 
     this._advanceTraversal(active);
 

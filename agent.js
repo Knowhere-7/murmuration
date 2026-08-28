@@ -193,6 +193,18 @@ window.MurmurationModules.Agent = class Agent {
     this.beliefState.current  = 0;
     this.vx = 0;
     this.vy = 0;
+
+    // GEA — seppuku is an agent choosing the group over itself: a FAILURE (it dies)
+    // that carries real wisdom (high knowledge). The lesson survives the agent.
+    try {
+      if (typeof window !== 'undefined' && window.GEAWriter) window.GEAWriter.record({
+        agentId: this.id, role: this.colony || 'agent', domain: 'murmuration',
+        taskType: 'seppuku', event: 'failure',
+        context: { wisdom: this.wisdomScore, faith: this.faith },
+        outcome: { chose: 'group_over_self' },
+        pressure: { performance: -1, survival: 0, efficiency: 0, knowledge: Math.max(0, Math.min(1, 0.4 + (this.wisdomScore || 0) * 0.6)) }
+      });
+    } catch (_) {}
   }
 
   // ─── Belief ──────────────────────────────────────────────────────────────
@@ -500,6 +512,31 @@ window.MurmurationModules.Agent = class Agent {
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // ── ARCHON: FEAR — the interior-capture ring. Panic reads red; an agent that
+    //    has turned toward a more-afraid neighbour warms toward gold (the crack in
+    //    the bondage). A gold shockwave marks the moment of gnosis.
+    const _fear = this.archons && this.archons.FEAR;
+    if (_fear && _fear.held) {
+      const fp       = 0.5 + 0.5 * Math.sin(Date.now() / 180);
+      const reaching = !!this._steadyTarget;
+      ctx.strokeStyle = reaching
+        ? `rgba(255, 185, 75, ${0.55 + fp * 0.35})`
+        : `rgba(205, 55, 42, ${0.45 + fp * 0.50})`;
+      ctx.lineWidth = reaching ? 1.4 : 1.1;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 6.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (this._freedPulse > 0) {                          // gnosis — liberation flash
+      const t = this._freedPulse / 24;
+      ctx.strokeStyle = `rgba(255, 216, 130, ${t * 0.8})`;
+      ctx.lineWidth   = 1.6;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 6 + (1 - t) * 15, 0, Math.PI * 2);
+      ctx.stroke();
+      this._freedPulse--;
     }
 
     // ST-2 grief ring — amber (GRIEVING) → pulsing red (CRISIS)
