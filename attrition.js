@@ -437,6 +437,24 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       { id:'wolfPack', trait:'Wolf Pack (Canis lupus)', kind:'offense',
         unlocked:{A:false,B:false}, dur:220, cd:180,
         desc:'a hunting party breaks off under a tactician and runs the attackers down' },
+      // #28 FLASH EXPANSION (Clupea harengus) — the school explodes outward as the
+      // strike commits, so it lands in empty water; the coherent target the
+      // attackers locked onto is gone, and they reform after.
+      { id:'flashExpansion', trait:'Flash Expansion Evasion (Clupea harengus)', kind:'defense',
+        unlocked:{A:false,B:false}, dur:36, cd:240,
+        desc:'the crown-guard bursts apart the instant the strike commits — it lands in empty water, and the attackers lose the coherent target they locked onto' },
+      // #8 PLANARIAN REGENERATION (Schmidtea) — a founding-word lineage. Any
+      // fragment reconstructs the whole: the colony regrows lost defenders at the
+      // crown. The structural answer to attrition, not a tactic.
+      { id:'planarianRegeneration', trait:'Planarian Regeneration (Schmidtea mediterranea)', kind:'regen',
+        unlocked:{A:false,B:false}, dur:1, cd:320,
+        desc:'any fragment reconstructs the whole — the colony regrows fallen defenders at the crown. attrition is answered with tissue, not just tactics' },
+      // #45 ELECTRIC ORGAN DISCHARGE (Electrophorus) — the high-voltage face of
+      // the multi-voltage organ: an emergency override that empties the water of
+      // motion. Attackers at the crown are STUNNED, not ejected — held for a beat.
+      { id:'electricDischarge', trait:'Electric Organ Discharge (Electrophorus electricus)', kind:'offense',
+        unlocked:{A:false,B:false}, dur:24, cd:240,
+        desc:'a high-voltage discharge stuns everything hostile at the crown — their charge frozen for a beat, buying the window a strike would not' },
     ];
   }
 
@@ -719,6 +737,36 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
             window.MurmurationModules.AttritionKnowledge.recordOutcome({
               event:'attacker_eliminated', colony, by:'wolfPack' }); } }
       }
+    } else if(r.id==='flashExpansion'){
+      // The school explodes: crown-near defenders burst radially outward, and the
+      // attackers' lock on the (now-gone) coherent target is damped for the beat.
+      for(const a of this.world.agents){
+        if(a.colony!==colony || a.seppukuDone || a.isKing) continue;
+        const d=Math.hypot(a.x-home.x,a.y-home.y)||1;
+        if(d < this.threatR){ a.vx += ((a.x-home.x)/d)*0.16; a.vy += ((a.y-home.y)/d)*0.16; }
+      }
+      for(const u of threat){
+        const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
+        u.vx -= ((home.x-u.x)/d)*0.06; u.vy -= ((home.y-u.y)/d)*0.06;
+      }
+    } else if(r.id==='planarianRegeneration'){
+      // Any fragment reconstructs the whole — regrow a few fallen defenders at the
+      // crown through the same reinforcement path Population Boom uses (caps at 100).
+      if(this.world.spawnColonyReinforcements){
+        this.world.spawnColonyReinforcements(3, colony);
+        window.MurmurationModules.AttritionKnowledge.recordDefense({
+          event:'regenerated', colony, added:3, gene:'planarianRegeneration' });
+      }
+    } else if(r.id==='electricDischarge'){
+      // High-voltage override: freeze the charge of everything hostile at the crown.
+      // Held, not ejected (the beetle ejects) — a stun window the defenders can use.
+      let stunned=0;
+      for(const u of threat){
+        const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
+        if(d < this.kings.captureR*2.2){ u.vx*=0.05; u.vy*=0.05; u._attritionStunned=this.world.time+30; stunned++; }
+      }
+      if(stunned) window.MurmurationModules.AttritionKnowledge.recordDefense({
+        event:'discharge_stun', colony, stunned, gene:'electricDischarge' });
     }
   }
 };
