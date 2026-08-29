@@ -377,6 +377,10 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     this.active = {};            // key -> ticksRemaining (a reaction expressing)
     this.lastFired = {};         // key -> tick, for cooldowns
     this.fireLog = [];
+    // PURE-NEED EVOLUTION (Ghost, 2026-08-29): decaying pressure signals per colony, updated each
+    // tick. A colony unlocks the LOCKED trait that best answers what is actually hurting it — not a
+    // fixed ladder — so two colonies under different pressure evolve DIFFERENTLY (identity by experience).
+    this._need = { A:{siege:0,swarm:0,deficit:0,grind:0}, B:{siege:0,swarm:0,deficit:0,grind:0} };
 
     // The repertoire. `unlocked` seeds INNATE immunity; adaptive ones start
     // locked and are revealed one per evolution cycle by the unlock pass.
@@ -586,9 +590,41 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
   unlockedList(colony){ return this.reactions.filter(r=>r.unlocked[colony]); }
   lockedList(colony){ return this.reactions.filter(r=>!r.unlocked[colony]); }
 
-  /** Reveal the next locked reaction — called once per evolution cycle (item 5). */
+  /** PURE NEED — pick the locked trait that best answers what is hurting THIS colony now. No
+      fixed order, no archetype bias: siege wants clearers, swarms want the cluster-cook, an honor
+      deficit wants offense (kills take honor), grind wants memory/regen. Different pressure ->
+      different evolution, so the colonies diverge by experience, not by a script. */
+  chooseNextTrait(colony){
+    const locked = this.lockedList(colony);
+    if(!locked.length) return null;
+    const n = (this._need && this._need[colony]) || { siege:0, swarm:0, deficit:0, grind:0 };
+    const REL = {
+      biofilmShield:         { swarm:2, siege:1 },
+      waspAlarm:             { siege:1, swarm:1, grind:0.5 },
+      gea:                   { grind:3 },
+      adaptiveImmunity:      { grind:2, siege:1 },
+      cephalopodCamouflage:  { siege:2 },
+      bombardierBeetle:      { siege:3, deficit:2, swarm:1 },
+      wolfPack:              { siege:2, deficit:2, swarm:1 },
+      flashExpansion:        { swarm:2, siege:1 },
+      planarianRegeneration: { grind:3, siege:1 },
+      electricDischarge:     { siege:2 },
+      thermalBalling:        { swarm:3, siege:2, deficit:2 },
+      quorumSensing:         {}
+    };
+    let best=null, bestScore=-1e9;
+    for(let i=0;i<locked.length;i++){
+      const r=locked[i]; const rel=REL[r.id]||{};
+      let s = (rel.siege||0)*n.siege + (rel.swarm||0)*n.swarm + (rel.deficit||0)*n.deficit + (rel.grind||0)*n.grind;
+      s += 0.0001*(locked.length-i);   // stable tie-break toward the earlier registry entry when needs are quiet
+      if(s>bestScore){ bestScore=s; best=r; }
+    }
+    return best;
+  }
+
+  /** Reveal the next locked reaction — now the PURE-NEED choice, not the fixed array order. */
   unlockNext(colony){
-    const next = this.reactions.find(r=>!r.unlocked[colony]);
+    const next = this.chooseNextTrait(colony);
     if(next){ next.unlocked[colony] = true;
       this.fireLog.unshift({ t:this.world.time, id:next.id, colony,
         msg:'UNLOCKED ' + next.trait + ' — colony ' + colony }); }
@@ -653,6 +689,17 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     }
     for(const colony of ['A','B']){
       const threat = this._threatTo(colony);
+      // ── accumulate PURE NEED (decaying) — what is actually hurting this colony right now ──
+      const _n = this._need[colony];
+      _n.siege*=0.996; _n.swarm*=0.996; _n.deficit*=0.996; _n.grind*=0.999;
+      const _home = this.kings.home(colony);
+      const _nearCrown = threat.filter(u=>Math.hypot(u.x-_home.x,u.y-_home.y) < this.kings.captureR*2).length;
+      if(this.kings.captured[colony]) _n.siege += 0.6;            // your crown is being held
+      _n.siege += _nearCrown*0.04;                                // enemies at the gate
+      _n.swarm += threat.length*0.02;                            // sheer numbers
+      const _Bh = window.MurmurationModules.Attrition.bleed;
+      if(_Bh){ const _avg=(_Bh.honor.A+_Bh.honor.B+_Bh.honor.U)/3; if(_Bh.honor[colony]<_avg) _n.deficit += (_avg-_Bh.honor[colony])*0.08; } // losing the pool
+      _n.grind += 0.004;                                          // memory/lineage — a slow, ever-present want
       const confirmed = this._confirm(colony, threat);
 
       // decay active reactions, keep expressing while live
