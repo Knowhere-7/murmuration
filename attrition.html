@@ -389,7 +389,7 @@
       <h2>Range controls</h2>
       <div class="kv"><span>sim speed</span><span class="val" id="speedVal">1&times;</span></div>
       <input type="range" id="speed" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
-      <div class="kv"><span>bleed rate /tick</span><span class="val" id="bleedVal">0.0040</span></div>
+      <div class="kv"><span>transfer rate /tick</span><span class="val" id="bleedVal">0.0040</span></div>
       <input type="range" id="bleedR" min="0.001" max="0.016" step="0.001" value="0.004" oninput="stage(this,'setBleed',this.value)">
       <div class="kv"><span>guard &mdash; KNOWHERE king</span><span class="val" id="guardValA">5</span></div>
       <input type="range" id="guardA" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','A',this.value)">
@@ -442,15 +442,18 @@
     </div>
 
     <div class="sec">
-      <h2>Honor bleed &middot; incident clock</h2>
-      <div class="kv"><span>KNOWHERE honor</span><span class="n" id="h-A">1.000</span></div>
+      <h2>Honor economy &middot; one pool, three ways</h2>
+      <div class="kv"><span style="color:#40e8d0">KNOWHERE honor</span><span class="n" id="h-A">1.000</span></div>
       <div class="hb"><span id="hbar-A"></span></div>
-      <div class="kv"><span>MAINLAND honor</span><span class="n" id="h-B">1.000</span></div>
+      <div class="kv"><span style="color:#ff5cc8">MAINLAND honor</span><span class="n" id="h-B">1.000</span></div>
       <div class="hb"><span id="hbar-B"></span></div>
+      <div class="kv"><span style="color:#ff8a3d">LOBO honor</span><span class="n" id="h-U">1.000</span></div>
+      <div class="hb"><span id="hbar-U"></span></div>
+      <div id="honorWinner" style="font-size:11px;font-weight:bold;margin-top:6px;display:none"></div>
       <div style="font-size:10px;color:var(--dim);margin-top:5px">
-        possession drains honor &middot; the colony must break it before zero &middot; zero = cascade
+        honor is conserved &mdash; possession TRANSFERS it to the possessor, a staunch reclaims it. the party with the most at the end passes its knowledge WITHOUT seppuku
       </div>
-      <div style="font-size:9px;color:var(--amber);margin-top:4px" id="bleedrate">bleed rate: 0.004/tick (sweep-derived &mdash; MTTR window)</div>
+      <div style="font-size:9px;color:var(--amber);margin-top:4px" id="bleedrate">transfer rate: 0.004/tick &middot; win at 50% of the pool</div>
     </div>
 
     <div class="sec">
@@ -849,7 +852,7 @@
   function setSpeed(v){ simSpeed=parseInt(v); document.getElementById('speedVal').textContent=v+'×'; }
   function setBleed(v){ document.getElementById('bleedVal').textContent=parseFloat(v).toFixed(4);
     if(k26) window.MurmurationModules.Attrition.bleed.setBleedRate(parseFloat(v));
-    document.getElementById('bleedrate').textContent='bleed rate: '+parseFloat(v).toFixed(4)+'/tick (live)'; }
+    document.getElementById('bleedrate').textContent='transfer rate: '+parseFloat(v).toFixed(4)+'/tick (live) · win at 50% of the pool'; }
   function setGuard(colony,v){ document.getElementById('guardVal'+colony).textContent=v;
     if(k26) window.MurmurationModules.Attrition.kings.guardCount[colony]=parseInt(v); }
   function setQuorum(v){ document.getElementById('quorumVal').textContent=v;
@@ -1213,15 +1216,23 @@
     const L=window.MurmurationModules.Attrition.lobo;
     if(L){ document.getElementById('s-lobo').textContent=L.status().state; }
     const B=window.MurmurationModules.Attrition.bleed;
-    if(B){ for(const c of ['A','B']){ const st=B.status(c);
-      const bar=document.getElementById('hbar-'+c), val=document.getElementById('h-'+c);
-      if(!bar||!val) continue;
-      val.textContent=st.honor.toFixed(3);
-      bar.style.width=(st.honor*100)+'%';
-      bar.style.background = st.cascaded?'#000':(st.bleeding?'var(--red)':(st.honor<0.4?'var(--amber)':'var(--grn)'));
-      val.style.color = st.cascaded?'var(--red)':(st.bleeding?'var(--red)':'var(--cy)');
-      if(st.cascaded) val.textContent='CASCADED';
-    }}
+    if(B){ const pool=B.pool||3; const pcol={A:'#40e8d0',B:'#ff5cc8',U:'#ff8a3d'};
+      for(const c of ['A','B','U']){ const st=B.status(c);
+        const bar=document.getElementById('hbar-'+c), val=document.getElementById('h-'+c);
+        if(!bar||!val) continue;
+        const winner = B.resolved===c;
+        // bar = this party's SHARE of the conserved pool — the three always sum to the whole
+        bar.style.width=Math.min(100,st.honor/pool*100).toFixed(1)+'%';
+        bar.style.background = winner?'gold':(st.cascaded?'#000':(st.bleeding?'var(--red)':pcol[c]));
+        val.style.color = winner?'gold':(st.cascaded?'var(--red)':pcol[c]);
+        val.textContent = st.cascaded?'CASCADED':(winner?st.honor.toFixed(3)+' ★':st.honor.toFixed(3));
+      }
+      const w=document.getElementById('honorWinner');
+      if(w){ if(B.resolved){ const nm={A:'KNOWHERE',B:'MAINLAND',U:'LOBO'}[B.resolved];
+          w.style.display='block'; w.style.color='gold';
+          w.textContent='★ HONOR VICTORY — '+nm+' holds the pool. Its knowledge passes WITHOUT seppuku.';
+        } else { w.style.display='none'; } }
+    }
     const K=window.MurmurationModules.Attrition.kings;
     if(K){ for(const c of ['A','B']){
       const st=K.status(c); const el=document.getElementById('k-'+c);
