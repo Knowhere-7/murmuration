@@ -253,9 +253,9 @@
       <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
         these move the colony&rsquo;s decision THRESHOLD, never its behaviour
       </div>
-      <div class="kv"><span style="color:var(--kn)">paranoia &middot; KNOWHERE</span><span class="val" id="stParAVal" style="color:var(--kn)">0.00</span></div>
+      <div class="kv"><span>paranoia &middot; KNOWHERE</span><span class="val" id="stParAVal" style="color:var(--kn)">0.00</span></div>
       <input type="range" id="stParA" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','A','paranoia',this.value)">
-      <div class="kv"><span style="color:var(--ml)">paranoia &middot; MAINLAND</span><span class="val" id="stParBVal" style="color:var(--ml)">0.00</span></div>
+      <div class="kv"><span>paranoia &middot; MAINLAND</span><span class="val" id="stParBVal" style="color:var(--ml)">0.00</span></div>
       <input type="range" id="stParB" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','B','paranoia',this.value)">
       <div class="kv"><span>alarm fatigue &middot; both</span><span class="val" id="stFatVal">0.00</span></div>
       <input type="range" id="stFat" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','both','fatigue',this.value)">
@@ -301,7 +301,7 @@
     </div>
 
     <div class="sec">
-      <h2 style="color:var(--kn)">KNOWHERE &middot; pressure</h2>
+      <h2>KNOWHERE &middot; pressure</h2>
       <div class="kv"><span>terrain pull</span><span class="val" id="wTerrAVal">1.00</span></div>
       <input type="range" id="wTerrA" min="0" max="2" step="0.01" value="1" oninput="stage(this,'setWorld','terrain','A',this.value)">
       <div class="kv"><span>predator pressure</span><span class="val" id="wPredAVal">0.00</span></div>
@@ -313,7 +313,7 @@
     </div>
 
     <div class="sec">
-      <h2 style="color:var(--ml)">MAINLAND &middot; pressure</h2>
+      <h2>MAINLAND &middot; pressure</h2>
       <div class="kv"><span>terrain pull</span><span class="val" id="wTerrBVal">1.00</span></div>
       <input type="range" id="wTerrB" min="0" max="2" step="0.01" value="1" oninput="stage(this,'setWorld','terrain','B',this.value)">
       <div class="kv"><span>predator pressure</span><span class="val" id="wPredBVal">0.00</span></div>
@@ -371,7 +371,7 @@
         <button onclick="stopWarGame()" style="border-color:#2a6a4a;color:var(--grn)">&#9632; ABORT</button>
         <button onclick="forgetLobo()" title="wipe what LOBO has learned across campaigns">&#9003; FORGET</button>
       </div>
-      <div class="kv"><span style="color:var(--lobo)">LOBO carries</span><span class="val" id="loboCarries" style="color:var(--lobo)">&mdash;</span></div>
+      <div class="kv"><span>LOBO carries</span><span class="val" id="loboCarries" style="color:var(--lobo)">&mdash;</span></div>
     </div>
 
     <div class="sec">
@@ -394,13 +394,13 @@
       <input type="range" id="speed" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
       <div class="kv"><span>transfer rate /tick</span><span class="val" id="bleedVal">0.0040</span></div>
       <input type="range" id="bleedR" min="0.001" max="0.016" step="0.001" value="0.004" oninput="stage(this,'setBleed',this.value)">
-      <div class="kv"><span style="color:var(--kn)">guard &mdash; KNOWHERE king</span><span class="val" id="guardValA" style="color:var(--kn)">5</span></div>
+      <div class="kv"><span>guard &mdash; KNOWHERE king</span><span class="val" id="guardValA" style="color:var(--kn)">5</span></div>
       <input type="range" id="guardA" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','A',this.value)">
-      <div class="kv"><span style="color:var(--ml)">guard &mdash; MAINLAND king</span><span class="val" id="guardValB" style="color:var(--ml)">5</span></div>
+      <div class="kv"><span>guard &mdash; MAINLAND king</span><span class="val" id="guardValB" style="color:var(--ml)">5</span></div>
       <input type="range" id="guardB" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','B',this.value)">
       <div class="kv"><span>reaction quorum</span><span class="val" id="quorumVal">3</span></div>
       <input type="range" id="quorum" min="1" max="6" step="1" value="3" oninput="stage(this,'setQuorum',this.value)">
-      <div class="kv"><span style="color:var(--lobo)">LOBO relentlessness</span><span class="val" id="relVal" style="color:var(--lobo)">1.0&times;</span></div>
+      <div class="kv"><span>LOBO relentlessness</span><span class="val" id="relVal" style="color:var(--lobo)">1.0&times;</span></div>
       <input type="range" id="rel" min="0" max="2" step="0.1" value="1" oninput="stage(this,'setRel',this.value)">
       <div class="row" style="margin-top:8px">
         <button onclick="unlockReaction()" style="border-color:#2a6a4a;color:var(--grn)">&#9654; UNLOCK REACTION</button>
@@ -415,7 +415,7 @@
       <h2>Colony state</h2>
       <div class="kv"><span>alive</span><span class="n" id="s-alive">&mdash;</span></div>
       <div class="kv"><span>unaligned in system</span><span class="n" id="s-unal">&mdash;</span></div>
-      <div class="kv"><span style="color:var(--lobo)">LOBO pack state</span><span class="n" id="s-lobo" style="color:var(--lobo)">&mdash;</span></div>
+      <div class="kv"><span>LOBO pack state</span><span class="n" id="s-lobo" style="color:var(--lobo)">&mdash;</span></div>
       <div class="kv"><span>waves sent</span><span class="n" id="s-waves">0</span></div>
       <div class="kv"><span>tick</span><span class="n" id="s-tick">0</span></div>
     </div>
@@ -447,11 +447,11 @@
 
     <div class="sec">
       <h2>Honor economy &middot; one pool, three ways</h2>
-      <div class="kv"><span style="color:var(--kn)">KNOWHERE honor</span><span class="n" id="h-A" style="color:var(--kn)">1.000</span></div>
+      <div class="kv"><span>KNOWHERE honor</span><span class="n" id="h-A" style="color:var(--kn)">1.000</span></div>
       <div class="hb"><span id="hbar-A"></span></div>
-      <div class="kv"><span style="color:var(--ml)">MAINLAND honor</span><span class="n" id="h-B" style="color:var(--ml)">1.000</span></div>
+      <div class="kv"><span>MAINLAND honor</span><span class="n" id="h-B" style="color:var(--ml)">1.000</span></div>
       <div class="hb"><span id="hbar-B"></span></div>
-      <div class="kv"><span style="color:var(--lobo)">LOBO honor</span><span class="n" id="h-U" style="color:var(--lobo)">1.000</span></div>
+      <div class="kv"><span>LOBO honor</span><span class="n" id="h-U" style="color:var(--lobo)">1.000</span></div>
       <div class="hb"><span id="hbar-U"></span></div>
       <div id="honorWinner" style="font-size:11px;font-weight:bold;margin-top:6px;display:none"></div>
       <div id="honorRound" style="font-size:10px;color:var(--dim);margin-top:4px">round 1 &middot; wins &nbsp;KN 0 &middot; ML 0 &middot; LOBO 0</div>
