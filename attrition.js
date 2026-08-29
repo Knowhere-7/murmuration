@@ -739,6 +739,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         this.kings._crownClearedUntil[colony] = this.world.time + 140;
         window.MurmurationModules.AttritionKnowledge.recordDefense({
           event:'crown_cleared', colony, ejected:cleared, gene:'bombardierBeetle' });
+        const _B=window.MurmurationModules.Attrition.bleed; if(_B) _B.rewardKill(colony, cleared);
       }
     } else if(r.id==='wolfPack'){
       // A pack breaks off and runs the nearest attackers down. Tactician = the
@@ -747,6 +748,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const pack = this.world.agents
         .filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard)
         .sort((a,b)=>(b.trustCharge||0)-(a.trustCharge||0)).slice(0,4);
+      let kills=0;
       for(const h of pack){
         let tgt=null, best=1e9;
         for(const u of threat){ const d=Math.hypot(u.x-h.x,u.y-h.y); if(d<best){best=d;tgt=u;} }
@@ -754,10 +756,11 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         const d=best||1;
         h.vx += ((tgt.x-h.x)/d)*0.16; h.vy += ((tgt.y-h.y)/d)*0.16;
         if(d < 14){ tgt._attritionStruck=(tgt._attritionStruck||0)+1;
-          if(tgt._attritionStruck>=3){ tgt.seppukuDone=true; tgt._attritionEjected=true;
+          if(tgt._attritionStruck>=3){ tgt.seppukuDone=true; tgt._attritionEjected=true; kills++;
             window.MurmurationModules.AttritionKnowledge.recordOutcome({
               event:'attacker_eliminated', colony, by:'wolfPack' }); } }
       }
+      if(kills){ const _B=window.MurmurationModules.Attrition.bleed; if(_B) _B.rewardKill(colony, kills); }
     } else if(r.id==='flashExpansion'){
       // The school explodes: crown-near defenders burst radially outward, and the
       // attackers' lock on the (now-gone) coherent target is damped for the beat.
@@ -827,8 +830,9 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       }
       const H=window.MurmurationModules.Attrition.heat;
       if(H && H.add) H.add('BREACH', knot.x, knot.y, 0.5);                    // paint the heat wash where it cooks
-      if(cooked) window.MurmurationModules.AttritionKnowledge.recordOutcome({
+      if(cooked){ window.MurmurationModules.AttritionKnowledge.recordOutcome({
         event:'attacker_cooked', colony, cooked, ball:engulfing, gene:'thermalBalling' });
+        const _B=window.MurmurationModules.Attrition.bleed; if(_B) _B.rewardKill(colony, cooked); }
     }
   }
 };
@@ -1241,6 +1245,12 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
     // possessor (conserved), MTTR-scaled: a swift break reclaims the most.
     this.staunchWindow = 300;
     this.staunchReward = 0.12;
+    // OFFENSIVE HONOR (2026-08-29, Ghost: "an even playing field... recover just as fast") — a
+    // colony that ELIMINATES a LOBO unit TAKES honor off it, the mirror of possession. LOBO gains
+    // by sitting on a crown; the colony gains by DESTROYING the threat. This is how a defender wins
+    // the pool or claws back from a drain — kills answer possession, so turtling loses but fighting
+    // recovers. Drain LOBO to zero and it cascades out ("defeat the threat altogether").
+    this.killReward = 0.008;             // honor taken from LOBO per unit eliminated (tunable)
     // DOMINANCE ENDS IT (Ghost ②a): first party to hold this fraction of the WHOLE pool
     // wins — >0.5 means it holds more than the other two combined. Tunable.
     this.winThreshold = 0.5;
@@ -1269,6 +1279,16 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
   }
   setWinThreshold(f) { this.winThreshold = Math.min(1, Math.max(0.34, f)); return this.winThreshold; }
   setAutoReset(b) { this.autoReset = !!b; return this.autoReset; }
+  setKillReward(r) { this.killReward = Math.max(0, r); return this.killReward; }
+
+  /** A colony that ELIMINATES n LOBO units TAKES honor off it — the offensive mirror of
+      possession, and how a defender wins or recovers. Conserved and clamped to LOBO's holdings. */
+  rewardKill(colony, n) {
+    if (this.resolved || this.cascaded[colony] || !(n > 0)) return 0;
+    const got = this._transfer('U', colony, this.killReward * n);
+    if (got > 0) this.events.push({ t: this.world.time, colony, event: 'kill_honor', from: 'U', amt: +got.toFixed(4), kills: n });
+    return got;
+  }
 
   /** Move honor from -> to, CONSERVED and clamped to what `from` actually holds. */
   _transfer(from, to, amt) {
