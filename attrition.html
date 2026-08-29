@@ -37,7 +37,9 @@
         --blood-text:#f2603a;
         /* PARTY COLOURS — all data about a party reads in its own colour (Ghost, 2026-08-29).
            Knowhere turquoise · Mainland pink · LOBO a full deep red. */
-        --kn:#40e8d0;--ml:#ff5cc8;--lobo:#d90429}
+        --kn:#40e8d0;--ml:#ff5cc8;--lobo:#d90429;
+        /* colony-wide traits (neither party owns them) read yellow; weather reads blue */
+        --colony:#ffd23a;--weather:#4aa3ff}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
             font:13px/1.5 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}
@@ -101,6 +103,12 @@
   #worldpanel input[type=range][id$="B"]::-moz-range-track{background:#ff5cc8}
   #worldpanel input[type=range][id$="B"]::-moz-range-thumb{background:#ff5cc8}
   #worldpanel input[type=range]:hover::-webkit-slider-thumb{background:#fff}
+  /* DOMAIN-COLOURED SLIDERS — a slider carrying style="--sl:<colour>" paints its bar+thumb
+     that colour, so the bar itself says whose control it is (Ghost, 2026-08-29). */
+  input[type=range][style*="--sl"]::-webkit-slider-runnable-track{background:var(--sl)!important}
+  input[type=range][style*="--sl"]::-webkit-slider-thumb{background:var(--sl)!important;box-shadow:0 0 10px var(--sl),0 0 2px #000}
+  input[type=range][style*="--sl"]::-moz-range-track{background:var(--sl)!important}
+  input[type=range][style*="--sl"]::-moz-range-thumb{background:var(--sl)!important}
   #worldpanel button{backdrop-filter:blur(2px);background:rgba(11,16,32,.42)}
   #worldpanel .val{color:var(--vio)}
   #world-reopen{position:fixed;top:60px;right:0;z-index:20;display:none;
@@ -217,7 +225,7 @@
     <div class="sec">
       <h2>The world &middot; both colonies</h2>
       <div class="kv"><span>sim speed</span><span class="val" id="wSpeedVal">1&times;</span></div>
-      <input type="range" id="wSpeed" min="1" max="6" step="1" value="1" oninput="setWorld('speed',this.value)">
+      <input type="range" id="wSpeed" style="--sl:#ffffff" min="1" max="6" step="1" value="1" oninput="setWorld('speed',this.value)">
     </div>
 
     <!-- WEATHER — the world's own pressure, independent of LOBO. The toggle is
@@ -230,7 +238,7 @@
         <span class="val" id="wxActive" style="margin-left:auto">0 fronts</span>
       </div>
       <div class="kv"><span>storm frequency</span><span class="val" id="wStormVal">0.40</span></div>
-      <input type="range" id="wStorm" min="0" max="1" step="0.01" value="0.40" oninput="stage(this,'setWorld','storm',this.value)">
+      <input type="range" id="wStorm" style="--sl:var(--weather)" min="0" max="1" step="0.01" value="0.40" oninput="stage(this,'setWorld','storm',this.value)">
       <div class="kv"><span>mean ticks between</span><span class="val" id="wxCadence">&mdash;</span></div>
       <div style="font-size:10px;color:var(--dim);margin:6px 0 6px">
         or call one down yourself &mdash; the PATH is always random:
@@ -258,9 +266,9 @@
       <div class="kv"><span>paranoia &middot; MAINLAND</span><span class="val" id="stParBVal" style="color:var(--ml)">0.00</span></div>
       <input type="range" id="stParB" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','B','paranoia',this.value)">
       <div class="kv"><span>alarm fatigue &middot; both</span><span class="val" id="stFatVal">0.00</span></div>
-      <input type="range" id="stFat" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','both','fatigue',this.value)">
+      <input type="range" id="stFat" style="--sl:var(--colony)" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','both','fatigue',this.value)">
       <div class="kv"><span>dread &middot; both</span><span class="val" id="stDrdVal">0.00</span></div>
-      <input type="range" id="stDrd" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','both','dread',this.value)">
+      <input type="range" id="stDrd" style="--sl:var(--colony)" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setStress','both','dread',this.value)">
       <div class="kv"><span>quorum they act on</span><span class="n" id="stQuorum">KN 3 &middot; ML 3</span></div>
       <div class="row" style="margin-top:10px">
         <button onclick="boom('A')" style="color:var(--kn)">&#9679; BOOM KNOWHERE</button>
@@ -289,10 +297,10 @@
         <span class="val" id="alLevel" style="margin-left:auto">&mdash;</span>
       </div>
       <div class="kv"><span>answer strength</span><span class="val" id="alFollowVal">1.0&times;</span></div>
-      <input type="range" id="alFollow" min="0" max="3" step="0.1" value="1"
+      <input type="range" id="alFollow" style="--sl:var(--colony)" min="0" max="3" step="0.1" value="1"
              oninput="stage(this,'setAlarm','follow',this.value)">
       <div class="kv"><span>spread rate</span><span class="val" id="alDiffVal">0.38</span></div>
-      <input type="range" id="alDiff" min="0.02" max="0.6" step="0.01" value="0.38"
+      <input type="range" id="alDiff" style="--sl:var(--colony)" min="0.02" max="0.6" step="0.01" value="0.38"
              oninput="stage(this,'setAlarm','diffuse',this.value)">
       <div style="font-size:10px;color:var(--dim);margin-bottom:6px">
         guards and the wounded release it &mdash; never the king. it spreads
@@ -346,7 +354,7 @@
         send any wave, any number of times &mdash; no cap, no de-escalation
       </div>
       <div class="kv"><span>force / determination</span><span class="val" id="forceVal">0.50</span></div>
-      <input type="range" id="force" min="0" max="1" step="0.01" value="0.5"
+      <input type="range" id="force" style="--sl:var(--lobo)" min="0" max="1" step="0.01" value="0.5"
              oninput="stage(this,'setForce',this.value)">
       <div class="row" style="margin-top:10px">
         <button id="autoAtkBtn" onclick="toggleAutoAttack()">&#9202; AUTO ATTACK: OFF</button>
@@ -355,7 +363,7 @@
         no hand at the controls &mdash; LOBO probes and strikes on its own, like the weather. the range never sleeps, so the genome is tested around the clock.
       </div>
       <div class="kv"><span>attack cadence &middot; mean ticks between</span><span class="val" id="autoCadVal">1800</span></div>
-      <input type="range" id="autoCad" min="300" max="6000" step="50" value="1800"
+      <input type="range" id="autoCad" style="--sl:var(--lobo)" min="300" max="6000" step="50" value="1800"
              oninput="autoAttack.cadence=+this.value;document.getElementById('autoCadVal').textContent=this.value">
     </div>
 
@@ -391,17 +399,17 @@
     <div class="sec">
       <h2>Range controls</h2>
       <div class="kv"><span>sim speed</span><span class="val" id="speedVal">1&times;</span></div>
-      <input type="range" id="speed" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
+      <input type="range" id="speed" style="--sl:#ffffff" min="1" max="6" step="1" value="1" oninput="setSpeed(this.value)">
       <div class="kv"><span>transfer rate /tick</span><span class="val" id="bleedVal">0.0040</span></div>
       <input type="range" id="bleedR" min="0.001" max="0.016" step="0.001" value="0.004" oninput="stage(this,'setBleed',this.value)">
       <div class="kv"><span>guard &mdash; KNOWHERE king</span><span class="val" id="guardValA" style="color:var(--kn)">5</span></div>
-      <input type="range" id="guardA" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','A',this.value)">
+      <input type="range" id="guardA" style="--sl:var(--kn)" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','A',this.value)">
       <div class="kv"><span>guard &mdash; MAINLAND king</span><span class="val" id="guardValB" style="color:var(--ml)">5</span></div>
-      <input type="range" id="guardB" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','B',this.value)">
+      <input type="range" id="guardB" style="--sl:var(--ml)" min="2" max="10" step="1" value="5" oninput="stage(this,'setGuard','B',this.value)">
       <div class="kv"><span>reaction quorum</span><span class="val" id="quorumVal">3</span></div>
-      <input type="range" id="quorum" min="1" max="6" step="1" value="3" oninput="stage(this,'setQuorum',this.value)">
+      <input type="range" id="quorum" style="--sl:var(--colony)" min="1" max="6" step="1" value="3" oninput="stage(this,'setQuorum',this.value)">
       <div class="kv"><span>LOBO relentlessness</span><span class="val" id="relVal" style="color:var(--lobo)">1.0&times;</span></div>
-      <input type="range" id="rel" min="0" max="2" step="0.1" value="1" oninput="stage(this,'setRel',this.value)">
+      <input type="range" id="rel" style="--sl:var(--lobo)" min="0" max="2" step="0.1" value="1" oninput="stage(this,'setRel',this.value)">
       <div class="row" style="margin-top:8px">
         <button onclick="unlockReaction()" style="border-color:#2a6a4a;color:var(--grn)">&#9654; UNLOCK REACTION</button>
         <button id="autoEvoBtn" class="t2" onclick="toggleAutoEvolve()">&#129516; AUTO EVOLVE: ON</button>
