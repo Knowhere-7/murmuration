@@ -385,7 +385,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         unlocked:{A:true,B:true}, _innate:true,
         desc:'consensus threshold — nothing fires until a quorum independently confirms the threat' },
       { id:'biofilmShield', trait:'Biofilm Shield (P. aeruginosa)', kind:'defense',
-        unlocked:{A:true,B:true}, _innate:true, dur:180, cd:120,
+        unlocked:{A:false,B:true}, _innate:true, dur:180, cd:120,   // MAINLAND innate — the striker's hard wall (Knowhere may still learn it)
         desc:'the colony tightens into a collective shell around the king — protection is emergent, no one cell makes it' },
       // WASP ALARM — the first UNLOCKABLE rung, and deliberately so. It changes
       // colony behaviour globally, so if it were innate there would be no run in
@@ -429,13 +429,13 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         unlocked:{A:false,B:false},
         desc:"the fifth founding word — the only one that LEARNS. Meets a LOBO tactic, builds a specific counter to THAT tactic, and remembers it. The first use always lands; the second is met. Never total, wanes unused, and refuses to bind self" },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
-        unlocked:{A:false,B:false}, dur:120, cd:200,
+        unlocked:{A:true,B:false}, _innate:true, dur:120, cd:200,   // KNOWHERE innate — the watcher hides its crown
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
       { id:'bombardierBeetle', trait:'Bombardier Beetle (Brachinus)', kind:'offense',
         unlocked:{A:false,B:false}, dur:1, cd:260,
         desc:'multi-signal convergence fires a coordinated burst at the crown — structurally cannot misfire' },
       { id:'wolfPack', trait:'Wolf Pack (Canis lupus)', kind:'offense',
-        unlocked:{A:false,B:false}, dur:220, cd:180,
+        unlocked:{A:false,B:true}, _innate:true, dur:220, cd:180,   // MAINLAND innate — the striker hunts attackers down
         desc:'a hunting party breaks off under a tactician and runs the attackers down' },
       // #28 FLASH EXPANSION (Clupea harengus) — the school explodes outward as the
       // strike commits, so it lands in empty water; the coherent target the
@@ -453,7 +453,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       // the multi-voltage organ: an emergency override that empties the water of
       // motion. Attackers at the crown are STUNNED, not ejected — held for a beat.
       { id:'electricDischarge', trait:'Electric Organ Discharge (Electrophorus electricus)', kind:'offense',
-        unlocked:{A:false,B:false}, dur:24, cd:240,
+        unlocked:{A:true,B:false}, _innate:true, dur:24, cd:240,   // KNOWHERE innate — close-quarters shock, the watcher's only deterrent (buy time, don't kill)
         desc:'a high-voltage discharge stuns everything hostile at the crown — their charge frozen for a beat, buying the window a strike would not' },
     ];
   }
@@ -1161,34 +1161,59 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
   constructor(world, kings) {
     this.world = world;
     this.kings = kings;
-    this.honor = { A: 1.0, B: 1.0 };     // colony honor, 0..1
-    // SWEEP-DERIVED, 2026-08-18 — not chosen by feel. The rate sweep (with the
-    // radius-clear mitigation live) put 0.004/tick at the sweet spot where MTTR
-    // matters: a prepared colony (an offensive gene unlocked) can recover with
-    // skill, a weak one (innate only) cannot, and an overwhelming rate (0.008)
-    // cascades everyone regardless. Faster is pure punishment; slower makes a
-    // captured king a shrug. Single-run variance is real, so this is the
-    // indicated value, not a decree — a multi-run pass would tighten it.
+    // ── §6 · CONSERVED HONOR ECONOMY (2026-08-28, Ghost) ──────────────────────
+    // Honor is a FIXED POOL — "all there is" — split THREE ways at max and only ever
+    // TRANSFERRED, never created or destroyed. The old §6 drained honor into the void;
+    // this MOVES it: whoever disrespects a crown TAKES that honor off the possessed.
+    // Three parties: A (Knowhere) · B (Mainland) · U (LOBO). Sum(honor) is invariant.
+    // The prize (Ghost): the party holding the MOST at the end passes its knowledge
+    // WITHOUT seppuku — it survives AND propagates; the losers pay the old price.
+    this.START = 1.0;                    // per-party max at kickoff — "every colony at max" (tunable)
+    this.honor = { A: this.START, B: this.START, U: this.START };
+    this.pool  = this.honor.A + this.honor.B + this.honor.U;   // conserved invariant (= 3·START)
+    // The transfer rate reuses the sweep-derived bleed value — SAME disrespect engine
+    // as before (§7 TIC), new destination. "transfers through battle the same as it
+    // does now with disrespect."
     this.bleedRate = 0.004;
-    this.recoverRate = 0.0006;           // honor heals slowly once the crown is safe
-    // BREAK-POSSESSION REWARD — winning the containment fight restores honor, so a
-    // king that holds through many sieges rebuilds standing through them instead of
-    // only bleeding across them. Scaled by MTTR: a swift break returns the most, a
-    // slow one little, so speed still matters. First-pass values, un-tuned, additive
-    // to the sweep-derived drain (which is left exactly as swept).
-    this.staunchWindow = 300;            // a break within this many ticks earns the full reward
-    this.staunchReward = 0.12;           // max honor returned for a swift containment
-    this.cascaded = { A: false, B: false };
-    this.events = [];                    // capture / staunch / cascade, with ticks
+    // BREAK-POSSESSION RECLAIM — the containment fight now takes honor BACK off the
+    // possessor (conserved), MTTR-scaled: a swift break reclaims the most.
+    this.staunchWindow = 300;
+    this.staunchReward = 0.12;
+    // DOMINANCE ENDS IT (Ghost ②a): first party to hold this fraction of the WHOLE pool
+    // wins — >0.5 means it holds more than the other two combined. Tunable.
+    this.winThreshold = 0.5;
+    this.cascaded = { A: false, B: false, U: false };
+    this.resolved = null;                // winner id once the tally fires; halts the economy
+    this.events = [];                    // transfer / staunch / cascade / victory, with ticks
     this._captureStart = {};
   }
 
   setBleedRate(r) { this.bleedRate = Math.max(0, r); return this.bleedRate; }
+  /** Re-seed the pool at a new per-party max (tuning hook). */
+  setStart(s) {
+    this.START = Math.max(0.01, s);
+    this.honor = { A: this.START, B: this.START, U: this.START };
+    this.pool = this.START * 3;
+    this.cascaded = { A: false, B: false, U: false };
+    this.resolved = null; this._captureStart = {};
+    return this.START;
+  }
+  setWinThreshold(f) { this.winThreshold = Math.min(1, Math.max(0.34, f)); return this.winThreshold; }
+
+  /** Move honor from -> to, CONSERVED and clamped to what `from` actually holds. */
+  _transfer(from, to, amt) {
+    amt = Math.min(amt, this.honor[from]);
+    if (amt <= 0) return 0;
+    this.honor[from] -= amt;
+    this.honor[to]   += amt;
+    return amt;
+  }
 
   step() {
+    if (this.resolved) return;                 // the match is decided — honor is frozen
     const t = this.world.time;
     for (const colony of ['A', 'B']) {
-      if (this.cascaded[colony]) continue;   // a cascaded colony is out of the fight
+      if (this.cascaded[colony]) continue;      // a cascaded colony is out of the fight
       const captured = this.kings.captured[colony];
 
       if (captured) {
@@ -1197,11 +1222,13 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
           this.events.push({ t, colony, event: 'captured' });
           window.MurmurationModules.AttritionKnowledge.recordOutcome({ event: 'bleed_start', colony });
         }
-        // §7: the drain is EARNED — it scales with how badly the colony is being
-        // disrespected right now (full possession ≈ the sweep-tuned base rate).
+        // §7: the transfer is EARNED — it scales with how badly the crown is being
+        // disrespected right now. LOBO (U) is the possessor: honor moves colony -> U.
         const insult = this.tic ? Math.max(0.5, this.tic.disrespect[colony] / 0.85) : 1;
-        this.honor[colony] -= this.bleedRate * insult;
-        if (this.honor[colony] <= 0) {
+        const moved = this._transfer(colony, 'U', this.bleedRate * insult);
+        if (moved > 0) this.events.push({ t, colony, event: 'transfer', to: 'U', amt: +moved.toFixed(4) });
+        if (this.honor[colony] <= 1e-9) {
+          this._transfer(colony, 'U', this.honor[colony]);   // hand over the residue — stay exactly conserved
           this.honor[colony] = 0;
           this.cascaded[colony] = true;
           const held = t - this._captureStart[colony];
@@ -1211,28 +1238,49 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
         }
       } else {
         if (this._captureStart[colony]) {
-          // MITIGATED — the colony broke the possession. This is the MTTR: how
-          // long from capture to staunch, and how much honor survived.
+          // MITIGATED — the colony broke the possession and RECLAIMS honor FROM the
+          // possessor (conserved: it takes it back off U, MTTR-scaled). A relentless
+          // defender can drain U past its own start and grow toward dominance.
           const mttr = t - this._captureStart[colony];
-          // Winning the containment fight RESTORES honor — the swifter the break,
-          // the more standing returns. This is what makes the loop winnable instead
-          // of a one-way ratchet to cascade; slow breaks still net a loss, so MTTR
-          // stays the thing that matters.
           const swift  = Math.max(0, 1 - mttr / this.staunchWindow);
           const reward = this.staunchReward * swift;
-          this.honor[colony] = Math.min(1, this.honor[colony] + reward);
-          this.events.push({ t, colony, event: 'staunched', mttr, reward: +reward.toFixed(3), honorLeft: +this.honor[colony].toFixed(3) });
-          window.MurmurationModules.AttritionKnowledge.recordDefense({ event: 'staunched', colony, mttr, reward, honorLeft: this.honor[colony] });
+          const got = this._transfer('U', colony, reward);
+          this.events.push({ t, colony, event: 'staunched', mttr, reclaimed: +got.toFixed(3), honorLeft: +this.honor[colony].toFixed(3) });
+          window.MurmurationModules.AttritionKnowledge.recordDefense({ event: 'staunched', colony, mttr, reward: got, honorLeft: this.honor[colony] });
           this._captureStart[colony] = null;
         }
-        this.honor[colony] = Math.min(1, this.honor[colony] + this.recoverRate);
+        // NO passive recovery — honor is conserved. A colony heals ONLY by taking it back.
       }
+    }
+    // LOBO is out if the colonies strip it to nothing.
+    if (!this.cascaded.U && this.honor.U <= 1e-9) {
+      this.honor.U = 0; this.cascaded.U = true;
+      this.events.push({ t, colony: 'U', event: 'CASCADE' });
+      window.MurmurationModules.AttritionKnowledge.recordOutcome({ event: 'cascade', colony: 'U' });
+    }
+    // ── DOMINANCE TALLY (Ghost ②a) — first to hold the winning share takes the pool.
+    for (const p of ['A', 'B', 'U']) {
+      if (this.honor[p] >= this.pool * this.winThreshold) { this._resolve(p, t); break; }
     }
   }
 
-  /** The cascade — the colony's collapse. It IS cascade-seeking, so the failure
-      is expressed in its own physics: grief propagates through the survivors.
-      The range records it as the training failure. */
+  /** RESOLUTION — the party with the most honor passes its knowledge WITHOUT seppuku
+      (survives + propagates); the losers pay the old price (cascade -> seppuku, Ghost ③b).
+      The knowledge-passing distinction is recorded for the GEA/inheritance layer. */
+  _resolve(winner, t) {
+    this.resolved = winner;
+    const losers = ['A', 'B', 'U'].filter(p => p !== winner);
+    this.events.push({ t, event: 'HONOR_VICTORY', winner, honor: +this.honor[winner].toFixed(3), losers });
+    window.MurmurationModules.AttritionKnowledge.recordOutcome({
+      event: 'honor_victory', winner, losers,
+      winnerPassesWithoutSeppuku: true, losersPassViaSeppuku: true,
+      honor: { A: +this.honor.A.toFixed(3), B: +this.honor.B.toFixed(3), U: +this.honor.U.toFixed(3) },
+    });
+    for (const l of losers) if (l === 'A' || l === 'B') { this.cascaded[l] = true; this._cascade(l); }
+  }
+
+  /** The cascade — a colony's collapse. It IS cascade-seeking, so the failure is
+      expressed in its own physics: grief propagates through the survivors. */
   _cascade(colony) {
     for (const a of this.world.agents) {
       if (a.colony !== colony || a.seppukuDone) continue;
@@ -1241,11 +1289,15 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
     }
   }
 
+  /** Total honor in play — must equal `this.pool` every tick (conservation check). */
+  totalHonor() { return this.honor.A + this.honor.B + this.honor.U; }
+
   status(colony) {
     return {
       honor: +this.honor[colony].toFixed(3),
       bleeding: !!this._captureStart[colony] && !this.cascaded[colony],
       cascaded: this.cascaded[colony],
+      resolved: this.resolved,
     };
   }
 };
