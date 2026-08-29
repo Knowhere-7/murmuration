@@ -1244,6 +1244,13 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
     // DOMINANCE ENDS IT (Ghost ②a): first party to hold this fraction of the WHOLE pool
     // wins — >0.5 means it holds more than the other two combined. Tunable.
     this.winThreshold = 0.5;
+    // CONTINUOUS MODE — after a victory, hold it a beat (so the gold banner is seen), then
+    // re-even the pool and open a fresh round. autoReset=false = the match ends for good.
+    this.autoReset = true;
+    this.victoryHold = 600;              // ticks the win holds before the next round opens
+    this.round = 1;
+    this.wins = { A: 0, B: 0, U: 0 };    // round championships, tallied across the session
+    this._resolvedAt = null;
     this.cascaded = { A: false, B: false, U: false };
     this.resolved = null;                // winner id once the tally fires; halts the economy
     this.events = [];                    // transfer / staunch / cascade / victory, with ticks
@@ -1261,6 +1268,7 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
     return this.START;
   }
   setWinThreshold(f) { this.winThreshold = Math.min(1, Math.max(0.34, f)); return this.winThreshold; }
+  setAutoReset(b) { this.autoReset = !!b; return this.autoReset; }
 
   /** Move honor from -> to, CONSERVED and clamped to what `from` actually holds. */
   _transfer(from, to, amt) {
@@ -1272,8 +1280,20 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
   }
 
   step() {
-    if (this.resolved) return;                 // the match is decided — honor is frozen
     const t = this.world.time;
+    if (this.resolved) {                        // the match is decided — honor holds a beat
+      if (this.autoReset && this._resolvedAt != null && t - this._resolvedAt >= this.victoryHold) {
+        // OPEN A FRESH ROUND — re-even the pool, lift the cascade flags (survivors fight on;
+        // auto-replenish refills the bodies). The win is already tallied in this.wins.
+        this.round++;
+        this.honor = { A: this.START, B: this.START, U: this.START };
+        this.cascaded = { A: false, B: false, U: false };
+        this._captureStart = {}; this.resolved = null; this._resolvedAt = null;
+        this.events.push({ t, event: 'NEW_ROUND', round: this.round });
+        window.MurmurationModules.AttritionKnowledge.recordOutcome({ event: 'new_round', round: this.round, wins: { ...this.wins } });
+      }
+      return;
+    }
     for (const colony of ['A', 'B']) {
       if (this.cascaded[colony]) continue;      // a cascaded colony is out of the fight
       const captured = this.kings.captured[colony];
@@ -1331,6 +1351,8 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
       The knowledge-passing distinction is recorded for the GEA/inheritance layer. */
   _resolve(winner, t) {
     this.resolved = winner;
+    this._resolvedAt = t;
+    this.wins[winner] = (this.wins[winner] || 0) + 1;
     const losers = ['A', 'B', 'U'].filter(p => p !== winner);
     this.events.push({ t, event: 'HONOR_VICTORY', winner, honor: +this.honor[winner].toFixed(3), losers });
     window.MurmurationModules.AttritionKnowledge.recordOutcome({

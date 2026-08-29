@@ -401,9 +401,10 @@
       <input type="range" id="rel" min="0" max="2" step="0.1" value="1" oninput="stage(this,'setRel',this.value)">
       <div class="row" style="margin-top:8px">
         <button onclick="unlockReaction()" style="border-color:#2a6a4a;color:var(--grn)">&#9654; UNLOCK REACTION</button>
+        <button id="autoEvoBtn" class="t2" onclick="toggleAutoEvolve()">&#129516; AUTO EVOLVE: ON</button>
       </div>
       <div style="font-size:10px;color:var(--dim);margin-top:4px">
-        arm the blue team&rsquo;s next gene &middot; or let evolution cycles do it
+        arm the blue team&rsquo;s next gene by hand &middot; or let AUTO EVOLVE unlock one every ~2500 ticks so the colonies grow on their own
       </div>
     </div>
 
@@ -450,6 +451,7 @@
       <div class="kv"><span style="color:#ff8a3d">LOBO honor</span><span class="n" id="h-U">1.000</span></div>
       <div class="hb"><span id="hbar-U"></span></div>
       <div id="honorWinner" style="font-size:11px;font-weight:bold;margin-top:6px;display:none"></div>
+      <div id="honorRound" style="font-size:10px;color:var(--dim);margin-top:4px">round 1 &middot; wins &nbsp;KN 0 &middot; ML 0 &middot; LOBO 0</div>
       <div style="font-size:10px;color:var(--dim);margin-top:5px">
         honor is conserved &mdash; possession TRANSFERS it to the possessor, a staunch reclaims it. the party with the most at the end passes its knowledge WITHOUT seppuku
       </div>
@@ -511,7 +513,7 @@
 <script src="keep.js?v=7"></script>
 <script src="gea-writer.js?v=1"></script>
 <script src="archons.js?v=1"></script>
-<script src="attrition.js?v=26"></script>
+<script src="attrition.js?v=27"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -786,6 +788,36 @@
     log(autoReplenish.on
       ? '♻ AUTO REPLENISH ARMED — a colony at ' + autoReplenish.floor + ' tops BOTH back to ' + autoReplenish.target
       : '♻ AUTO REPLENISH OFF', 'warn');
+  }
+
+  // AUTO EVOLVE — the colonies GROW on their own: each unlocks its next locked gene on a
+  // cadence (staggered so they don't move in lockstep), via the same path the ▶ button uses
+  // so sense-granting rungs (adaptive immunity) switch on. This is what makes a long run
+  // actually DEVELOP instead of freezing at the innate three.
+  const autoEvolve = {
+    on: true,
+    every: 2500,                       // ticks between a colony's unlocks
+    _next: { A: 2500, B: 4000 },       // staggered start
+    tick(t){
+      if(!this.on || !k26 || !k26.world) return;
+      const R = window.MurmurationModules.Attrition.reactions;
+      if(!R) return;
+      for(const c of ['A','B']){
+        if(t < this._next[c]) continue;
+        this._next[c] = t + this.every;
+        if(R.lockedList(c).length) unlockReaction(c);   // full activation path; no-op when fully evolved
+      }
+    }
+  };
+  window.autoEvolve = autoEvolve;
+  function toggleAutoEvolve(){
+    autoEvolve.on = !autoEvolve.on;
+    autoEvolve._next = { A: (k26?k26.world.time|0:0)+800, B: (k26?k26.world.time|0:0)+2000 };
+    const b = document.getElementById('autoEvoBtn');
+    if(b){ b.textContent = '🧬 AUTO EVOLVE: ' + (autoEvolve.on ? 'ON' : 'OFF'); b.classList.toggle('t2', autoEvolve.on); }
+    log(autoEvolve.on
+      ? '🧬 AUTO EVOLVE ARMED — each colony unlocks its next gene every ' + autoEvolve.every + ' ticks'
+      : '🧬 AUTO EVOLVE OFF', 'warn');
   }
 
   function wave(tier){
@@ -1232,6 +1264,8 @@
           w.style.display='block'; w.style.color='gold';
           w.textContent='★ HONOR VICTORY — '+nm+' holds the pool. Its knowledge passes WITHOUT seppuku.';
         } else { w.style.display='none'; } }
+      const rd=document.getElementById('honorRound');
+      if(rd) rd.textContent='round '+(B.round||1)+'  ·  wins  KN '+(B.wins?B.wins.A:0)+' · ML '+(B.wins?B.wins.B:0)+' · LOBO '+(B.wins?B.wins.U:0);
     }
     const K=window.MurmurationModules.Attrition.kings;
     if(K){ for(const c of ['A','B']){
@@ -1592,6 +1626,7 @@
       }
       if(window.autoAttack) autoAttack.tick(k26.world.time|0);
       if(window.autoReplenish) autoReplenish.tick(k26.world.time|0);
+      if(window.autoEvolve) autoEvolve.tick(k26.world.time|0);
       if((k26.world.time|0) % 30 === 0){ syncWeather(); syncAlarm(); syncLobo(); syncStress(); }
     }
     stats();
