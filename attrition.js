@@ -385,7 +385,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         unlocked:{A:true,B:true}, _innate:true,
         desc:'consensus threshold — nothing fires until a quorum independently confirms the threat' },
       { id:'biofilmShield', trait:'Biofilm Shield (P. aeruginosa)', kind:'defense',
-        unlocked:{A:false,B:true}, _innate:true, dur:180, cd:120,   // MAINLAND innate — the striker's hard wall (Knowhere may still learn it)
+        unlocked:{A:false,B:false}, dur:180, cd:120,   // shared UNLOCKABLE now — the turtle shell is neither archetype's birthright; either can learn it
         desc:'the colony tightens into a collective shell around the king — protection is emergent, no one cell makes it' },
       // WASP ALARM — the first UNLOCKABLE rung, and deliberately so. It changes
       // colony behaviour globally, so if it were innate there would be no run in
@@ -432,7 +432,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         unlocked:{A:true,B:false}, _innate:true, dur:120, cd:200,   // KNOWHERE innate — the watcher hides its crown
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
       { id:'bombardierBeetle', trait:'Bombardier Beetle (Brachinus)', kind:'offense',
-        unlocked:{A:false,B:false}, dur:1, cd:260,
+        unlocked:{A:false,B:true}, _innate:true, dur:1, cd:260,   // MAINLAND innate — the brawler's coordinated burst (with Wolf Pack = pure aggression, no turtling)
         desc:'multi-signal convergence fires a coordinated burst at the crown — structurally cannot misfire' },
       { id:'wolfPack', trait:'Wolf Pack (Canis lupus)', kind:'offense',
         unlocked:{A:false,B:true}, _innate:true, dur:220, cd:180,   // MAINLAND innate — the striker hunts attackers down
