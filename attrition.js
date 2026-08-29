@@ -455,6 +455,14 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       { id:'electricDischarge', trait:'Electric Organ Discharge (Electrophorus electricus)', kind:'offense',
         unlocked:{A:true,B:false}, _innate:true, dur:24, cd:240,   // KNOWHERE innate — close-quarters shock, the watcher's only deterrent (buy time, don't kill)
         desc:'a high-voltage discharge stuns everything hostile at the crown — their charge frozen for a beat, buying the window a strike would not' },
+      // AFRICANIZED HONEY BEE — thermal balling. The colony can't out-sting the wasp, so it
+      // ENGULFS a hostile cluster in a living ball and vibrates it HOT until the trapped COOK.
+      // Self/not-self by heat: the colony tolerates its own; a light toll bites only under
+      // sustained use. Needs a pheromone call (the quorum confirm) + a ball of ≥15 that actually
+      // closes on the knot. KNOWHERE-innate for now (the tactician's first DENY tool); shared later.
+      { id:'thermalBalling', trait:'Thermal Balling (Apis mellifera scutellata)', kind:'defense',
+        unlocked:{A:true,B:false}, _innate:true, dur:60, cd:300,   // KNOWHERE innate — collective deny-by-heat
+        desc:'the colony engulfs a hostile cluster in a living ball and vibrates it red-hot — the trapped cook while the colony tolerates its own heat. needs a pheromone call and a ball of ≥15' },
     ];
   }
 
@@ -636,6 +644,13 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
 
   step(){
     const t = this.world.time;
+    // Thermal-balling heat COOLS when no longer engulfed — an escapee cools off (only the ones
+    // held in the ball cook), and a baller's own heat fades once it leaves (only sustained/extreme
+    // balling keeps it high enough to glow white and take real harm). No permanent brand.
+    for(const a of this.world.agents){
+      if(a._beeHeat>0)  a._beeHeat =Math.max(0, a._beeHeat -0.02);   // trapped hostile cools if it escapes
+      if(a._ballHeat>0) a._ballHeat=Math.max(0, a._ballHeat-0.015);  // baller cools once out of the ball
+    }
     for(const colony of ['A','B']){
       const threat = this._threatTo(colony);
       const confirmed = this._confirm(colony, threat);
@@ -659,6 +674,12 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
           const h=this.kings.home(colony);
           const atCrown = threat.filter(u=>Math.hypot(u.x-h.x,u.y-h.y) < this.kings.captureR*1.2).length;
           if(atCrown < 2) continue;
+        }
+        // THERMAL BALLING needs a real cluster to swallow AND the bodies to swallow it — as few
+        // as 15 free members can answer the pheromone call, but they MUST be there to muster.
+        if(r.id==='thermalBalling'){
+          const avail = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard).length;
+          if(avail < 15 || threat.length < 3) continue;
         }
         this.active[key] = r.dur||1;
         this.lastFired[key] = t;
@@ -767,6 +788,47 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       }
       if(stunned) window.MurmurationModules.AttritionKnowledge.recordDefense({
         event:'discharge_stun', colony, stunned, gene:'electricDischarge' });
+    } else if(r.id==='thermalBalling'){
+      // AFRICANIZED HONEY BEE — call the ball, engulf the knot, COOK it. The quorum confirm that
+      // fired this IS the pheromone call; free members answer and close on the densest hostile
+      // knot, and where ≥15 actually engulf it, heat builds on the trapped until they cook.
+      // Self/not-self by heat: the trapped glow RED-HOT and die; the ballers take only a light
+      // toll, and only a big/sustained ball heats THEM enough to matter (white-with-blue-core).
+      if(!threat.length) return;
+      let knot=null, bestNear=-1;
+      for(const u of threat){ let n=0; for(const v of threat){ if(Math.hypot(u.x-v.x,u.y-v.y)<55) n++; } if(n>bestNear){bestNear=n;knot=u;} }
+      if(!knot) return;
+      const ballR=60;
+      const ballers=this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
+      let engulfing=0;
+      for(const a of ballers){
+        const d=Math.hypot(a.x-knot.x,a.y-knot.y)||1;
+        if(d<ballR*2.2){ a.vx+=((knot.x-a.x)/d)*0.10; a.vy+=((knot.y-a.y)/d)*0.10; }   // answer the call, close in
+        if(d<ballR) engulfing++;
+      }
+      if(engulfing<15) return;   // the call went out but the ball hasn't closed — no cook this beat
+      const hot=0.06*Math.min(2, engulfing/15);
+      let cooked=0;
+      for(const u of threat){
+        if(Math.hypot(u.x-knot.x,u.y-knot.y)<ballR){
+          u._beeHeat=(u._beeHeat||0)+hot;                                    // glows red-hot (agent.js draw)
+          if(u._beeHeat>=1){ u.seppukuDone=true; u._attritionEjected=true; cooked++; }
+        }
+      }
+      // the ballers' OWN heat CLIMBS only when the ball is big/sustained — a minimal 15-ball stays
+      // cool (the step-decay wins); a big one drives it past the white-glow line (0.8) and, past
+      // that, starts to actually cost energy. Extreme use is felt; ordinary use is nearly free.
+      const selfHeat=0.05*Math.max(0, engulfing/15-1);
+      for(const a of ballers){
+        if(Math.hypot(a.x-knot.x,a.y-knot.y)<ballR){
+          a._ballHeat=Math.min(2, (a._ballHeat||0)+selfHeat);
+          if(a.energy!=null) a.energy=Math.max(0, a.energy-(0.0015+0.05*Math.max(0,(a._ballHeat||0)-0.6)));
+        }
+      }
+      const H=window.MurmurationModules.Attrition.heat;
+      if(H && H.add) H.add('BREACH', knot.x, knot.y, 0.5);                    // paint the heat wash where it cooks
+      if(cooked) window.MurmurationModules.AttritionKnowledge.recordOutcome({
+        event:'attacker_cooked', colony, cooked, ball:engulfing, gene:'thermalBalling' });
     }
   }
 };

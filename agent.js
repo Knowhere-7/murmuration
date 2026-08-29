@@ -505,6 +505,28 @@ window.MurmurationModules.Agent = class Agent {
       ctx.fill();
     }
 
+    // THERMAL BALLING — a hostile being cooked glows RED-HOT, brighter and bigger as it nears the cook.
+    if (this._beeHeat > 0) {
+      const h = Math.min(1, this._beeHeat);
+      ctx.fillStyle = `rgba(255, ${Math.round(35 + h * 150)}, ${Math.round(h * h * 50)}, ${0.35 + h * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 1 + h * 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // THERMAL BALLING — a baller pushing the ball to EXTREME heats itself: a white glow with a
+    // BLUE-HOT core (blue reads hotter than white, and is distinct from the plain white already in use).
+    if (this._ballHeat > 0.6) {
+      const wq = Math.min(1, (this._ballHeat - 0.6) / 1.0);
+      ctx.fillStyle = `rgba(255, 255, 255, ${wq * 0.55})`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 1 + wq * 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(90, 160, 255, ${wq * 0.9})`;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // ST-1 trust ring — violet, tight to the smaller body
     if (this.trustCharge > 0.15) {
       ctx.strokeStyle = `hsla(${hue + 20}, 90%, 70%, ${this.trustCharge * 0.75})`;
