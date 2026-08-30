@@ -527,6 +527,31 @@ window.MurmurationModules.Agent = class Agent {
       ctx.fill();
     }
 
+    // ── TACTICIAN DOCTRINE tells (Knowhere) — the behaviour must announce itself ──
+    // MIMIC OCTOPUS — an infiltrator wearing LOBO's colours: a red shell over a
+    // turquoise Knowhere core (the disguise, and the tell that it IS a disguise).
+    if (this._mimicGlow > 0) {
+      const m = Math.min(1, this._mimicGlow);
+      ctx.fillStyle = `rgba(255, 60, 80, ${m * 0.6})`;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(64, 232, 208, ${m * 0.9})`;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // FLASHING COMMUNICATION — a turquoise sync pulse rippling through the colony.
+    if (this._flashGlow > 0) {
+      const f = Math.min(1, this._flashGlow);
+      ctx.strokeStyle = `rgba(64, 232, 208, ${f * 0.85})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 2 + (1 - f) * 5, 0, Math.PI * 2); ctx.stroke();
+    }
+    // MEERKAT SENTINEL — a lookout: a steady turquoise watch-ring while it holds the ridge.
+    if (this._sentinelGlow > 0) {
+      const s = Math.min(1, this._sentinelGlow);
+      ctx.strokeStyle = `rgba(64, 232, 208, ${s * 0.7})`;
+      ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2); ctx.stroke();
+    }
+
     // ST-1 trust ring — violet, tight to the smaller body
     if (this.trustCharge > 0.15) {
       ctx.strokeStyle = `hsla(${hue + 20}, 90%, 70%, ${this.trustCharge * 0.75})`;

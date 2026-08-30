@@ -381,6 +381,13 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     // tick. A colony unlocks the LOCKED trait that best answers what is actually hurting it — not a
     // fixed ladder — so two colonies under different pressure evolve DIFFERENTLY (identity by experience).
     this._need = { A:{siege:0,swarm:0,deficit:0,grind:0}, B:{siege:0,swarm:0,deficit:0,grind:0} };
+    // ── TACTICIAN DOCTRINE STATE (Ghost, 2026-08-29) — real coupling, not decoration ──
+    // Intel is PRODUCED by the sentinel and CONSUMED by the strike; the sync window is
+    // OPENED by the flash and READ by the snap. This is what makes each trait load-bearing:
+    // remove the producer and the consumer measurably degrades.
+    this._intel = { A:null, B:null };   // {vanguard:[agents], lane:{angle,px,py}, at:tick} — meerkat writes, pistol shrimp reads
+    this._sync  = { A:0,    B:0    };   // tick until which a coordinated strike window is open — flash writes, snap/mimic read
+    this._snaps = [];                   // pistol-shrimp cavitation POPs to draw: {x,y,age,life} — the victim is culled the instant it dies, so the effect lives here
 
     // The repertoire. `unlocked` seeds INNATE immunity; adaptive ones start
     // locked and are revealed one per evolution cycle by the unlock pass.
@@ -430,10 +437,38 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         unlocked:{A:false,B:false},
         desc:'the colony stops starting over: what it LEARNED carries between campaigns. Abilities do not travel (SR-011) — every unlock is earned again' },
       { id:'adaptiveImmunity', trait:'Adaptive Immunity (human immune system)', kind:'inheritance',
-        unlocked:{A:false,B:false},
+        unlocked:{A:true,B:false}, _innate:true,   // KNOWHERE innate — the tactician LEARNS; this is the doctrine's memory
         desc:"the fifth founding word — the only one that LEARNS. Meets a LOBO tactic, builds a specific counter to THAT tactic, and remembers it. The first use always lands; the second is met. Never total, wanes unused, and refuses to bind self" },
+      /* ── KNOWHERE — THE TACTICIAN'S DOCTRINE (Ghost, 2026-08-29) ──────────────
+         The hide-and-seek genome (camouflage/eel) was retired: "a tactician is a
+         tactics expert... a swarm that survives by playing hide and seek will never
+         win at anything on this field." Knowhere is rebuilt to DISMANTLE LOBO, and
+         it earns in the kill-economy by killing in the keep, not by hiding.
+
+         The four below are ONE coordinated behaviour wired as a DEPENDENCY CHAIN so
+         each trait is load-bearing (Ghost's law: no cosmetic traits, "all traits
+         load bearing... they must perform as the original 5"):
+           SEE  → meerkat sentinels mark LOBO's vanguard + access lane (post intel)
+           SYNC → flashing comms open a strike window; no commander to decapitate
+           FRAY → mimic octopus infiltrates the wave and scatters its cohesion
+           KILL → pistol shrimp detonates a contactless snap on the MARKED vanguard
+         Remove a link and the rest measurably weaken. LOBO the swarm has no
+         location — so the doctrine attacks its DECISION (the access-finder it feeds
+         a false-soft lane) and its COORDINATION (the vanguard it decapitates). */
+      { id:'meerkatSentinel', trait:'Sentinel Watch (Suricata suricatta)', kind:'signal',
+        unlocked:{A:true,B:false}, _innate:true, dur:90, cd:80,   // KNOWHERE innate — perceive & classify
+        desc:'lookouts posted on the approaches detect the wave forming and classify its vector — early warning that marks LOBO\'s vanguard and access lane for the strike that follows' },
+      { id:'flashingComms', trait:'Flashing Communication (Dosidicus chromatophores)', kind:'signal',
+        unlocked:{A:true,B:false}, _innate:true, dur:60, cd:200,   // KNOWHERE innate — distributed command
+        desc:'distributed photophore command — marks the target and SYNCS the strike so the doctrine fires as one; a decentralized signal has no commander to decapitate' },
+      { id:'mimicOctopus', trait:'Mimic Octopus (Thaumoctopus mimicus)', kind:'defense',
+        unlocked:{A:true,B:false}, _innate:true, dur:90, cd:240,   // KNOWHERE innate — dynamic deception
+        desc:'a few members wear LOBO\'s colours and infiltrate the wave — friend and planted decoy blur, the vanguard\'s cohesion frays, and pawns peel off the lane' },
+      { id:'pistolShrimp', trait:'Pistol Shrimp (Alpheus)', kind:'offense',
+        unlocked:{A:true,B:false}, _innate:true, dur:1, cd:150,   // KNOWHERE innate — contactless decapitation
+        desc:'a cavitation snap detonates at RANGE on the marked vanguard — no contact needed; killing the head collapses the wave\'s cohesion. costs the snapper energy (the claw must recock)' },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
-        unlocked:{A:true,B:false}, _innate:true, dur:120, cd:200,   // KNOWHERE innate — the watcher hides its crown
+        unlocked:{A:false,B:false}, dur:120, cd:200,   // retired from Knowhere innate — now an option for all
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
       { id:'bombardierBeetle', trait:'Bombardier Beetle (Brachinus)', kind:'offense',
         unlocked:{A:false,B:true}, _innate:true, dur:1, cd:260,   // MAINLAND innate — the brawler's coordinated burst (with Wolf Pack = pure aggression, no turtling)
@@ -457,7 +492,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       // the multi-voltage organ: an emergency override that empties the water of
       // motion. Attackers at the crown are STUNNED, not ejected — held for a beat.
       { id:'electricDischarge', trait:'Electric Organ Discharge (Electrophorus electricus)', kind:'offense',
-        unlocked:{A:true,B:false}, _innate:true, dur:24, cd:240,   // KNOWHERE innate — close-quarters shock, the watcher's only deterrent (buy time, don't kill)
+        unlocked:{A:false,B:false}, dur:24, cd:240,   // retired from Knowhere innate (the "eel" half of the flawed hide-and-seek genome) — now an option for all
         desc:'a high-voltage discharge stuns everything hostile at the crown — their charge frozen for a beat, buying the window a strike would not' },
       // AFRICANIZED HONEY BEE — thermal balling. The colony can't out-sting the wasp, so it
       // ENGULFS a hostile cluster in a living ball and vibrates it HOT until the trapped COOK.
@@ -603,6 +638,10 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       waspAlarm:             { siege:1, swarm:1, grind:0.5 },
       gea:                   { grind:3 },
       adaptiveImmunity:      { grind:2, siege:1 },
+      meerkatSentinel:       { siege:1, swarm:1 },        // perceive the wave forming
+      flashingComms:         { siege:1, deficit:1 },      // coordinate the strike
+      mimicOctopus:          { siege:2, swarm:1 },         // fray the massing wave's command
+      pistolShrimp:          { deficit:2, siege:2 },       // kills take honor; decapitate the crown press
       cephalopodCamouflage:  { siege:2 },
       bombardierBeetle:      { siege:3, deficit:2, swarm:1 },
       wolfPack:              { siege:2, deficit:2, swarm:1 },
@@ -675,7 +714,17 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
        gain a sense, cannot notice what it has no sense for, and a colony without
        the alarm is exactly as deaf as before no matter how much it knows. */
     const fam = this.familiarity(colony, 'assault');
-    return sensing >= Math.max(1, q - bonus - Math.round(fam));
+    /* SENTINEL EARLY WARNING (meerkat) — posted lookouts see the wave forming, so
+       the colony needs one fewer independent confirmation to act. A real perception
+       function: the trait must be unlocked (the sense must exist) AND enough of the
+       colony must be free to actually stand watch, or there is no one on the ridge. */
+    let sentinel = 0;
+    const _sen = this.byId('meerkatSentinel');
+    if (_sen && _sen.unlocked[colony]) {
+      const watchers = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing).length;
+      if (watchers >= 6) sentinel = 1;
+    }
+    return sensing >= Math.max(1, q - bonus - Math.round(fam) - sentinel);
   }
 
   step(){
@@ -686,7 +735,13 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     for(const a of this.world.agents){
       if(a._beeHeat>0)  a._beeHeat =Math.max(0, a._beeHeat -0.02);   // trapped hostile cools if it escapes
       if(a._ballHeat>0) a._ballHeat=Math.max(0, a._ballHeat-0.015);  // baller cools once out of the ball
+      // TACTICIAN tells decay so draw() (which has no clock) can just test > 0
+      if(a._sentinelGlow>0) a._sentinelGlow=Math.max(0, a._sentinelGlow-0.03);
+      if(a._flashGlow>0)    a._flashGlow   =Math.max(0, a._flashGlow   -0.06);
+      if(a._mimicGlow>0)    a._mimicGlow   =Math.max(0, a._mimicGlow   -0.02);
     }
+    // age the cavitation pops and retire the spent ones
+    for(let i=this._snaps.length-1;i>=0;i--){ if(++this._snaps[i].age > this._snaps[i].life) this._snaps.splice(i,1); }
     for(const colony of ['A','B']){
       const threat = this._threatTo(colony);
       // ── accumulate PURE NEED (decaying) — what is actually hurting this colony right now ──
@@ -727,6 +782,19 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         if(r.id==='thermalBalling'){
           const avail = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard).length;
           if(avail < 15 || threat.length < 3) continue;
+        }
+        // PISTOL SHRIMP — the snap needs something to detonate on: a hostile inside
+        // strike range of the crown (the vanguard drives here). No target, no snap.
+        if(r.id==='pistolShrimp'){
+          const h=this.kings.home(colony);
+          const inRange = threat.some(u=>Math.hypot(u.x-h.x,u.y-h.y) < this.kings.captureR*2.6);
+          if(!inRange) continue;
+        }
+        // MIMIC OCTOPUS — needs a wave big enough to hide inside AND enough free
+        // members to send disguised. A handful of infiltrators against nothing is theatre.
+        if(r.id==='mimicOctopus'){
+          const free = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard).length;
+          if(free < 6 || threat.length < 4) continue;
         }
         this.active[key] = r.dur||1;
         this.lastFired[key] = t;
@@ -877,7 +945,152 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       if(H && H.add) H.add('BREACH', knot.x, knot.y, 0.5);                    // paint the heat wash where it cooks
       if(cooked){ window.MurmurationModules.AttritionKnowledge.recordOutcome({
         event:'attacker_cooked', colony, cooked, ball:engulfing, gene:'thermalBalling' }); }
+    } else if(r.id==='meerkatSentinel'){
+      // SEE — the perception function. Sentinels PRODUCE intel the strike consumes:
+      // which hostiles are the vanguard (LOBO's committed head) and the lane they ride.
+      // This is not a glow; it writes this._intel[colony], and pistol shrimp reads it.
+      if(!threat.length){ return; }
+      let vanguard = threat.filter(u=>u._loboRole==='VANGUARD');
+      if(!vanguard.length){
+        // LOBO not in a named commit this beat — classify the nearest-to-crown as the
+        // de-facto head (the ones actually pressing the mark). Perception, not a label.
+        vanguard = threat.slice().sort((a,b)=>
+          (Math.hypot(a.x-home.x,a.y-home.y))-(Math.hypot(b.x-home.x,b.y-home.y))).slice(0, Math.min(4, threat.length));
+      }
+      // the lane = mean bearing of the head off the crown (LOBO's chosen access vector)
+      let sx=0, sy=0; for(const u of vanguard){ sx+=u.x-home.x; sy+=u.y-home.y; }
+      const angle = Math.atan2(sy, sx);
+      this._intel[colony] = { vanguard, lane:{ angle }, at:this.world.time };
+      // post lookouts toward the incoming vector so the watch is visible and real
+      const free = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard);
+      const posted = free.slice(0, 3);
+      for(const a of posted){ a._sentinelGlow=1;
+        a.vx += Math.cos(angle)*0.05; a.vy += Math.sin(angle)*0.05; }   // ease toward the ridge
+      window.MurmurationModules.AttritionKnowledge.recordDefense({
+        event:'sentinel_intel', colony, vanguard:vanguard.length, gene:'meerkatSentinel' });
+    } else if(r.id==='flashingComms'){
+      // SYNC — the coordination primitive. Opens a strike window the snap and the
+      // infiltration READ; a distributed signal, so there is no commander to kill.
+      // Load-bearing: without the open window the snap decapitates ONE; within it,
+      // the doctrine fires as a coordinated volley.
+      this._sync[colony] = this.world.time + 70;
+      const signallers = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
+      for(const a of signallers){ if(Math.hypot(a.x-home.x,a.y-home.y) < this.threatR) a._flashGlow=1; }
+      window.MurmurationModules.AttritionKnowledge.recordDefense({
+        event:'strike_synced', colony, until:this._sync[colony], gene:'flashingComms' });
+    } else if(r.id==='mimicOctopus'){
+      // FRAY — the attack on LOBO's CONTROL PLANE (Ghost: access on a locationless
+      // adversary is its decision/coordination). Infiltrators wear LOBO's colours and
+      // embed in the wave; nearby pawns are marked _mimicDisrupted, which LOBO's own
+      // steering reads to LOSE authority over them (obey drops) — friend and decoy blur.
+      if(!threat.length) return;
+      let cx=0, cy=0; for(const u of threat){ cx+=u.x; cy+=u.y; } cx/=threat.length; cy/=threat.length;
+      const free = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard);
+      const infiltrators = free.slice(0, Math.min(4, free.length));
+      const synced = this.world.time < this._sync[colony];
+      const reach = synced ? 46 : 34;              // a synced infiltration bites deeper
+      const hold  = synced ? 26 : 16;              // ticks of lost command per touch
+      let disrupted=0;
+      for(const a of infiltrators){
+        a._mimicGlow = 1;                          // wearing LOBO's colours (agent.js tell)
+        const d=Math.hypot(cx-a.x,cy-a.y)||1;
+        a.vx += ((cx-a.x)/d)*0.12; a.vy += ((cy-a.y)/d)*0.12;   // slip into the wave
+        for(const u of threat){
+          if(Math.hypot(u.x-a.x,u.y-a.y) < reach){
+            u._mimicDisrupted = this.world.time + hold;         // LOBO reads this and loses grip
+            disrupted++;
+          }
+        }
+      }
+      if(disrupted) window.MurmurationModules.AttritionKnowledge.recordOutcome({
+        event:'command_frayed', colony, disrupted, gene:'mimicOctopus' });
+    } else if(r.id==='pistolShrimp'){
+      // KILL — contactless decapitation. Reads the sentinel's intel to aim at the
+      // MARKED vanguard; the cavitation snap detonates at RANGE (no striker contact),
+      // ejecting the head. Killing the head collapses the wave (survivors scatter).
+      // Costs the snapper energy — the claw must recock (the load-bearing toll).
+      // ONE-SHOT: a snap is a discrete event, so it fires only on the actual fire
+      // tick, never again on the dur-decay re-entry (keeps the decapitation surgical).
+      if(this.world.time !== this.lastFired[colony+':pistolShrimp']) return;
+      const intel = this._intel[colony];
+      const fresh = intel && (this.world.time - intel.at) < 120;
+      let targets = [];
+      if(fresh){ targets = intel.vanguard.filter(u=>u && !u.seppukuDone &&
+        Math.hypot(u.x-home.x,u.y-home.y) < this.kings.captureR*2.6); }
+      if(!targets.length){
+        // no fresh intel — the snap still fires but blind: nearest hostile only, no
+        // decapitation bonus. This is what makes the meertkat load-bearing.
+        targets = threat.filter(u=>Math.hypot(u.x-home.x,u.y-home.y) < this.kings.captureR*2.6)
+          .sort((a,b)=>Math.hypot(a.x-home.x,a.y-home.y)-Math.hypot(b.x-home.x,b.y-home.y));
+      }
+      if(!targets.length) return;
+      const synced = this.world.time < this._sync[colony];
+      const nShots = fresh ? (synced ? 3 : 2) : 1;   // intel + sync = a coordinated volley on the head
+      const snappers = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
+      const H = window.MurmurationModules.Attrition.heat;
+      let killed=0;
+      for(let i=0; i<Math.min(nShots, targets.length); i++){
+        const u = targets[i];
+        u.seppukuDone=true; u._attritionEjected=true;
+        // THE SNAP — a cavitation POP where the head fell: the collapsing bubble the
+        // claw produces (the shock-ring) around an incandescent core (the ~thousands-
+        // of-degrees implosion cooks the victim's insides). Drawn by this.draw().
+        this._snaps.push({ x:u.x, y:u.y, age:0, life:12 });
+        killed++;
+        // DECAPITATION COLLAPSE — survivors near the fallen head lose the lead and scatter
+        for(const v of threat){
+          if(v===u || v.seppukuDone) continue;
+          const d=Math.hypot(v.x-u.x,v.y-u.y)||1;
+          if(d < 40){ v.vx += ((v.x-u.x)/d)*0.10; v.vy += ((v.y-u.y)/d)*0.10; v._headless=this.world.time+20; }
+        }
+        // TOLL — the nearest snapper spends energy to recock; contactless power is not free
+        let snapper=null, bd=1e9;
+        for(const a of snappers){ const d=Math.hypot(a.x-u.x,a.y-u.y); if(d<bd){bd=d;snapper=a;} }
+        if(snapper && snapper.energy!=null) snapper.energy=Math.max(0, snapper.energy-0.08);
+      }
+      if(killed) window.MurmurationModules.AttritionKnowledge.recordOutcome({
+        event:'vanguard_snapped', colony, killed, aimed:fresh, synced, gene:'pistolShrimp' });
     }
+  }
+
+  /** THE CAVITATION POP — an IMPLOSION, not a blast. The claw collapses a bubble:
+      a shock-ring rushes INWARD, and at the collapse a blue sonoluminescent spark
+      flares (the real flash a snapping shrimp makes) over the incandescent core
+      that cooked the victim's insides. Drawn over the swarm, under the crown, so
+      the king stays legible (the standing glow rule). */
+  draw(ctx){
+    if(!this._snaps || !this._snaps.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for(const s of this._snaps){
+      const p = Math.min(1, s.age/s.life);   // 0 → 1 over the pop's life
+      const inv = 1 - p;
+      // IMPLOSION ring — wide then rushing in to the core (eased so it snaps shut)
+      const ringR = 3 + inv*inv*20;
+      const ringFade = 1 - Math.max(0, (p-0.85)/0.15);   // gone once it has collapsed
+      ctx.strokeStyle = `rgba(150,225,255,${(0.2 + p*0.6)*ringFade})`;
+      ctx.lineWidth = 0.6 + p*1.6;
+      ctx.beginPath(); ctx.arc(s.x, s.y, ringR, 0, Math.PI*2); ctx.stroke();
+      // COOKED CORE — incandescent red-white, peaks around the collapse then fades
+      const heat = Math.sin(Math.min(1, p*1.1) * Math.PI);
+      const cr = 3 + heat*4;
+      const cg = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, cr);
+      cg.addColorStop(0,   `rgba(255,255,255,${0.85*heat})`);
+      cg.addColorStop(0.5, `rgba(255,150,70,${0.7*heat})`);
+      cg.addColorStop(1,   `rgba(255,40,40,0)`);
+      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(s.x, s.y, cr, 0, Math.PI*2); ctx.fill();
+      // BLUE SPARK — sonoluminescence at the collapse: a sharp blue-white flash at the core
+      const spark = Math.max(0, (p-0.55)/0.45);
+      if(spark > 0){
+        const sr = 2 + spark*5;
+        const bg = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sr);
+        bg.addColorStop(0,   `rgba(235,245,255,${0.95*spark})`);
+        bg.addColorStop(0.4, `rgba(80,150,255,${0.9*spark})`);
+        bg.addColorStop(1,   `rgba(40,90,255,0)`);
+        ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(s.x, s.y, sr, 0, Math.PI*2); ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 };
 
@@ -1173,6 +1386,12 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
         }
         // ORDER: steer the piece. Dominates separation/wander without freezing
         // the current out entirely — the water still flows through (1-obey).
+        // MIMIC OCTOPUS attacks this — the control plane. A pawn tagged
+        // _mimicDisrupted has been infiltrated by a disguised defender; LOBO can no
+        // longer tell it from a planted decoy, so its authority over that pawn
+        // collapses (obey → a fraction) and the ordered concentration frays. This is
+        // where the tactician's deception becomes load-bearing, not the velocity nudge.
+        if (a._mimicDisrupted > t) obey *= 0.25;
         const d = Math.hypot(tx - a.x, ty - a.y) || 1;
         const dirx = (tx - a.x) / d, diry = (ty - a.y) / d;
         a.vx = a.vx * (1 - obey) + dirx * speed * obey;

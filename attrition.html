@@ -486,7 +486,7 @@
 <!-- topomap FIRST: k26.drawBackground self-heals the contour layer by calling
      window.buildTopoMap, so without this the range renders on bare black. -->
 <script src="topomap.js?v=8"></script>
-<script src="agent.js?v=8"></script>
+<script src="agent.js?v=9"></script>
 <script src="world.js?v=27"></script>
 <script src="seed.js?v=2"></script>
 <script src="interaction.js?v=3"></script>
@@ -524,7 +524,7 @@
 <script src="keep.js?v=7"></script>
 <script src="gea-writer.js?v=1"></script>
 <script src="archons.js?v=1"></script>
-<script src="attrition.js?v=30"></script>
+<script src="attrition.js?v=31"></script>
 <script>
   let k26=null, raf=null, running=true, target='B';
 
@@ -1598,6 +1598,8 @@
     if(k26){ k26.draw();
       const ctx=k26.world.ctx || (k26.canvas&&k26.canvas.getContext('2d'));
       if(ctx && window.MurmurationModules.Attrition.lobo) window.MurmurationModules.Attrition.lobo.draw(ctx);
+      // tactician cavitation POPs — over the swarm, under the crown marker
+      { const _rx=window.MurmurationModules.Attrition.reactions; if(ctx && _rx && _rx.draw) _rx.draw(ctx); }
       // heat lowest of all — it is the reason to look, so nothing may sit under it
       const _hd=window.MurmurationModules.Attrition.heat;
       if(ctx && _hd) _hd.draw(ctx);
