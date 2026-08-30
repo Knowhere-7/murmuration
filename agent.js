@@ -551,6 +551,8 @@ window.MurmurationModules.Agent = class Agent {
       ctx.lineWidth = 0.9;
       ctx.beginPath(); ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2); ctx.stroke();
     }
+    // (CORDYCEPS-seized hosts are LOBO pawns — rendered as black husks in LOBO.draw,
+    //  where they can override the crimson; agent.draw does not own them.)
 
     // ST-1 trust ring — violet, tight to the smaller body
     if (this.trustCharge > 0.15) {

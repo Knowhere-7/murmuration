@@ -467,6 +467,9 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       { id:'pistolShrimp', trait:'Pistol Shrimp (Alpheus)', kind:'offense',
         unlocked:{A:true,B:false}, _innate:true, dur:1, cd:150,   // KNOWHERE innate — contactless decapitation
         desc:'a cavitation snap detonates at RANGE on the marked vanguard — no contact needed; killing the head collapses the wave\'s cohesion. costs the snapper energy (the claw must recock)' },
+      { id:'cordyceps', trait:'Cordyceps (Ophiocordyceps unilateralis)', kind:'offense',
+        unlocked:{A:true,B:false}, _innate:true, dur:90, cd:320,   // KNOWHERE innate — the POSSESSION-BREAKER: takeover, not a burst
+        desc:'the tactician\'s answer to a seated occupation: infiltrators spore the FRAYED occupiers (mimic loosened LOBO\'s grip first), the fungus seizes their motor control, walks them OFF the crown, kills them after incubation and FRUITS into a neighbour — LOBO\'s own pawns clear the crown. opens the throttle window so it sticks; kills feed honor' },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
         unlocked:{A:false,B:false}, dur:120, cd:200,   // retired from Knowhere innate — now an option for all
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
@@ -642,6 +645,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       flashingComms:         { siege:1, deficit:1 },      // coordinate the strike
       mimicOctopus:          { siege:2, swarm:1 },         // fray the massing wave's command
       pistolShrimp:          { deficit:2, siege:2 },       // kills take honor; decapitate the crown press
+      cordyceps:             { siege:3, deficit:1 },        // the possession-breaker — answers a HELD crown
       cephalopodCamouflage:  { siege:2 },
       bombardierBeetle:      { siege:3, deficit:2, swarm:1 },
       wolfPack:              { siege:2, deficit:2, swarm:1 },
@@ -739,6 +743,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       if(a._sentinelGlow>0) a._sentinelGlow=Math.max(0, a._sentinelGlow-0.03);
       if(a._flashGlow>0)    a._flashGlow   =Math.max(0, a._flashGlow   -0.06);
       if(a._mimicGlow>0)    a._mimicGlow   =Math.max(0, a._mimicGlow   -0.02);
+      if(a._cordycepsGlow>0 && !a._cordyceps) a._cordycepsGlow=Math.max(0, a._cordycepsGlow-0.03); // fades once the host is dead/cured
     }
     // age the cavitation pops and retire the spent ones
     for(let i=this._snaps.length-1;i>=0;i--){ if(++this._snaps[i].age > this._snaps[i].life) this._snaps.splice(i,1); }
@@ -795,6 +800,13 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         if(r.id==='mimicOctopus'){
           const free = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard).length;
           if(free < 6 || threat.length < 4) continue;
+        }
+        // CORDYCEPS — the possession-breaker only makes sense against a SEATED
+        // occupation: the crown is captured, or a real cluster is sitting on it.
+        if(r.id==='cordyceps'){
+          const h=this.kings.home(colony);
+          const seated = threat.filter(u=>Math.hypot(u.x-h.x,u.y-h.y) < this.kings.captureR*1.6).length;
+          if(!this.kings.captured[colony] && seated < 3) continue;
         }
         this.active[key] = r.dur||1;
         this.lastFired[key] = t;
@@ -1050,6 +1062,49 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       }
       if(killed) window.MurmurationModules.AttritionKnowledge.recordOutcome({
         event:'vanguard_snapped', colony, killed, aimed:fresh, synced, gene:'pistolShrimp' });
+    } else if(r.id==='cordyceps'){
+      // SEIZE — the possession-breaker. NOT a burst: it turns LOBO's own seated
+      // occupiers into the thing that clears the crown. Chains off mimic — only a
+      // FRAYED occupier (obey already loosened, `_mimicDisrupted`) can be spored.
+      const seatedZone = this.kings.captureR*1.6, incub=40, spreadR=34, MAXNEW=3;
+      const planters = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
+      let newInf=0, cleared=0;
+      // 1) PLANT — spore the frayed occupiers sitting on the crown
+      for(const u of threat){
+        if(u._cordyceps) continue;
+        const d=Math.hypot(u.x-home.x,u.y-home.y);
+        if(d < seatedZone && u._mimicDisrupted > this.world.time && newInf < MAXNEW){
+          u._cordyceps = this.world.time + incub;
+          u._cordycepsGlow = 1;
+          newInf++;
+          // TOLL — the nearest planter spends energy seeding the spore
+          let nb=null, bd=1e9; for(const a of planters){ const dd=Math.hypot(a.x-u.x,a.y-u.y); if(dd<bd){bd=dd;nb=a;} }
+          if(nb && nb.energy!=null) nb.energy=Math.max(0, nb.energy-0.05);
+        }
+      }
+      // 2) EXPRESS — the seized are compelled to LEAVE the crown; at incubation's end
+      //    they erupt (die → honor harvest) and FRUIT into a still-seated neighbour.
+      for(const u of threat){
+        if(!u._cordyceps) continue;
+        u._cordycepsGlow = Math.min(1.6, (u._cordycepsGlow||0)+0.03);
+        const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
+        u.vx += ((u.x-home.x)/d)*0.14; u.vy += ((u.y-home.y)/d)*0.14;   // driven off the mark
+        if(this.world.time >= u._cordyceps){
+          u.seppukuDone=true; u._attritionEjected=true; cleared++;       // erupt (conserved honor via _harvestKills)
+          let v=null, bd=1e9;
+          for(const w of threat){ if(w===u||w.seppukuDone||w._cordyceps) continue;
+            const dd=Math.hypot(w.x-u.x,w.y-u.y); if(dd<spreadR && dd<bd){bd=dd;v=w;} }
+          if(v){ v._cordyceps=this.world.time+incub; v._cordycepsGlow=1; }   // fruiting body spreads
+        }
+      }
+      // 3) STICK — an eviction opens the same throttle window the bombardier uses, so
+      //    LOBO cannot instantly re-seat the crown the takeover just emptied.
+      if(cleared){
+        this.kings._crownClearedUntil = this.kings._crownClearedUntil || {};
+        this.kings._crownClearedUntil[colony] = this.world.time + 140;
+        window.MurmurationModules.AttritionKnowledge.recordOutcome({
+          event:'occupation_broken', colony, cleared, gene:'cordyceps' });
+      }
     }
   }
 
@@ -1434,9 +1489,20 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
     ctx.save();
     for (const a of pawns) {
       const sac = a._loboSacrifice;
-      ctx.beginPath(); ctx.arc(a.x, a.y, sac ? 2.6 : 3.2, 0, Math.PI * 2);
-      ctx.fillStyle = sac ? 'rgba(255,150,90,0.75)' : (a._loboRole === 'VANGUARD' ? '#ff2a3a' : 'rgba(255,60,80,0.72)');
-      ctx.fill();
+      const rad = sac ? 2.6 : 3.2;
+      ctx.beginPath(); ctx.arc(a.x, a.y, rad, 0, Math.PI * 2);
+      if (a._cordyceps) {
+        // CORDYCEPS-SEIZED — a hollowed husk: black body, white outline that brightens
+        // and thickens as the fungus matures toward eruption. No longer LOBO's crimson.
+        const g = Math.min(1.6, a._cordycepsGlow || 0.3);
+        ctx.fillStyle = '#000'; ctx.fill();
+        ctx.strokeStyle = `rgba(255,255,255,${0.5 + Math.min(0.45, g * 0.35)})`;
+        ctx.lineWidth = 0.8 + Math.min(1.2, g * 0.8);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = sac ? 'rgba(255,150,90,0.75)' : (a._loboRole === 'VANGUARD' ? '#ff2a3a' : 'rgba(255,60,80,0.72)');
+        ctx.fill();
+      }
     }
     for (const colony of Object.keys(this.plan)) {
       const p = this._pawnsFor(colony); if (!p.length) continue;
