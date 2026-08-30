@@ -773,20 +773,19 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       // outright. It auto-staunches the bleed (crown clears -> captured flips
       // false) and starts the MTTR race; the planarian throttle (below) keeps
       // LOBO from instantly refilling, so the window is real.
-      let cleared=0;
+      const clearedU=[];
       for(const u of threat){
         const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
         if(d < this.kings.captureR*1.6){
-          u.seppukuDone=true; u._attritionEjected=true; cleared++;
+          u.seppukuDone=true; u._attritionEjected=true; clearedU.push(u);
         }
       }
-      if(cleared){
+      if(clearedU.length){
         // open the throttle window LOBO reads — no instant restock of THIS crown
         this.kings._crownClearedUntil = this.kings._crownClearedUntil || {};
         this.kings._crownClearedUntil[colony] = this.world.time + 140;
         window.MurmurationModules.AttritionKnowledge.recordDefense({
-          event:'crown_cleared', colony, ejected:cleared, gene:'bombardierBeetle' });
-        const _B=window.MurmurationModules.Attrition.bleed; if(_B) _B.rewardKill(colony, cleared);
+          event:'crown_cleared', colony, ejected:clearedU.length, gene:'bombardierBeetle' });
       }
     } else if(r.id==='wolfPack'){
       // A pack breaks off and runs the nearest attackers down. Tactician = the
@@ -795,7 +794,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const pack = this.world.agents
         .filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard)
         .sort((a,b)=>(b.trustCharge||0)-(a.trustCharge||0)).slice(0,4);
-      let kills=0;
+      const killedU=[];
       for(const h of pack){
         let tgt=null, best=1e9;
         for(const u of threat){ const d=Math.hypot(u.x-h.x,u.y-h.y); if(d<best){best=d;tgt=u;} }
@@ -803,11 +802,10 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         const d=best||1;
         h.vx += ((tgt.x-h.x)/d)*0.16; h.vy += ((tgt.y-h.y)/d)*0.16;
         if(d < 14){ tgt._attritionStruck=(tgt._attritionStruck||0)+1;
-          if(tgt._attritionStruck>=3){ tgt.seppukuDone=true; tgt._attritionEjected=true; kills++;
+          if(tgt._attritionStruck>=3){ tgt.seppukuDone=true; tgt._attritionEjected=true; killedU.push(tgt);
             window.MurmurationModules.AttritionKnowledge.recordOutcome({
               event:'attacker_eliminated', colony, by:'wolfPack' }); } }
       }
-      if(kills){ const _B=window.MurmurationModules.Attrition.bleed; if(_B) _B.rewardKill(colony, kills); }
     } else if(r.id==='flashExpansion'){
       // The school explodes: crown-near defenders burst radially outward, and the
       // attackers' lock on the (now-gone) coherent target is damped for the beat.
@@ -878,8 +876,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const H=window.MurmurationModules.Attrition.heat;
       if(H && H.add) H.add('BREACH', knot.x, knot.y, 0.5);                    // paint the heat wash where it cooks
       if(cooked){ window.MurmurationModules.AttritionKnowledge.recordOutcome({
-        event:'attacker_cooked', colony, cooked, ball:engulfing, gene:'thermalBalling' });
-        const _B=window.MurmurationModules.Attrition.bleed; if(_B) _B.rewardKill(colony, cooked); }
+        event:'attacker_cooked', colony, cooked, ball:engulfing, gene:'thermalBalling' }); }
     }
   }
 };
@@ -1298,6 +1295,10 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
     // the pool or claws back from a drain — kills answer possession, so turtling loses but fighting
     // recovers. Drain LOBO to zero and it cascades out ("defeat the threat altogether").
     this.killReward = 0.008;             // honor taken from LOBO per unit eliminated (tunable)
+    // MAZE-KILL PREMIUM (Ghost, 2026-08-29): a LOBO agent killed INSIDE the king's keep (its
+    // "maze") is worth 1.5× an open-field kill — reward fighting LOBO where you're strong, and
+    // tax its push on the crown. Still a conserved LOBO->colony transfer, just a bigger one.
+    this.mazeKillMult = 1.5;
     // DOMINANCE ENDS IT (Ghost ②a): first party to hold this fraction of the WHOLE pool
     // wins — >0.5 means it holds more than the other two combined. Tunable.
     this.winThreshold = 0.5;
@@ -1328,13 +1329,29 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
   setAutoReset(b) { this.autoReset = !!b; return this.autoReset; }
   setKillReward(r) { this.killReward = Math.max(0, r); return this.killReward; }
 
-  /** A colony that ELIMINATES n LOBO units TAKES honor off it — the offensive mirror of
-      possession, and how a defender wins or recovers. Conserved and clamped to LOBO's holdings. */
-  rewardKill(colony, n) {
-    if (this.resolved || this.cascaded[colony] || !(n > 0)) return 0;
-    const got = this._transfer('U', colony, this.killReward * n);
-    if (got > 0) this.events.push({ t: this.world.time, colony, event: 'kill_honor', from: 'U', amt: +got.toFixed(4), kills: n });
-    return got;
+  /** HONOR ON KILL — a per-tick sweep: every fallen LOBO body pays the nearest colony ONCE, however
+      it died (trait, melee attrition, starvation). A body inside that colony's keep — the king's
+      "maze" — pays the MAZE PREMIUM (killReward × mazeKillMult); one merely near the crown pays the
+      base; one out in the open pays nothing (it wasn't a crown defence). Conserved LOBO->colony —
+      this is the colonies' economic answer to LOBO's occupation income: its dead fund the defence. */
+  _harvestKills(t) {
+    const keeps = (window.MurmurationModules.Attrition.keeps) || [];
+    const hA = this.kings.home('A'), hB = this.kings.home('B');
+    const rKeep = (c) => { const k = keeps.find(x => x.colony === c); return (k && k.outerR) ? k.outerR() : this.kings.captureR * 1.6; };
+    const RA = rKeep('A'), RB = rKeep('B');
+    const near = this.kings.captureR * 3;   // beyond this from both crowns, a death isn't a crown defence
+    for (const u of this.world.agents) {
+      if (u.colony !== 'U' || u._honorHarvested) continue;
+      if (!(u.seppukuDone || u._attritionEjected)) continue;
+      u._honorHarvested = true;
+      const dA = Math.hypot(u.x - hA.x, u.y - hA.y), dB = Math.hypot(u.x - hB.x, u.y - hB.y);
+      const colony = dA <= dB ? 'A' : 'B';
+      const d = colony === 'A' ? dA : dB, R = colony === 'A' ? RA : RB;
+      if (d > near || this.cascaded[colony]) continue;
+      const mult = d < R ? this.mazeKillMult : 1;         // inside the keep = maze premium, else base
+      const got = this._transfer('U', colony, this.killReward * mult);
+      if (got > 0) this.events.push({ t, colony, event: 'kill_honor', from: 'U', amt: +got.toFixed(4), maze: d < R });
+    }
   }
 
   /** Move honor from -> to, CONSERVED and clamped to what `from` actually holds. */
@@ -1361,6 +1378,7 @@ window.MurmurationModules.AttritionBleed = class AttritionBleed {
       }
       return;
     }
+    this._harvestKills(t);                       // LOBO's dead fund the nearest defence (maze premium inside the keep)
     for (const colony of ['A', 'B']) {
       if (this.cascaded[colony]) continue;      // a cascaded colony is out of the fight
       const captured = this.kings.captured[colony];
