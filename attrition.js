@@ -217,6 +217,7 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
     this.captureR = opts.captureR || 50;        // how close is "at the king"
     this.kings = { A: null, B: null };
     this.captured = { A: false, B: false };
+    this._stormCd = { A: 0, B: 0 };   // per-colony cooldown so a parked rival mass can't decapitate every re-crown on one tick
     this.onCapture = opts.onCapture || null;    // hook for the honor-bleed pass
   }
 
@@ -329,6 +330,29 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
         }
       } else if (attackers === 0) {
         this.captured[c] = false;   // the crown is relieved when the siege breaks
+      }
+
+      // ── COLONY-vs-COLONY CROWN CAPTURE (Ghost, 2026-09-02) — the rivalry gets its teeth
+      //    back. A rival colony that overwhelms the guard can now STORM the crown, the same
+      //    bar LOBO needs (≥3 at the crown, outnumbering the guard there). The king FALLS and
+      //    the colony re-crowns a survivor next step (install()). DELIBERATELY MINIMAL — no
+      //    spoils / subjugation / honor-transfer yet; Ghost is designing "the rest" later.
+      //    This only makes colony-vs-colony capture POSSIBLE and real, credited to the taker
+      //    (never routed through LOBO's onCapture/decapitation path). The cooldown stops a
+      //    parked rival mass from killing every freshly re-crowned king on the same tick. ──
+      const rival = c === 'A' ? 'B' : 'A';
+      const rivalAtCrown = atKing(a => a.colony === rival);
+      if (rivalAtCrown >= 3 && rivalAtCrown > guardsHere && this.world.time >= (this._stormCd[c] || 0)) {
+        const king = this.kings[c];
+        if (king && !king.seppukuDone) {
+          king.isKing = false; king.seppukuDone = true;   // the king falls; step()/install() re-crown a survivor
+          this.kings[c] = null;
+          this._stormCd[c] = this.world.time + 300;
+          window.MurmurationModules.AttritionKnowledge.recordOutcome({
+            event: 'crown_stormed', colony: c, by: rival, attackers: rivalAtCrown, guards: guardsHere,
+          });
+          if (window.addEvent) window.addEvent('⚔ Colony ' + rival + ' STORMED Colony ' + c + "'s crown — the king falls.", 'crisis');
+        }
       }
     }
   }
