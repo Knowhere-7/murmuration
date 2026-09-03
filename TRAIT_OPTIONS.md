@@ -51,3 +51,30 @@ Status legend: **DOCTRINE** = part of the Knowhere-tactician build now in progre
 - Contactless / advertised / sacrificial powers each carry a **toll** when wired
   (same discipline as `thermalBalling`'s `_ballHeat`): light standing cost, bites
   only under heavy/sustained use.
+
+## ✅ BUILT — cordyceps v2 (realistic propagation) · Ghost's idea 2026-08-31, tuned 2026-09-02
+
+Implemented in `attrition.js` cordyceps EXPRESS. Tuning knobs (balance, not assumed):
+`CASCADE_MAXGEN=2` (chain depth: plant → 2nd → 3rd, then stops) · `FRUIT_INCUB=14` (the short
+window — a fruited host pops soon after its parent) · reuses `spreadR=34`, `MAXNEW=3`. The infected
+now walks toward its nearest clean neighbour (seek-own-kind steer). The gen cap + short window are
+the farm-trap guard vs a planarian-reviving LOBO. ⏳ open tuning: the pair isn't literally
+simultaneous ("both pop" is ~14 ticks apart); tighten FRUIT_INCUB if truer simultaneity is wanted.
+
+Make cordyceps behave like the real *Ophiocordyceps* — a spreading outbreak, not a one-shot
+fruiting. Keep the current effect (seize a frayed occupier, walk it off the crown, kill it), and
+add TRUE propagation:
+- The infected host **seeks its own kind**, reaches a **second** agent and infects it; then **both
+  pop** (die together).
+- Within a **very short window**, the freshly-infected second host can chain to a **third** — a
+  fruiting cascade. The short window is the intended natural throttle (keeps it from becoming a
+  whole-wave wipe).
+- **Honor:** a chain/secondary kill **still pays the maze-kill premium (1.2)** — the second agent
+  wasn't struck by the caster, it was killed by **infection** (fruiting), which is a cordyceps kill
+  by definition. Conservation holds (LOBO→colony transfer).
+- ⚠️ Balance watch: a cascade against a **reviving** LOBO (planarian) is exactly where honor could
+  start minting — the [[project_immortal_lobo_sealed_test]] farm trap. The short window + a per-
+  cascade cap keep it bounded; must be tuned, not assumed.
+- Note: cordyceps is a **genome-shared** gene — the same propagation applies whoever expresses it
+  (Knowhere turning LOBO's ranks into a self-consuming outbreak, or LOBO wielding it against a
+  colony's own kind). "Get the most from that gene" = the spread IS the gene.

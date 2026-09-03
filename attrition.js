@@ -1091,6 +1091,12 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       // occupiers into the thing that clears the crown. Chains off mimic — only a
       // FRAYED occupier (obey already loosened, `_mimicDisrupted`) can be spored.
       const seatedZone = this.kings.captureR*1.6, incub=40, spreadR=34, MAXNEW=3;
+      // v2 REALISTIC PROPAGATION (Ghost 2026-08-31): a bounded outbreak, not a one-shot and not an
+      // unbounded chain. A fruiting host walks toward its own kind and spores a second, but only
+      // CASCADE_MAXGEN generations deep and on a SHORT window (FRUIT_INCUB) — the natural throttle.
+      // The cap is what keeps a cascade against a PLANARIAN-reviving LOBO from minting honor forever
+      // (the farm trap, [[project_immortal_lobo_sealed_test]]). Tunable, not assumed.
+      const CASCADE_MAXGEN=2, FRUIT_INCUB=14;
       const planters = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
       let newInf=0, cleared=0;
       // 1) PLANT — spore the frayed occupiers sitting on the crown
@@ -1100,6 +1106,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         if(d < seatedZone && u._mimicDisrupted > this.world.time && newInf < MAXNEW){
           u._cordyceps = this.world.time + incub;
           u._cordycepsGlow = 1;
+          u._cordycepsGen = 0;                        // seed generation — the primary planting
           newInf++;
           // TOLL — the nearest planter spends energy seeding the spore
           let nb=null, bd=1e9; for(const a of planters){ const dd=Math.hypot(a.x-u.x,a.y-u.y); if(dd<bd){bd=dd;nb=a;} }
@@ -1112,13 +1119,20 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         if(!u._cordyceps) continue;
         u._cordycepsGlow = Math.min(1.6, (u._cordycepsGlow||0)+0.03);
         const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
-        u.vx += ((u.x-home.x)/d)*0.14; u.vy += ((u.y-home.y)/d)*0.14;   // driven off the mark
+        u.vx += ((u.x-home.x)/d)*0.14; u.vy += ((u.y-home.y)/d)*0.14;   // driven off the mark (seize: clear the crown)
+        // SEEK ITS OWN KIND — the ophiocordyceps compulsion: the fungus walks the host toward the
+        // nearest still-clean neighbour so the spore actually reaches a second body (outbreak, not luck).
+        let kin=null, kd=1e9;
+        for(const w of threat){ if(w===u||w.seppukuDone||w._cordyceps) continue;
+          const dd=Math.hypot(w.x-u.x,w.y-u.y); if(dd<kd){kd=dd;kin=w;} }
+        if(kin){ const kk=kd||1; u.vx += ((kin.x-u.x)/kk)*0.10; u.vy += ((kin.y-u.y)/kk)*0.10; }
         if(this.world.time >= u._cordyceps){
           u.seppukuDone=true; u._attritionEjected=true; cleared++;       // erupt (conserved honor via _harvestKills)
-          let v=null, bd=1e9;
-          for(const w of threat){ if(w===u||w.seppukuDone||w._cordyceps) continue;
-            const dd=Math.hypot(w.x-u.x,w.y-u.y); if(dd<spreadR && dd<bd){bd=dd;v=w;} }
-          if(v){ v._cordyceps=this.world.time+incub; v._cordycepsGlow=1; }   // fruiting body spreads
+          // FRUIT — chain into that neighbour, but only CASCADE_MAXGEN deep and on the SHORT window,
+          // so the pair pops in quick succession and the cascade dies out fast (the throttle).
+          if((u._cordycepsGen||0) < CASCADE_MAXGEN && kin && !kin.seppukuDone && kd < spreadR){
+            kin._cordyceps=this.world.time+FRUIT_INCUB; kin._cordycepsGlow=1; kin._cordycepsGen=(u._cordycepsGen||0)+1;
+          }
         }
       }
       // 3) STICK — an eviction opens the same throttle window the bombardier uses, so
