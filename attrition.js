@@ -769,7 +769,23 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const watchers = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing).length;
       if (watchers >= 6) sentinel = 1;
     }
-    return sensing >= Math.max(1, q - bonus - Math.round(fam) - sentinel);
+    const bar = Math.max(1, q - bonus - Math.round(fam) - sentinel);
+    if (sensing >= bar) return true;
+    /* PER-NODE DISTRIBUTED DISTRUST IS AUTHORITATIVE over the colony mood
+       (insight_agent_paranoia_zero_trust; IMMUNE_AUDIT gap #3). Stress is a
+       MODIFIER, never a SUBSTITUTE: a colony whose own members have INDEPENDENTLY
+       lost trust — each below the 0.2 line agent.js already decides at, distributed
+       across bodies rather than one loud node — acts on that genuine consensus even
+       when FATIGUE has inflated the mood quorum. This is the documented fatigue
+       exploit's backstop: a LOBO that cries wolf can raise the mood bar, but it
+       cannot talk the colony's own distributed distrust out of firing. It cannot be
+       manufactured by the paranoia MOOD alone (it needs real low-trust nodes AT the
+       threat) and it is floored at the BASE quorum, so it is a true consensus, not a
+       hair-trigger. In normal play trust sits at ~0.5, so this clause is silent. */
+    const distrusting = this.world.agents.filter(a => a.colony===colony && !a.seppukuDone &&
+      (a.trustCharge ?? 1) < 0.2 &&
+      threat.some(u=>Math.hypot(a.x-u.x,a.y-u.y) < _sr)).length;
+    return distrusting >= Math.max(1, this.quorum);
   }
 
   step(){
