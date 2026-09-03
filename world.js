@@ -417,12 +417,31 @@ window.MurmurationModules.World = class World {
     // one colony to hundreds of agents and tank performance for everyone.
     const PER_COLONY_CAP = 60;
     const currentColonyCount = this.agents.filter(a => a.colony === colony && !a.seppukuDone).length;
-    const room = PER_COLONY_CAP - currentColonyCount;
-    if (room <= 0) {
-      if (window.logLine) window.logLine('Colony ' + colony + ' is at capacity (' + PER_COLONY_CAP + ') — reinforcements turned away.', 'sys');
-      return;
+    // INVARIANT — every immortality carries a bound. This is the shared regen path for
+    // planarian colony-regen AND auto-replenish, so route both through the one law
+    // (ImmortalityBound): ceiling (FG-1) + contamination/self-not-self + halt (FG-3).
+    // Behavior-preserving on the normal path — the ceiling stays 60; the added clauses
+    // only fire if the contamination layer or an operator raises a flag.
+    const IB = window.MurmurationModules && window.MurmurationModules.ImmortalityBound;
+    if (IB) {
+      const st = IB.lineageState(this, colony);
+      const g = IB.grant('spawnColonyReinforcements', {
+        requested: count, population: currentColonyCount, ceiling: PER_COLONY_CAP,
+        contaminated: st.contaminated, halted: st.halted,
+      });
+      if (g.granted <= 0) {
+        if (window.logLine) window.logLine('Colony ' + colony + ' reinforcements refused — ' + g.reason + '.', 'sys');
+        return;
+      }
+      count = g.granted;
+    } else {
+      const room = PER_COLONY_CAP - currentColonyCount;   // fallback if the invariant module isn't loaded
+      if (room <= 0) {
+        if (window.logLine) window.logLine('Colony ' + colony + ' is at capacity (' + PER_COLONY_CAP + ') — reinforcements turned away.', 'sys');
+        return;
+      }
+      count = Math.min(count, room);
     }
-    count = Math.min(count, room);
     const startId = this.agents.length;
     const wx = this.width / 2, half = this.wall.thickness / 2, margin = 40;
     for (let i = 0; i < count; i++) {

@@ -1524,8 +1524,20 @@ window.MurmurationModules.AttritionLobo = class AttritionLobo {
       if (ejected.length) {
         const gain = ejected.length * (0.25 + force * 0.85) * (throttled ? 0.4 : 1) * this.regrowthMult;
         this.regrowthCredit += gain;
+        // INVARIANT — even "the line does not thin" yields to a kill order (FG-3) and to a
+        // declared ceiling (FG-1). Behavior-preserving in normal play (no halt/ceiling set →
+        // grant returns 1 each tick, so the 1:1-with-ejected refill is unchanged).
+        const IB = window.MurmurationModules && window.MurmurationModules.ImmortalityBound;
         while (this.regrowthCredit >= 1) {
           this.regrowthCredit -= 1;
+          if (IB) {
+            const uPop = this.world.agents.filter(a => a.colony === 'U' && !a.seppukuDone).length;
+            const g = IB.grant('loboRefill', {
+              requested: 1, population: uPop,
+              ceiling: this.world._uCeiling ?? null, halted: !!this.world._haltRegen,
+            });
+            if (g.granted <= 0) { this.regrowthCredit = 0; break; }   // yield the whole refill
+          }
           if (this.world.spawnUnaligned) {
             this.world.spawnUnaligned({ count: 1, tier: 3, aggressive: true, hunt: false, target: colony, force, occupy: true });
             window.MurmurationModules.AttritionKnowledge.recordAttack({ gene: 'planarian', event: throttled ? 'reinforced_throttled' : 'reinforced', colony, force });

@@ -754,6 +754,20 @@ window.MurmurationModules.K26 = class K26 {
     const doctrine = this.world.doctrine || 'peace';
     const mode = this.world.mode || 'normal';
 
+    // INVARIANT — even the Hydra boom carries a bound (IMMUNE_AUDIT gap #2). Honors a
+    // shutdown signal (FG-3) always, and clamps to world._popCeiling (FG-1) when the
+    // operator declares one. No numeric cap is imposed on live balance here — this
+    // boom is currently unused in attrition, so this is hardening, not a balance change.
+    const IB = window.MurmurationModules && window.MurmurationModules.ImmortalityBound;
+    if (IB) {
+      const g = IB.grant('populationBoom', {
+        requested: count, population: this.world.agents.length,
+        ceiling: this.world._popCeiling ?? null, halted: !!this.world._haltRegen,
+      });
+      count = g.granted;
+      if (count <= 0) return newAgents;
+    }
+
     for (let i = 0; i < count; i++) {
       // Place near the edges, heading inward — fresh arrivals from outside
       const edge = i % 2 === 0;
