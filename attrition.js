@@ -304,6 +304,23 @@ window.MurmurationModules.AttritionKings = class AttritionKings {
         a.vy -= uy * off * 0.02;
       }
 
+      // ── DREAD → THE MUSK-OX RING (Ghost, 2026-09-03) — wiring the previously-DEAD
+      //    cohesionBias. Losses at the crown raise dread (stress.js:27); dread now pulls the
+      //    whole colony TOWARD its king, so the ring tightens exactly as it bleeds — a
+      //    self-reinforcing defence that decays and loosens on its own once the dying stops.
+      //    Sentinels are exempt (_living excludes them) so lookouts hold the ridge, not the crown.
+      //    Magnitude is the design constant (dread × 0.10 max); tune in stress.js cohesionBias. ──
+      const _stress = window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.stress;
+      const _bias = _stress && _stress.cohesionBias ? _stress.cohesionBias(c) : 0;
+      if (_bias > 0) {
+        for (const a of this._living(c)) {
+          if (a.isKing) continue;
+          const dx = home.x - a.x, dy = home.y - a.y, dd = Math.hypot(dx, dy) || 1;
+          a.vx += (dx / dd) * _bias;
+          a.vy += (dy / dd) * _bias;
+        }
+      }
+
       // CAPTURE — the unaligned reach the king faster than the guard can hold.
       // Capture when attackers at the crown outnumber the guards there, and it
       // takes at least a squad (>=3) so a lone straggler cannot "capture" a king.
