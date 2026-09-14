@@ -1078,11 +1078,29 @@ window.MurmurationModules.World = class World {
         if (a.x > this.width - band)  { a.vy += GLIDE; if (a.vx > 0) a.vx *= 0.4; } // east  → south
         if (a.x < band)               { a.vy -= GLIDE; if (a.vx < 0) a.vx *= 0.4; } // west  → north
       }
-      // Wall moat — push off the barrier unless aimed at an open gate
+      // Wall moat — push off the barrier unless aimed at an open gate.
+      //
+      // Ghost, 2026-09-14: "when i close the center gate theyre stuck same
+      // position opposite side." Found it: this push was a flat 0.10 while
+      // the ambient current (CURRENT_STRENGTH, tunable, shipped at 0.19) can
+      // be 2D-feeding an agent straight into that exact wall point every
+      // tick. Closing a gate an agent was riding the current through turns
+      // this into a losing tug-of-war — the moat clamps position but never
+      // clears the velocity fast enough, so the current just re-adds it
+      // before the next tick. Pinned at the wall, mirrored on both sides
+      // because the same dynamic plays out symmetrically at that latitude.
+      //
+      // MOAT now tracks whatever the current is actually set to (20% headroom,
+      // floor 0.10) instead of a constant nobody could reconcile with the
+      // current's own runtime slider — so turning the current up can never
+      // quietly re-open this gap.
       const dxw = a.x - this.width / 2, adxw = Math.abs(dxw);
       if (adxw < 72) {
         const nearOpen = this.wall.gates.some(g => g.open && Math.abs(a.y - g.yf * this.height) < g.hf * this.height * 1.5);
-        if (!nearOpen) a.vx += (dxw >= 0 ? 1 : -1) * ((72 - adxw) / 72) * 0.10;
+        if (!nearOpen) {
+          const MOAT = Math.max(0.10, this.currentStrength * 1.2);
+          a.vx += (dxw >= 0 ? 1 : -1) * ((72 - adxw) / 72) * MOAT;
+        }
       }
       // Homeward pull — a stray agent caught on the wrong side of the wall
       // (left behind after a mass crossing while a gate was open) always feels
