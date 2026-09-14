@@ -1464,7 +1464,25 @@ function repositionZoneGauges() {
 
 window.addEventListener('load', () => {
   sizeCanvas();
-  runSim();
+  // Ghost, 2026-09-14: "it starts with both colonies on their proper side then
+  // immediately disappears" / "it reverts back to how it was before repair."
+  // Root cause: TWO 'load' listeners raced. This one called runSim() (fresh,
+  // correctly-separated genesis, running whatever the CURRENT code does)
+  // synchronously; the persistent-memory script's listener (below, in its own
+  // IIFE) scheduled tryRestore() 300ms later, which unconditionally overwrote
+  // it with the last localStorage snapshot — necessarily older than the code
+  // now running, so any fix shipped since that save looked like it reverted.
+  // Fix: decide ONCE, synchronously, which path this load takes. A healthy
+  // save means skip the fresh spawn entirely — nothing to flash-then-replace,
+  // because nothing was ever spawned to replace. tryRestore() (unchanged)
+  // still does the actual restoring 300ms later; this only stops runSim()
+  // from doing throwaway work whose result the user would never see anyway.
+  let hasHealthySave = false;
+  try {
+    const snap = JSON.parse(localStorage.getItem('murmuration.civ.v2') || 'null');
+    hasHealthySave = !!(snap && snap.version >= 2 && snap.agents && snap.agents.length);
+  } catch (e) {}
+  if (!hasHealthySave) runSim();
 
   // Fade the hero overlay after 5 seconds
   setTimeout(() => {
