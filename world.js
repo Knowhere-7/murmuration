@@ -935,11 +935,11 @@ window.MurmurationModules.World = class World {
       this._centreGateY = centre ? centre.yf * this.height : this.height * 0.5;
 
       const wx0 = this.width / 2;
-      let strayA = 0, totA = 0, strayB = 0, totB = 0, cxA = 0, cxB = 0;
+      let strayA = 0, totA = 0, strayB = 0, totB = 0, cxA = 0, cxB = 0, cyA = 0, cyB = 0;
       for (const a of active) {
         if (a.isSentinel) continue;
-        if (a.colony === 'B') { totB++; cxB += a.x; if (a.x < wx0) strayB++; }
-        else                  { totA++; cxA += a.x; if (a.x > wx0) strayA++; }
+        if (a.colony === 'B') { totB++; cxB += a.x; cyB += a.y; if (a.x < wx0) strayB++; }
+        else                  { totA++; cxA += a.x; cyA += a.y; if (a.x > wx0) strayA++; }
       }
       this._dispA = totA ? strayA / totA : 0;
       this._dispB = totB ? strayB / totB : 0;
@@ -976,6 +976,34 @@ window.MurmurationModules.World = class World {
       };
       this._anchorA = anchorFor(cxA, totA, this.width * 0.25);
       this._anchorB = anchorFor(cxB, totB, this.width * 0.75);
+
+      /* ── FLOCK ANCHOR, Y AXIS (Ghost, 2026-09-14) ──────────────────────────
+         Ghost watched a colony spiral between the top and centre gates for
+         4.5M ticks and called it: "it looks like they're being pushed by a
+         current they're trying to fight." They were, and losing — every
+         homeward force above (_dispA/_dispB, _anchorA/_anchorB, the stray
+         pull) reads and corrects ONLY x (which side of the wall). The ambient
+         current is a full 2D rotational eddy (vx AND vy, strength 0.19,
+         merging into one board-spanning eddy the moment any gate opens) with
+         nothing opposing its vertical component at all. A colony swept off
+         its home LATITUDE had no force pulling it back — it just kept
+         orbiting the current between whichever two gate latitudes were open,
+         because the wall moat (which only blocks at non-gate y) was the one
+         thing bounding the drift instead of home ever being it.
+         Same shape as the x anchor, same constants, just measured against
+         homeY instead of homeX — a colony pulled off its floor in one axis
+         deserves the same restoring force it already has in the other. */
+      const DEAD_Y = this.height * 0.10;
+      const anchorForY = (cySum, tot, homeY) => {
+        if (!tot) return 0;
+        const off = homeY - (cySum / tot);
+        if (Math.abs(off) < DEAD_Y) return 0;
+        const over = (Math.abs(off) - DEAD_Y) / (this.height * 0.25);
+        return Math.sign(off) * Math.min(1, over) * ANCHOR;
+      };
+      const homeY = this.height * 0.5;
+      this._anchorAY = anchorForY(cyA, totA, homeY);
+      this._anchorBY = anchorForY(cyB, totB, homeY);
     }
 
     for (const a of active) {
@@ -1096,6 +1124,9 @@ window.MurmurationModules.World = class World {
       // actually moves a migrated colony home; the stray pull above only ever
       // caught individuals who had come loose.
       a.vx += (a.colony === 'B' ? this._anchorB : this._anchorA) || 0;
+      // Same anchor, y axis — the current can carry a colony off its home
+      // latitude with nothing else to answer it (see the comment above).
+      a.vy += (a.colony === 'B' ? this._anchorBY : this._anchorAY) || 0;
     }
 
     for (const agent of active) {
