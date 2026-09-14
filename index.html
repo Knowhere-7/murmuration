@@ -1518,8 +1518,19 @@ function runSim() {
   if (k26.economy && _scarB) k26.economy.scarcityLevelB = parseFloat(_scarB.value);
   if (k26.economy && _abunA) k26.economy.abundanceA = parseFloat(_abunA.value);
   if (k26.economy && _abunB) k26.economy.abundanceB = parseFloat(_abunB.value);
-  // Reset gate button labels
-  [0,1].forEach(i => { const b=document.getElementById('gate'+i+'Btn'); if(b){ b.textContent=(i===0?'NORTH':'SOUTH')+' GATE: SHUT'; b.style.color=''; b.style.borderColor=''; } });
+  // Reset gate button labels. Same fix as toggleGate() (2026-09-14): read the name off
+  // the gate itself rather than assuming only NORTH/SOUTH exist — this loop only ran to
+  // i=1, so it never touched the real SOUTH button (index 2, untouched, stayed correct),
+  // but it DID stomp the CENTRE button's label at index 1 back to "SOUTH GATE" on every
+  // (re)start, leaving two buttons both reading "SOUTH GATE" even though toggleGate(1)
+  // was still correctly operating the centre gate underneath the wrong label.
+  [0,1,2].forEach(i => {
+    const b = document.getElementById('gate'+i+'Btn');
+    if (!b) return;
+    const g = k26.world && k26.world.wall && k26.world.wall.gates[i];
+    const name = (g && g.name) ? g.name.replace(/ GATE$/, '') : ['NORTH','CENTRE','SOUTH'][i];
+    b.textContent = name + ' GATE: SHUT'; b.style.color = ''; b.style.borderColor = '';
+  });
 
   // Hook UI updates BEFORE starting — the loop fires synchronously on start()
   const origUI = k26.updateUI.bind(k26);
@@ -1730,8 +1741,16 @@ function toggleCTF() {
     btn.style.background = 'rgba(100,220,150,0.10)'; btn.style.borderColor = 'rgba(100,220,150,0.4)'; btn.style.color = '#8be0a8';
     board.style.display = 'block';
     banner.style.display = 'none';
-    // Gates opened by ctf.start() — reflect it in the gate buttons
-    [0,1].forEach(i => { const b=document.getElementById('gate'+i+'Btn'); if(b){ b.textContent=(i===0?'NORTH':'SOUTH')+' GATE: OPEN'; b.style.color='#8be0a8'; b.style.borderColor='rgba(100,220,150,0.5)'; } });
+    // Gates opened by ctf.start() — NORTH + CENTRE (indices 0,1), reflect it in the
+    // buttons. Same name-from-the-gate fix as toggleGate()/the reset loop above —
+    // this used to hardcode index 1 as "SOUTH", mislabeling the centre gate it just opened.
+    [0,1].forEach(i => {
+      const b = document.getElementById('gate'+i+'Btn');
+      if (!b) return;
+      const g = k26.world && k26.world.wall && k26.world.wall.gates[i];
+      const name = (g && g.name) ? g.name.replace(/ GATE$/, '') : ['NORTH','CENTRE','SOUTH'][i];
+      b.textContent = name + ' GATE: OPEN'; b.style.color='#8be0a8'; b.style.borderColor='rgba(100,220,150,0.5)';
+    });
     narrate('War games begin. ' + ctfPendingMode.toUpperCase() + '. Both gates thrown open — the raid is on.');
   } else {
     k26.ctf.stop();
