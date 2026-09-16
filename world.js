@@ -200,6 +200,12 @@ window.MurmurationModules.World = class World {
   /** Neon barrier + gate markers. Called by K26 between connections and agents. */
   drawWall(ctx) {
     const W = this.width, H = this.height, wx = W / 2, half = this.wall.thickness / 2;
+    // Ported from attrition-private (11b6c47) — see that commit for the full
+    // story. Short version: the two outer glow bands already scaled off
+    // `half`, but the brightest core stroke and the gate markers/font were
+    // flat pixel constants tuned for thickness=12 (half=6), so onResize()
+    // moving `half` didn't visibly move the wall's most eye-catching lines.
+    const scale = Math.max(0.35, half / 6);
     ctx.save();
     ctx.lineCap = 'round';
 
@@ -215,7 +221,7 @@ window.MurmurationModules.World = class World {
       ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
       ctx.strokeStyle = 'rgba(120,235,255,0.45)'; ctx.lineWidth = half * 2;
       ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
-      ctx.strokeStyle = 'rgba(240,255,255,0.85)'; ctx.lineWidth = 1.4;
+      ctx.strokeStyle = 'rgba(240,255,255,0.85)'; ctx.lineWidth = 1.4 * scale;
       ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
     }
 
@@ -223,19 +229,19 @@ window.MurmurationModules.World = class World {
     for (const g of this.wall.gates) {
       const yc = g.yf * H, gh = g.hf * H;
       const col = g.open ? '90,255,170' : '255,95,80';
-      ctx.strokeStyle = `rgba(${col},0.9)`; ctx.lineWidth = 2;
+      ctx.strokeStyle = `rgba(${col},0.9)`; ctx.lineWidth = 2 * scale;
       for (const py of [yc - gh, yc + gh]) {
         ctx.beginPath(); ctx.moveTo(wx - half * 3.2, py); ctx.lineTo(wx + half * 3.2, py); ctx.stroke();
       }
       if (!g.open) {
-        ctx.setLineDash([5, 6]); ctx.strokeStyle = `rgba(${col},0.55)`; ctx.lineWidth = half * 1.5;
+        ctx.setLineDash([5 * scale, 6 * scale]); ctx.strokeStyle = `rgba(${col},0.55)`; ctx.lineWidth = half * 1.5;
         ctx.beginPath(); ctx.moveTo(wx, yc - gh); ctx.lineTo(wx, yc + gh); ctx.stroke();
         ctx.setLineDash([]);
       }
-      ctx.font = '7px monospace';
+      ctx.font = `${Math.max(5, Math.round(7 * scale))}px monospace`;
       ctx.fillStyle = `rgba(${col},0.7)`;
       ctx.textAlign = 'center';
-      ctx.fillText(g.open ? 'OPEN' : 'SHUT', wx, yc - gh - 5);
+      ctx.fillText(g.open ? 'OPEN' : 'SHUT', wx, yc - gh - 5 * scale);
     }
     ctx.restore();
   }
