@@ -1637,6 +1637,18 @@
   }
 
   window.addEventListener('resize',()=>{ if(k26) sizeCanvas(); });
+  // Ghost, 2026-09-16: "i shrank the map by pinching the mouse pad on my old
+  // device" — trackpad pinch drives PINCH/VISUAL-VIEWPORT zoom, which is not
+  // guaranteed to fire a plain `window resize` event the same way an actual
+  // window resize does (behavior varies by browser/OS/trackpad driver — this
+  // is exactly why it "sometimes" resized and sometimes didn't). visualViewport
+  // is the API built specifically to catch this: it fires on pinch-zoom
+  // regardless of whether the layout viewport itself changed. Same handler,
+  // so canvas + wall + zones all stay in sync with whatever zoom actually did,
+  // instead of guessing at one specific zoom implementation.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => { if (k26) sizeCanvas(); });
+  }
   build();
   autoStowPanels();
   syncWeather();
