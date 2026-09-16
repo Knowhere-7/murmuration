@@ -15,7 +15,14 @@ window.MurmurationModules.World = class World {
     // Reference size for onResize() — captured once, at whatever size the
     // world was actually born at, so the wall reads exactly as tuned there
     // and scales proportionally away from it in either direction.
-    this._baseWidthForWall = width || 1;
+    // A bare `|| 1` fallback here was the actual bug: right after a login
+    // redirect the canvas can legitimately measure 0 (or near-0) width before
+    // layout has settled. Baseline=1 turns the FIRST real resize into
+    // thickness = 12 * (800/1) = 9600px — a wall so enormous it paints over
+    // the whole screen and reads as "nothing renders." 800 is a sane fallback
+    // (this codebase's own typical starting width elsewhere), so a degenerate
+    // birth width can no longer produce a runaway multiplier.
+    this._baseWidthForWall = (width && width > 50) ? width : 800;
     // ── PER-COLONY ENVIRONMENT — each colony evolves on its own path. Every
     // 'Break the Swarm' trait, plus the new positive/threat levers, is scoped
     // to A or B independently instead of hitting both at once. ──
@@ -178,7 +185,12 @@ window.MurmurationModules.World = class World {
    *  hard collision agents lose access to space against, not a cosmetic. */
   onResize() {
     if (!this.wall || !this._baseWidthForWall) return;
-    this.wall.thickness = this._baseWallThickness * (this.width / this._baseWidthForWall);
+    const raw = this._baseWallThickness * (this.width / this._baseWidthForWall);
+    // Belt-and-suspenders after the "wall painted over the whole screen" bug:
+    // no matter what produced a bad ratio, the wall can never leave a sane
+    // range. 2px floor keeps it a real barrier; 60px ceiling keeps a single
+    // multiplier mistake from ever blotting out the board again.
+    this.wall.thickness = Math.max(2, Math.min(60, raw));
   }
 
   /** Keep an agent on whichever side of the wall it was on, unless it is
