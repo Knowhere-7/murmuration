@@ -12,17 +12,6 @@ window.MurmurationModules.World = class World {
     this.width  = width;
     this.height = height;
     this.agents = [];
-    // Reference size for onResize() — captured once, at whatever size the
-    // world was actually born at, so the wall reads exactly as tuned there
-    // and scales proportionally away from it in either direction.
-    // A bare `|| 1` fallback here was the actual bug: right after a login
-    // redirect the canvas can legitimately measure 0 (or near-0) width before
-    // layout has settled. Baseline=1 turns the FIRST real resize into
-    // thickness = 12 * (800/1) = 9600px — a wall so enormous it paints over
-    // the whole screen and reads as "nothing renders." 800 is a sane fallback
-    // (this codebase's own typical starting width elsewhere), so a degenerate
-    // birth width can no longer produce a runaway multiplier.
-    this._baseWidthForWall = (width && width > 50) ? width : 800;
     // ── PER-COLONY ENVIRONMENT — each colony evolves on its own path. Every
     // 'Break the Swarm' trait, plus the new positive/threat levers, is scoped
     // to A or B independently instead of hitting both at once. ──
@@ -92,9 +81,8 @@ window.MurmurationModules.World = class World {
     // Two gates the user opens/closes. Closed = colonies stay separate.
     // Open = agents (and conflict) bleed across. Movement collision only —
     // bonds and sightlines still cross, so tension builds along the seam.
-    this._baseWallThickness = 12;
     this.wall = {
-      thickness: this._baseWallThickness,
+      thickness: 12,
       // Spread far apart and pushed close to the top/bottom edges (was 0.28/0.72,
       // clustered near mid-height). Solid wall segments above/below a gate are
       // where agents pile up and wedge into the corner under crowd pressure —
@@ -176,27 +164,6 @@ window.MurmurationModules.World = class World {
     return g.open;
   }
 
-  /** Called by k26.js right after width/height change on a canvas resize.
-   *  Ghost, 2026-09-15/16: "the wall/spheres look oversized" when Attrition's
-   *  panel opens and shrinks the canvas — confirmed. Zone radius (economy.js)
-   *  is FIXED on purpose, a feature Ghost wants permanent. The wall is the
-   *  opposite case: `thickness` is a hard barrier agents collide with
-   *  (applyWallCollision/the moat push), so a fixed 12px that doesn't shrink
-   *  with the board becomes a proportionally huge, harder-to-cross barrier
-   *  the smaller the canvas gets — agents genuinely losing access to space,
-   *  not a visual quirk. Scaled from _baseWidthForWall (the size the world
-   *  was actually born at), so at that size it reads exactly as tuned and
-   *  moves proportionally away from it in either direction. */
-  onResize() {
-    if (!this.wall || !this._baseWidthForWall) return;
-    const raw = this._baseWallThickness * (this.width / this._baseWidthForWall);
-    // Belt-and-suspenders after the "wall painted over the whole screen" bug:
-    // no matter what produced a bad ratio, the wall can never leave a sane
-    // range. 2px floor keeps it a real barrier; 60px ceiling keeps a single
-    // multiplier mistake from ever blotting out the board again.
-    this.wall.thickness = Math.max(2, Math.min(60, raw));
-  }
-
   /** Keep an agent on whichever side of the wall it was on, unless it is
    *  passing through an OPEN gate. Called after movement each tick. */
   applyWallCollision(a) {
@@ -216,15 +183,6 @@ window.MurmurationModules.World = class World {
   /** Neon barrier + gate markers. Called by K26 between connections and agents. */
   drawWall(ctx) {
     const W = this.width, H = this.height, wx = W / 2, half = this.wall.thickness / 2;
-    // Everything below was scaled off `half` EXCEPT the brightest, most visible
-    // stroke (the white core) and the gate markers/font — those were flat
-    // pixel constants tuned for thickness=12 (half=6). Once onResize() made
-    // `half` actually move, those fixed values stayed put, so the wall's most
-    // eye-catching lines never appeared to change size at all. Ghost: "it
-    // comes up now but doesnt shrink." `scale` carries every constant below
-    // proportionally from that same half=6 baseline, floored so nothing
-    // vanishes to 0 on a very small board.
-    const scale = Math.max(0.35, half / 6);
     ctx.save();
     ctx.lineCap = 'round';
 
@@ -240,7 +198,7 @@ window.MurmurationModules.World = class World {
       ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
       ctx.strokeStyle = 'rgba(120,235,255,0.45)'; ctx.lineWidth = half * 2;
       ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
-      ctx.strokeStyle = 'rgba(240,255,255,0.85)'; ctx.lineWidth = 1.4 * scale;
+      ctx.strokeStyle = 'rgba(240,255,255,0.85)'; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(wx, ya); ctx.lineTo(wx, yb); ctx.stroke();
     }
 
@@ -248,19 +206,19 @@ window.MurmurationModules.World = class World {
     for (const g of this.wall.gates) {
       const yc = g.yf * H, gh = g.hf * H;
       const col = g.open ? '90,255,170' : '255,95,80';
-      ctx.strokeStyle = `rgba(${col},0.9)`; ctx.lineWidth = 2 * scale;
+      ctx.strokeStyle = `rgba(${col},0.9)`; ctx.lineWidth = 2;
       for (const py of [yc - gh, yc + gh]) {
         ctx.beginPath(); ctx.moveTo(wx - half * 3.2, py); ctx.lineTo(wx + half * 3.2, py); ctx.stroke();
       }
       if (!g.open) {
-        ctx.setLineDash([5 * scale, 6 * scale]); ctx.strokeStyle = `rgba(${col},0.55)`; ctx.lineWidth = half * 1.5;
+        ctx.setLineDash([5, 6]); ctx.strokeStyle = `rgba(${col},0.55)`; ctx.lineWidth = half * 1.5;
         ctx.beginPath(); ctx.moveTo(wx, yc - gh); ctx.lineTo(wx, yc + gh); ctx.stroke();
         ctx.setLineDash([]);
       }
-      ctx.font = `${Math.max(5, Math.round(7 * scale))}px monospace`;
+      ctx.font = '7px monospace';
       ctx.fillStyle = `rgba(${col},0.7)`;
       ctx.textAlign = 'center';
-      ctx.fillText(g.open ? 'OPEN' : 'SHUT', wx, yc - gh - 5 * scale);
+      ctx.fillText(g.open ? 'OPEN' : 'SHUT', wx, yc - gh - 5);
     }
     ctx.restore();
   }
