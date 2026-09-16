@@ -604,6 +604,27 @@ window.MurmurationModules.Agent = class Agent {
       ctx.stroke();
     }
 
+    // PARANOIA — a jittering ring of short spikes, deliberately CRISP where the
+    // wasp alarm (alarm.js draw()) is a soft diffuse field-fill. Same colony hue
+    // as the body, so it never gets mistaken for the alarm even when both are up
+    // at once on the same agent. Attrition-only: ColonyStress lives on
+    // window.MurmurationModules.Attrition, which simply doesn't exist outside it.
+    const _stressM = window.MurmurationModules && window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.stress;
+    const paranoia = _stressM ? _stressM.effective(this.colony, 'paranoia') : 0;
+    if (paranoia > 0.05) {
+      const spikes = 10, baseR = this.radius + 3;
+      ctx.strokeStyle = `hsla(${hue}, 95%, 75%, ${Math.min(0.85, paranoia)})`;
+      ctx.lineWidth = 0.7;
+      for (let i = 0; i < spikes; i++) {
+        const a = (i / spikes) * Math.PI * 2 + Math.random() * 0.3;
+        const len = 1.5 + Math.random() * 3 * paranoia;
+        ctx.beginPath();
+        ctx.moveTo(this.x + Math.cos(a) * baseR, this.y + Math.sin(a) * baseR);
+        ctx.lineTo(this.x + Math.cos(a) * (baseR + len), this.y + Math.sin(a) * (baseR + len));
+        ctx.stroke();
+      }
+    }
+
     ctx.restore();
   }
 };
