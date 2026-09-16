@@ -96,6 +96,8 @@ window.MurmurationModules.Economy = class Economy {
 
     // 10 resource zones — the 5-zone pattern (2 top wide, 1 center, 2 bottom
     // wide), mirrored per colony side so each colony gets its own full set.
+    // radius is LITERAL PIXELS, on purpose — it never scales on resize while
+    // the centers (px/py) do. See recomputeZonePositions() below.
     const layout = [
       // Colony A / Knowhere side
       { px: 0.12, py: 0.20, name: 'WELL · KN I',   richness: 0.85, radius: 40 },
@@ -130,6 +132,14 @@ window.MurmurationModules.Economy = class Economy {
   static PHASE_ORDER = ['GOLDEN', 'DISASTER', 'SCARCITY', 'REBUILD'];
 
   // Call whenever world.width/height changes (sizeCanvas, restoreCivilization)
+  //
+  // DELIBERATELY DOES NOT TOUCH z.radius. Ghost, 2026-09-15, after shrinking the
+  // window enough to fit both slider panels in view at once: "the spheres they
+  // navigate to for sustenance dont shrink creating the best effect yet... i
+  // absolutely have to have this as a permanent feature." Centers compress with
+  // the canvas, radius stays literal pixels (see the `radius: 40/50` constants
+  // above) — that mismatch IS the effect. If a future pass makes radius scale
+  // with w/h "for consistency," it kills this on purpose. Don't.
   recomputeZonePositions() {
     const w = this.world.width, h = this.world.height;
     for (const z of this.zones) {
