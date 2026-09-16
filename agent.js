@@ -611,17 +611,36 @@ window.MurmurationModules.Agent = class Agent {
     // window.MurmurationModules.Attrition, which simply doesn't exist outside it.
     const _stressM = window.MurmurationModules && window.MurmurationModules.Attrition && window.MurmurationModules.Attrition.stress;
     const paranoia = _stressM ? _stressM.effective(this.colony, 'paranoia') : 0;
+    const fatigue  = _stressM ? _stressM.effective(this.colony, 'fatigue')  : 0;
     if (paranoia > 0.05) {
       const spikes = 10, baseR = this.radius + 3;
-      ctx.strokeStyle = `hsla(${hue}, 95%, 75%, ${Math.min(0.85, paranoia)})`;
-      ctx.lineWidth = 0.7;
+      const threadFatigue = fatigue > 0.05;
       for (let i = 0; i < spikes; i++) {
         const a = (i / spikes) * Math.PI * 2 + Math.random() * 0.3;
         const len = 1.5 + Math.random() * 3 * paranoia;
+        const x0 = this.x + Math.cos(a) * baseR, y0 = this.y + Math.sin(a) * baseR;
+        const x1 = this.x + Math.cos(a) * (baseR + len), y1 = this.y + Math.sin(a) * (baseR + len);
+
+        // Outer stroke — the spike itself, colony hue, unchanged from v11.
+        ctx.strokeStyle = `hsla(${hue}, 95%, 75%, ${Math.min(0.85, paranoia)})`;
+        ctx.lineWidth = 0.7;
         ctx.beginPath();
-        ctx.moveTo(this.x + Math.cos(a) * baseR, this.y + Math.sin(a) * baseR);
-        ctx.lineTo(this.x + Math.cos(a) * (baseR + len), this.y + Math.sin(a) * (baseR + len));
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
         ctx.stroke();
+
+        // Fatigue thread — the SAME centerline, redrawn thinner in a greyed
+        // shift of the same hue: vigilance corroding from within, not a
+        // second signal beside it. Gated on both readings so fatigue never
+        // shows here without paranoia already drawing.
+        if (threadFatigue) {
+          ctx.strokeStyle = `hsla(${hue}, ${95 - fatigue * 70}%, ${75 - fatigue * 35}%, ${Math.min(0.9, fatigue)})`;
+          ctx.lineWidth = 0.4;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+        }
       }
     }
 
