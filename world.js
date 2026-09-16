@@ -505,7 +505,20 @@ window.MurmurationModules.World = class World {
    * `hunt: true` assigns each agent a colony to chase down and strike its King.
    */
   spawnUnaligned(opts = {}) {
-    const count = opts.count != null ? opts.count : 8;
+    // LOBO's MUSTER (lobo-evolve.js) was deliberately uncapped, SR-010 — that is
+    // an honor/economy decision about how long a campaign can run, not a license
+    // to render an unbounded number of agents at once. Ghost, 2026-09-15: "lobo
+    // cant exceed 150 it slows the visuals to a glitchy crawl." Same shape as
+    // PER_COLONY_CAP below (spawnColonyReinforcements) — a live-population
+    // ceiling, checked at spawn time, independent of the uncapped lifetime tally.
+    const LOBO_LIVE_CAP = 150;
+    const liveU = this.agents.filter(a => a.colony === 'U' && !a.seppukuDone).length;
+    const room = LOBO_LIVE_CAP - liveU;
+    if (room <= 0) {
+      if (window.logLine) window.logLine(`LOBO at the live cap (${LOBO_LIVE_CAP}) — wave turned away.`, 'sys');
+      return;
+    }
+    const count = Math.min(opts.count != null ? opts.count : 8, room);
     const aggressive = opts.aggressive !== false;
     const hunt = !!opts.hunt;
     const target = this.unalignedTarget || 'both';
