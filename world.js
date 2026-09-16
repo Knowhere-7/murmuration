@@ -12,6 +12,10 @@ window.MurmurationModules.World = class World {
     this.width  = width;
     this.height = height;
     this.agents = [];
+    // Reference size for onResize() — captured once, at whatever size the
+    // world was actually born at, so the wall reads exactly as tuned there
+    // and scales proportionally away from it in either direction.
+    this._baseWidthForWall = width || 1;
     // ── PER-COLONY ENVIRONMENT — each colony evolves on its own path. Every
     // 'Break the Swarm' trait, plus the new positive/threat levers, is scoped
     // to A or B independently instead of hitting both at once. ──
@@ -81,8 +85,9 @@ window.MurmurationModules.World = class World {
     // Two gates the user opens/closes. Closed = colonies stay separate.
     // Open = agents (and conflict) bleed across. Movement collision only —
     // bonds and sightlines still cross, so tension builds along the seam.
+    this._baseWallThickness = 12;
     this.wall = {
-      thickness: 12,
+      thickness: this._baseWallThickness,
       // Spread far apart and pushed close to the top/bottom edges (was 0.28/0.72,
       // clustered near mid-height). Solid wall segments above/below a gate are
       // where agents pile up and wedge into the corner under crowd pressure —
@@ -162,6 +167,18 @@ window.MurmurationModules.World = class World {
       window.logLine(`${g.open ? '\u25B6 OPENED' : '\u25A0 CLOSED'} \u2014 ${g.name}`, g.open ? 'evolve' : 'warn');
     }
     return g.open;
+  }
+
+  /** Called by k26.js right after width/height change on a canvas resize.
+   *  Ported from attrition-private (19ce0b7) — same shared world.js, same
+   *  bug: wall.thickness was a flat 12px that never rescaled, so a much
+   *  smaller canvas made it a proportionally huge, harder-to-cross barrier.
+   *  Zone radius (economy.js) is FIXED on purpose (a1bc27a, a permanent
+   *  feature Ghost asked to keep) — the wall is the opposite case, a real
+   *  hard collision agents lose access to space against, not a cosmetic. */
+  onResize() {
+    if (!this.wall || !this._baseWidthForWall) return;
+    this.wall.thickness = this._baseWallThickness * (this.width / this._baseWidthForWall);
   }
 
   /** Keep an agent on whichever side of the wall it was on, unless it is
