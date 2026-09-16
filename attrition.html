@@ -226,24 +226,12 @@
       <h2>The world &middot; both colonies</h2>
       <div class="kv"><span>sim speed</span><span class="val" id="wSpeedVal">1&times;</span></div>
       <input type="range" id="wSpeed" style="--sl:#ffffff" min="1" max="6" step="1" value="1" oninput="setWorld('speed',this.value)">
-    </div>
-
-    <!-- WEATHER — the world's own pressure, independent of LOBO. The toggle is
-         real: weather.js checks `enabled` before scheduling, so OFF genuinely
-         stops mother nature rather than just hiding her. -->
-    <div class="sec">
-      <h2>Weather</h2>
-      <div class="row">
-        <button id="wxToggle" onclick="toggleWeather()">&#9210; WEATHER: ON</button>
-        <span class="val" id="wxActive" style="margin-left:auto">0 fronts</span>
-      </div>
-      <div class="kv"><span>storm frequency</span><span class="val" id="wStormVal">0.40</span></div>
-      <input type="range" id="wStorm" style="--sl:var(--weather)" min="0" max="1" step="0.01" value="0.40" oninput="stage(this,'setWorld','storm',this.value)">
-      <div class="kv"><span>mean ticks between</span><span class="val" id="wxCadence">&mdash;</span></div>
-      <div style="font-size:10px;color:var(--dim);margin:6px 0 6px">
-        or call one down yourself &mdash; the PATH is always random:
-      </div>
-      <div class="row" id="wxKinds"></div>
+      <!-- Weather removed, Ghost 2026-09-15: "more noise than benefit." Tax rate
+           lived in that section by co-location, not because it's weather —
+           kept here, the section it actually belongs to. weather.js is no
+           longer loaded at all (see the script tags below), so k26.weather is
+           undefined and every guarded call site (`if (k26.weather)`) is a
+           clean no-op — nothing here needed touching to make that safe. -->
       <div class="kv"><span>tax rate</span><span class="val" id="wTaxVal">0.00</span></div>
       <input type="range" id="wTax" min="0" max="1" step="0.01" value="0" oninput="stage(this,'setWorld','tax',this.value)">
     </div>
@@ -505,7 +493,11 @@
        ctf.js  — the kings REPLACE the flags here; both would contest the map.
        maze.js — the keep is Attrition's confinement, and an active maze
                  suppresses the topo contours the composed range is drawn on. -->
-<script src="weather.js"></script>
+<!-- weather.js removed, Ghost 2026-09-15: "more noise than benefit." Not loaded at
+     all now — k26.attachWorldSystems() (k26.js) only builds a subsystem when its
+     module exists (`if (!M[s.mod]) continue`), so k26.weather is simply
+     undefined, and every call site elsewhere in this file is already guarded
+     with `if (k26.weather)` / `if (!k26.weather) return`. Nothing else to touch. -->
 <script src="lineage.js"></script>
 <script src="slimeMoldCore.js"></script>
 <script src="gauntlet.js"></script>
@@ -585,25 +577,22 @@
 
     /* ── THE WORLD ANSWERS ───────────────────────────────────────────────────
        Ghost, 2026-08-26: "it doesnt carry the reactions that the other sims
-       have when detonate is hit."
+       have when detonate is hit." Then 2026-09-15: "get rid of the large
+       lightning bolts... they look too generic and take away from the
+       overall picture." The 08-26 fix electrified the sky on EVERY detonate
+       regardless of which slider fired — a scarcity nudge and a terrain
+       broadside looked identical, just bigger. That's the genericness: the
+       effect answered "something was committed," never "what."
 
-       He is right, and the first version missed the point of his own request.
-       DETONATE in murmuration is not a commit button — the sky objects. Three
-       or more pressures at once electrifies it white-blue even with no paranoia
-       in the mix, because "the world itself objects". Attrition already loads
-       world.js and seed.js, so all of this was sitting here unused; the button
-       was applying numbers in silence.
-
-       Scale follows what was actually committed: how many changes, how hard,
-       and over which colony. A single nudge gets a flicker; a five-slider
-       broadside gets the compound storm. */
+       Removed rather than tuned — heat.js's TACTIC marker below already
+       answers "the world noticed a deliberate action," per-location and
+       restrained, without a screen-wide bolt show standing in for it.
+       world.js's strikeLightning/drawLightning stay as they are: seed.js
+       still uses them for the open-world paranoia trait, a different,
+       already-tuned use this wasn't touching. */
     const n=names.length, compound = n>=3;
     const w = k26 && k26.world;
-    if(w && w.strikeLightning){
-      for(const c of ['A','B']) if(hit[c])
-        w.strikeLightning(c, Math.max(0.35, force||0.5), {compound});
-    }
-    // and mark it on the heat map — an operator action is a TACTIC, the one
+    // mark it on the heat map — an operator action is a TACTIC, the one
     // heat channel reserved for something deliberate having just happened
     const H = window.MurmurationModules.Attrition.heat;
     if(H && w){
