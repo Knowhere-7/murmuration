@@ -1202,30 +1202,44 @@
   function toggleWorld(){
     const closed=document.getElementById('worldpanel').classList.toggle('collapsed');
     document.body.classList.toggle('world-closed', closed);
+    _userClosed.world = closed;   // remember the operator's own choice
   }
 
-  /* TWO PANELS NEED ROOM. Together they are 620px of glass; below that the
-     range is a sliver and the two collide over each other. So narrow viewports
-     start with both stowed and the edge tabs (WORLD left, LOBO right) as the
-     way back in — the sim keeps the whole screen, which is the point.
-     Only the INITIAL state is automatic: once the operator opens a panel by
-     hand, a later resize must not reach in and shut it again. */
-  let _autoStowDone=false;
-  function autoStowPanels(force){
-    const need=980, narrow=window.innerWidth<need;
-    if(!force && _autoStowDone) return;
+  /* TWO PANELS NEED ROOM. Together they are 620px of glass — below a
+     comfortable margin past that, the map itself gets squeezed to a sliver
+     even though nothing is broken. Verified directly (2026-09-16): at 687px
+     with both panels open, the map was reduced to a 67px strip — reads as
+     "nothing renders" even though every pixel is doing exactly what it was
+     told to.
+     REWRITTEN (2026-09-16): the old version only ever checked ONCE, at
+     initial load — "once the operator opens a panel by hand, a later resize
+     must not reach in and shut it again." That was the actual bug: if the
+     window (or effective zoom) later shrank, the panels stayed wherever
+     that one-time check left them, with nothing left to protect the map.
+     Now it re-checks on every resize AND on visualViewport resize (pinch
+     zoom). The safety half is unconditional — the map is never allowed to
+     be squeezed, no matter how the panels got open. The courtesy half
+     respects intent one direction only: it will re-open a panel once there
+     is room again, but never against an operator's own explicit close. */
+  const _userClosed = { panel:false, world:false };
+  function autoStowPanels(){
+    const need=1240, narrow=window.innerWidth<need;   // >=620 for the map too, not just the panels
     const p=document.getElementById('panel'), w=document.getElementById('worldpanel');
     if(!p||!w) return;
-    p.classList.toggle('collapsed', narrow);
-    w.classList.toggle('collapsed', narrow);
-    document.body.classList.toggle('panel-closed', narrow);
-    document.body.classList.toggle('world-closed', narrow);
-    _autoStowDone=true;
+    if (narrow) {
+      p.classList.add('collapsed'); document.body.classList.add('panel-closed');
+      w.classList.add('collapsed'); document.body.classList.add('world-closed');
+    } else {
+      if (!_userClosed.panel) { p.classList.remove('collapsed'); document.body.classList.remove('panel-closed'); }
+      if (!_userClosed.world) { w.classList.remove('collapsed'); document.body.classList.remove('world-closed'); }
+    }
+    if (k26) setTimeout(sizeCanvas, 260);
   }
 
   function togglePanel(){
     const closed=document.getElementById('panel').classList.toggle('collapsed');
     document.body.classList.toggle('panel-closed', closed);
+    _userClosed.panel = closed;   // remember the operator's own choice
     if(k26) setTimeout(sizeCanvas,260);
   }
 
@@ -1636,7 +1650,13 @@
     raf=requestAnimationFrame(frame);
   }
 
-  window.addEventListener('resize',()=>{ if(k26) sizeCanvas(); });
+  window.addEventListener('resize',()=>{ if(k26) sizeCanvas(); autoStowPanels(); });
+  // Pinch/trackpad zoom drives the Visual Viewport, which does not reliably
+  // fire a plain window 'resize' the same way an actual window resize does —
+  // this is what let the panel-collision state survive a zoom untouched.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => { if (k26) sizeCanvas(); autoStowPanels(); });
+  }
   build();
   autoStowPanels();
   syncWeather();
