@@ -511,7 +511,7 @@ window.MurmurationModules.World = class World {
     // cant exceed 150 it slows the visuals to a glitchy crawl." Same shape as
     // PER_COLONY_CAP below (spawnColonyReinforcements) — a live-population
     // ceiling, checked at spawn time, independent of the uncapped lifetime tally.
-    const LOBO_LIVE_CAP = 150;
+    const LOBO_LIVE_CAP = 200;   // testing a higher ceiling — 150 was the last known-smooth number (2026-09-15)
     const liveU = this.agents.filter(a => a.colony === 'U' && !a.seppukuDone).length;
     const room = LOBO_LIVE_CAP - liveU;
     if (room <= 0) {
