@@ -510,7 +510,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         desc:'a cavitation snap detonates at RANGE on the marked vanguard — no contact needed; killing the head collapses the wave\'s cohesion. costs the snapper energy (the claw must recock)' },
       { id:'cordyceps', trait:'Cordyceps (Ophiocordyceps unilateralis)', kind:'offense',
         unlocked:{A:true,B:false}, _innate:true, dur:90, cd:320,   // KNOWHERE innate — the POSSESSION-BREAKER: takeover, not a burst
-        desc:'the tactician\'s answer to a seated occupation: infiltrators spore the FRAYED occupiers (mimic loosened LOBO\'s grip first), the fungus seizes their motor control, walks them OFF the crown, kills them after incubation and FRUITS into a neighbour — LOBO\'s own pawns clear the crown. opens the throttle window so it sticks; kills feed honor' },
+        desc:'the tactician\'s answer to a seated occupation: infiltrators spore the FRAYED occupiers (mimic loosened LOBO\'s grip first), the fungus seizes their motor control, walks them OFF the crown, then HUNTS the nearest still-clean LOBO agent — contact spores the target and pops the host in the same beat. LOBO\'s own pawns clear the crown, one hop at a time. opens the throttle window so it sticks; kills feed honor' },
       { id:'cephalopodCamouflage', trait:'Cephalopod Camouflage (Sepia)', kind:'defense',
         unlocked:{A:false,B:false}, dur:120, cd:200,   // retired from Knowhere innate — now an option for all
         desc:'the king pattern-breaks — attackers lose their target lock for a beat' },
@@ -1123,13 +1123,19 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       // SEIZE — the possession-breaker. NOT a burst: it turns LOBO's own seated
       // occupiers into the thing that clears the crown. Chains off mimic — only a
       // FRAYED occupier (obey already loosened, `_mimicDisrupted`) can be spored.
-      const seatedZone = this.kings.captureR*1.6, incub=40, spreadR=34, MAXNEW=3;
-      // v2 REALISTIC PROPAGATION (Ghost 2026-08-31): a bounded outbreak, not a one-shot and not an
-      // unbounded chain. A fruiting host walks toward its own kind and spores a second, but only
-      // CASCADE_MAXGEN generations deep and on a SHORT window (FRUIT_INCUB) — the natural throttle.
-      // The cap is what keeps a cascade against a PLANARIAN-reviving LOBO from minting honor forever
-      // (the farm trap, [[project_immortal_lobo_sealed_test]]). Tunable, not assumed.
-      const CASCADE_MAXGEN=2, FRUIT_INCUB=14;
+      const seatedZone = this.kings.captureR*1.6, incub=40, MAXNEW=3;
+      // v3 INFECT-THEN-DIE (Ghost 2026-09-17): once seized, a host doesn't sit on a timer —
+      // it actively HUNTS the nearest still-clean LOBO agent, and the moment it reaches one,
+      // it spores that agent and pops in the same beat. One host, one spread, then it's spent.
+      // NO GENERATION CAP (Ghost 2026-09-17, "scale naturally, and accordingly") — and this is
+      // safe to leave uncapped, unlike v2: every pop is 1-in-1-out (a host converts exactly one
+      // existing LOBO into its successor, then dies), so the chain can never OUTGROW the wave —
+      // it's bounded by however many hostiles actually showed up, not by an arbitrary number.
+      // No new agents are minted, so this is not the farm-trap risk from
+      // [[project_immortal_lobo_sealed_test]] (that was about regeneration/reproduction; this
+      // only relays an existing, finite population toward its own end). Short post-infection
+      // incubation (FRUIT_INCUB) still applies, so a cascade unfolds in beats, not instantly.
+      const FRUIT_INCUB=14, INFECT_R=10, HUNT_TIMEOUT=90;
       const planters = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
       let newInf=0, cleared=0;
       // 1) PLANT — spore the frayed occupiers sitting on the crown
@@ -1146,26 +1152,35 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
           if(nb && nb.energy!=null) nb.energy=Math.max(0, nb.energy-0.05);
         }
       }
-      // 2) EXPRESS — the seized are compelled to LEAVE the crown; at incubation's end
-      //    they erupt (die → honor harvest) and FRUIT into a still-seated neighbour.
+      // 2) EXPRESS — the seized are compelled to LEAVE the crown, then HUNT: the fungus
+      //    walks its host toward the nearest still-clean neighbour. Reaching one is the
+      //    trigger — not a clock: contact spores the target AND pops the host in the same
+      //    beat (erupt → honor harvest). A host that finds no one within HUNT_TIMEOUT pops
+      //    anyway — bounded, never an eternal husk wandering the field.
       for(const u of threat){
         if(!u._cordyceps) continue;
         u._cordycepsGlow = Math.min(1.6, (u._cordycepsGlow||0)+0.03);
         const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
         u.vx += ((u.x-home.x)/d)*0.14; u.vy += ((u.y-home.y)/d)*0.14;   // driven off the mark (seize: clear the crown)
-        // SEEK ITS OWN KIND — the ophiocordyceps compulsion: the fungus walks the host toward the
-        // nearest still-clean neighbour so the spore actually reaches a second body (outbreak, not luck).
+        if(this.world.time < u._cordyceps) continue;                    // still incubating — not hunting yet
+        // SEEK ITS OWN KIND — the ophiocordyceps compulsion: beeline for the nearest
+        // not-yet-infected neighbour so the spore reaches a second body (outbreak, not luck).
         let kin=null, kd=1e9;
         for(const w of threat){ if(w===u||w.seppukuDone||w._cordyceps) continue;
           const dd=Math.hypot(w.x-u.x,w.y-u.y); if(dd<kd){kd=dd;kin=w;} }
-        if(kin){ const kk=kd||1; u.vx += ((kin.x-u.x)/kk)*0.10; u.vy += ((kin.y-u.y)/kk)*0.10; }
-        if(this.world.time >= u._cordyceps){
-          u.seppukuDone=true; u._attritionEjected=true; cleared++;       // erupt (conserved honor via _harvestKills)
-          // FRUIT — chain into that neighbour, but only CASCADE_MAXGEN deep and on the SHORT window,
-          // so the pair pops in quick succession and the cascade dies out fast (the throttle).
-          if((u._cordycepsGen||0) < CASCADE_MAXGEN && kin && !kin.seppukuDone && kd < spreadR){
+        if(kin){
+          const kk=kd||1; u.vx += ((kin.x-u.x)/kk)*0.22; u.vy += ((kin.y-u.y)/kk)*0.22;
+          if(kd < INFECT_R){
+            // CONTACT — infect the one target, then pop. One host, one spread, then it's done.
+            // Uncapped: as long as a still-clean neighbour exists, the relay keeps going.
+            u.seppukuDone=true; u._attritionEjected=true; cleared++;      // erupt (conserved honor via _harvestKills)
             kin._cordyceps=this.world.time+FRUIT_INCUB; kin._cordycepsGlow=1; kin._cordycepsGen=(u._cordycepsGen||0)+1;
+            continue;
           }
+        }
+        u._cordycepsHuntSince = u._cordycepsHuntSince || this.world.time;
+        if(this.world.time - u._cordycepsHuntSince > HUNT_TIMEOUT){
+          u.seppukuDone=true; u._attritionEjected=true; cleared++;       // no reachable target in time — pop anyway
         }
       }
       // 3) STICK — an eviction opens the same throttle window the bombardier uses, so
