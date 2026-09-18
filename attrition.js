@@ -810,6 +810,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const _n = this._need[colony];
       _n.siege*=0.996; _n.swarm*=0.996; _n.deficit*=0.996; _n.grind*=0.999;
       const _home = this.kings.home(colony);
+      this._cordycepsTick(colony, _home);  // unconditional — seized hosts keep hunting whether or not cordyceps is currently "active"
       const _nearCrown = threat.filter(u=>Math.hypot(u.x-_home.x,u.y-_home.y) < this.kings.captureR*2).length;
       if(this.kings.captured[colony]) _n.siege += 0.6;            // your crown is being held
       _n.siege += _nearCrown*0.04;                                // enemies at the gate
@@ -1123,22 +1124,11 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       // SEIZE — the possession-breaker. NOT a burst: it turns LOBO's own seated
       // occupiers into the thing that clears the crown. Chains off mimic — only a
       // FRAYED occupier (obey already loosened, `_mimicDisrupted`) can be spored.
+      // PLANT ONLY here — the ongoing hunt/infect/pop for hosts already seized lives
+      // in `_cordycepsTick`, called unconditionally every tick (see why below).
       const seatedZone = this.kings.captureR*1.6, incub=40, MAXNEW=3;
-      // v3 INFECT-THEN-DIE (Ghost 2026-09-17): once seized, a host doesn't sit on a timer —
-      // it actively HUNTS the nearest still-clean LOBO agent, and the moment it reaches one,
-      // it spores that agent and pops in the same beat. One host, one spread, then it's spent.
-      // NO GENERATION CAP (Ghost 2026-09-17, "scale naturally, and accordingly") — and this is
-      // safe to leave uncapped, unlike v2: every pop is 1-in-1-out (a host converts exactly one
-      // existing LOBO into its successor, then dies), so the chain can never OUTGROW the wave —
-      // it's bounded by however many hostiles actually showed up, not by an arbitrary number.
-      // No new agents are minted, so this is not the farm-trap risk from
-      // [[project_immortal_lobo_sealed_test]] (that was about regeneration/reproduction; this
-      // only relays an existing, finite population toward its own end). Short post-infection
-      // incubation (FRUIT_INCUB) still applies, so a cascade unfolds in beats, not instantly.
-      const FRUIT_INCUB=14, INFECT_R=10, HUNT_TIMEOUT=90;
       const planters = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
-      let newInf=0, cleared=0;
-      // 1) PLANT — spore the frayed occupiers sitting on the crown
+      let newInf=0;
       for(const u of threat){
         if(u._cordyceps) continue;
         const d=Math.hypot(u.x-home.x,u.y-home.y);
@@ -1152,58 +1142,100 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
           if(nb && nb.energy!=null) nb.energy=Math.max(0, nb.energy-0.05);
         }
       }
-      // 2) EXPRESS — the seized are compelled to LEAVE the crown, then HUNT: the fungus
-      //    walks its host toward the nearest still-clean neighbour. Reaching one is the
-      //    trigger — not a clock: contact spores the target AND pops the host in the same
-      //    beat (erupt → honor harvest). A host that finds no one within HUNT_TIMEOUT pops
-      //    anyway — bounded, never an eternal husk wandering the field.
-      //
-      // HUNTS THE WHOLE WAVE, NOT JUST THE CROWN (Ghost 2026-09-17, "seems as if they
-      // may be popping when they get close to the king — no spreading out"): `threat`
-      // is capped to `_threatTo`'s near-crown radius (this.threatR, 130px) — fine for
-      // WHO GETS SEEDED (only a frayed occupier actually at the crown), wrong for who a
-      // seized host can chase. Scoping the hunt to that same small bubble, on top of
-      // LOBO's own much stronger pull toward the king, meant an infected host could
-      // basically never range far enough to find or be found by kin outside it — the
-      // relay looked crown-locked because its whole search space WAS the crown. The
-      // hunt now searches every live LOBO agent on the field, not just the ones still
-      // sitting on the crown.
-      const allU = this.world.agents.filter(a=>a.colony==='U' && !a.seppukuDone);
-      for(const u of allU){
-        if(!u._cordyceps) continue;
-        u._cordycepsGlow = Math.min(1.6, (u._cordycepsGlow||0)+0.03);
-        const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
-        u.vx += ((u.x-home.x)/d)*0.14; u.vy += ((u.y-home.y)/d)*0.14;   // driven off the mark (seize: clear the crown)
-        if(this.world.time < u._cordyceps) continue;                    // still incubating — not hunting yet
-        // SEEK ITS OWN KIND — the ophiocordyceps compulsion: beeline for the nearest
-        // not-yet-infected neighbour, anywhere on the field, so the spore reaches a
-        // second body (outbreak, not luck) instead of only ever finding crown-huggers.
-        let kin=null, kd=1e9;
+    }
+  }
+
+  /** CORDYCEPS — the ongoing hunt/infect/pop for already-seized hosts, run every
+      tick for every colony, UNCONDITIONALLY (see below for why this had to move
+      out of `_express`).
+
+      v3 INFECT-THEN-DIE (Ghost 2026-09-17): once seized, a host doesn't sit on a
+      timer — it actively HUNTS a still-clean LOBO agent, and the moment it reaches
+      one, it spores that agent and pops in the same beat. One host, one spread,
+      then it's spent.
+
+      NO GENERATION CAP (Ghost 2026-09-17, "scale naturally, and accordingly") —
+      safe to leave uncapped, unlike v2: every pop is 1-in-1-out (a host converts
+      exactly one existing LOBO into its successor, then dies), so the chain can
+      never OUTGROW the wave — it's bounded by however many hostiles actually
+      showed up, not by an arbitrary number. No new agents are minted, so this is
+      not the farm-trap risk from [[project_immortal_lobo_sealed_test]] (that was
+      about regeneration/reproduction; this only relays an existing, finite
+      population toward its own end).
+
+      HUNTS THE WHOLE WAVE, NOT JUST THE CROWN (Ghost 2026-09-17, "seems as if
+      they may be popping when they get close to the king — no spreading out"):
+      the hunt used to search `threat`, which `_threatTo` caps to this.threatR
+      (130px) of the crown — fine for WHO GETS SEEDED, wrong for who a seized
+      host can chase. Now searches every live LOBO agent on the field.
+
+      PREFER DISTANT TARGETS (Ghost 2026-09-17) — two things had to change together
+      for this to actually work, both found by testing, not guessed:
+        1. Literal farthest-on-the-field FAILED outright: zero successful
+           infections, every host timed out or died to ordinary combat before
+           finishing a cross-map trip, because the wave dies faster (~450 ticks
+           for 200 agents) than a full traverse takes. Rebalanced to the NEAREST
+           candidate beyond MIN_HUNT_R — distant relative to the immediate huddle,
+           not distant absolutely.
+        2. Still zero chains even so — because this whole method used to be
+           `_express`'s cordyceps branch, which ONLY runs while `active[key]>0`
+           (a ~90-tick window per activation, per `dur`). A host mid-hunt when
+           that window closed just FROZE — no glow, no movement, no timeout —
+           until cordyceps fired again (cd:320). A host is a standing fact once
+           seeded, not a burst; it has to keep hunting whether or not the
+           reaction that planted it is currently "active". Moving this out to an
+           unconditional per-tick call fixed it.
+        3. LOCK ON, don't re-pick every tick — re-running "nearest beyond
+           MIN_HUNT_R" fresh each tick meant the qualifying set reshuffled as the
+           wave thinned, so the pull direction flickered between targets instead
+           of accumulating toward one. A host now commits to one target (by id)
+           and keeps it until contact, death, or someone else infects it first.
+  */
+  _cordycepsTick(colony, home){
+    const FRUIT_INCUB=14, INFECT_R=10, HUNT_TIMEOUT=160, MIN_HUNT_R=90;
+    const allU = this.world.agents.filter(a=>a.colony==='U' && !a.seppukuDone);
+    let cleared=0;
+    for(const u of allU){
+      if(!u._cordyceps) continue;
+      u._cordycepsGlow = Math.min(1.6, (u._cordycepsGlow||0)+0.03);
+      const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
+      u.vx += ((u.x-home.x)/d)*0.14; u.vy += ((u.y-home.y)/d)*0.14;   // driven off the mark (seize: clear the crown)
+      if(this.world.time < u._cordyceps) continue;                    // still incubating — not hunting yet
+      let kin = u._cordycepsTargetId!=null
+        ? allU.find(w=>w.id===u._cordycepsTargetId && w!==u && !w.seppukuDone && !w._cordyceps)
+        : null;
+      if(!kin){
+        let kd=1e9, nearAny=null, nearAnyD=1e9;
         for(const w of allU){ if(w===u||w.seppukuDone||w._cordyceps) continue;
-          const dd=Math.hypot(w.x-u.x,w.y-u.y); if(dd<kd){kd=dd;kin=w;} }
-        if(kin){
-          const kk=kd||1; u.vx += ((kin.x-u.x)/kk)*0.22; u.vy += ((kin.y-u.y)/kk)*0.22;
-          if(kd < INFECT_R){
-            // CONTACT — infect the one target, then pop. One host, one spread, then it's done.
-            // Uncapped: as long as a still-clean neighbour exists, the relay keeps going.
-            u.seppukuDone=true; u._attritionEjected=true; cleared++;      // erupt (conserved honor via _harvestKills)
-            kin._cordyceps=this.world.time+FRUIT_INCUB; kin._cordycepsGlow=1; kin._cordycepsGen=(u._cordycepsGen||0)+1;
-            continue;
-          }
-        }
-        u._cordycepsHuntSince = u._cordycepsHuntSince || this.world.time;
-        if(this.world.time - u._cordycepsHuntSince > HUNT_TIMEOUT){
-          u.seppukuDone=true; u._attritionEjected=true; cleared++;       // no reachable target in time — pop anyway
+          const dd=Math.hypot(w.x-u.x,w.y-u.y);
+          if(dd<nearAnyD){nearAnyD=dd;nearAny=w;}
+          if(dd>=MIN_HUNT_R && dd<kd){kd=dd;kin=w;} }
+        if(!kin) kin=nearAny;
+        u._cordycepsTargetId = kin ? kin.id : null;
+      }
+      if(kin){
+        const kd = Math.hypot(kin.x-u.x,kin.y-u.y);
+        const kk=kd||1; u.vx += ((kin.x-u.x)/kk)*0.32; u.vy += ((kin.y-u.y)/kk)*0.32;
+        if(kd < INFECT_R){
+          // CONTACT — infect the one target, then pop. One host, one spread, then it's done.
+          // Uncapped: as long as a still-clean neighbour exists, the relay keeps going.
+          u.seppukuDone=true; u._attritionEjected=true; cleared++;      // erupt (conserved honor via _harvestKills)
+          kin._cordyceps=this.world.time+FRUIT_INCUB; kin._cordycepsGlow=1; kin._cordycepsGen=(u._cordycepsGen||0)+1;
+          continue;
         }
       }
-      // 3) STICK — an eviction opens the same throttle window the bombardier uses, so
-      //    LOBO cannot instantly re-seat the crown the takeover just emptied.
-      if(cleared){
-        this.kings._crownClearedUntil = this.kings._crownClearedUntil || {};
-        this.kings._crownClearedUntil[colony] = this.world.time + 140;
-        window.MurmurationModules.AttritionKnowledge.recordOutcome({
-          event:'occupation_broken', colony, cleared, gene:'cordyceps' });
+      u._cordycepsHuntSince = u._cordycepsHuntSince || this.world.time;
+      if(this.world.time - u._cordycepsHuntSince > HUNT_TIMEOUT){
+        u.seppukuDone=true; u._attritionEjected=true; cleared++;       // no reachable target in time — pop anyway
       }
+    }
+    // STICK — an eviction opens the same throttle window the bombardier uses, so
+    // LOBO cannot instantly re-seat the crown the takeover just emptied.
+    if(cleared){
+      this.kings._crownClearedUntil = this.kings._crownClearedUntil || {};
+      this.kings._crownClearedUntil[colony] = this.world.time + 140;
+      window.MurmurationModules.AttritionKnowledge.recordOutcome({
+        event:'occupation_broken', colony, cleared, gene:'cordyceps' });
     }
   }
 
