@@ -17,6 +17,16 @@
 node_modules
 _bc_backup
 
+# Added 2026-09-17. Same gap as above, caught while deploying Cordyceps v3: none
+# of these are git-tracked (.gitignore already keeps them out of source), but
+# .assetsignore is the ONLY thing wrangler's asset uploader actually reads — it
+# walks the real filesystem, so an untracked-but-present file still ships. Found
+# live: .remember/'s local session logs (Windows file paths, no credentials),
+# .netlify/'s stale site ID + local absolute path, and a stray simulation save.
+.remember
+.netlify
+*-swarm.json
+
 # Config and ignore files are not site content.
 wrangler.jsonc
 .assetsignore
