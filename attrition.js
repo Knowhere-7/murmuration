@@ -1157,16 +1157,29 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       //    trigger — not a clock: contact spores the target AND pops the host in the same
       //    beat (erupt → honor harvest). A host that finds no one within HUNT_TIMEOUT pops
       //    anyway — bounded, never an eternal husk wandering the field.
-      for(const u of threat){
+      //
+      // HUNTS THE WHOLE WAVE, NOT JUST THE CROWN (Ghost 2026-09-17, "seems as if they
+      // may be popping when they get close to the king — no spreading out"): `threat`
+      // is capped to `_threatTo`'s near-crown radius (this.threatR, 130px) — fine for
+      // WHO GETS SEEDED (only a frayed occupier actually at the crown), wrong for who a
+      // seized host can chase. Scoping the hunt to that same small bubble, on top of
+      // LOBO's own much stronger pull toward the king, meant an infected host could
+      // basically never range far enough to find or be found by kin outside it — the
+      // relay looked crown-locked because its whole search space WAS the crown. The
+      // hunt now searches every live LOBO agent on the field, not just the ones still
+      // sitting on the crown.
+      const allU = this.world.agents.filter(a=>a.colony==='U' && !a.seppukuDone);
+      for(const u of allU){
         if(!u._cordyceps) continue;
         u._cordycepsGlow = Math.min(1.6, (u._cordycepsGlow||0)+0.03);
         const d=Math.hypot(u.x-home.x,u.y-home.y)||1;
         u.vx += ((u.x-home.x)/d)*0.14; u.vy += ((u.y-home.y)/d)*0.14;   // driven off the mark (seize: clear the crown)
         if(this.world.time < u._cordyceps) continue;                    // still incubating — not hunting yet
         // SEEK ITS OWN KIND — the ophiocordyceps compulsion: beeline for the nearest
-        // not-yet-infected neighbour so the spore reaches a second body (outbreak, not luck).
+        // not-yet-infected neighbour, anywhere on the field, so the spore reaches a
+        // second body (outbreak, not luck) instead of only ever finding crown-huggers.
         let kin=null, kd=1e9;
-        for(const w of threat){ if(w===u||w.seppukuDone||w._cordyceps) continue;
+        for(const w of allU){ if(w===u||w.seppukuDone||w._cordyceps) continue;
           const dd=Math.hypot(w.x-u.x,w.y-u.y); if(dd<kd){kd=dd;kin=w;} }
         if(kin){
           const kk=kd||1; u.vx += ((kin.x-u.x)/kk)*0.22; u.vy += ((kin.y-u.y)/kk)*0.22;
