@@ -802,6 +802,8 @@
      came from in the log, so the posture is never unexplained. */
   const SWITCH_KEY = 'attrition.switches/1';
   let _switchSaveMuted = false;           // set while a URL parameter drives the toggles
+  // Invariant: toggleAutoAttack/toggleAutoReplenish must stay synchronous. The mute
+  // window is safe only because no click can run inside it; an await would leak it.
   function saveSwitches(){
     if(_switchSaveMuted) return;
     try { localStorage.setItem(SWITCH_KEY, JSON.stringify({ attack: autoAttack.on, replenish: autoReplenish.on })); } catch(e){}
