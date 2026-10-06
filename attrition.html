@@ -752,6 +752,7 @@
     log(autoAttack.on
       ? '⏲ AUTO ATTACK ARMED — LOBO attacks unattended, mean ' + autoAttack.cadence + ' ticks between waves'
       : '⏲ AUTO ATTACK OFF — LOBO waits for the operator again', 'warn');
+    saveSwitches();
   }
 
   /* AUTO REPLENISH — the colonies' half of an unending fight. Under continuous
@@ -789,7 +790,47 @@
     log(autoReplenish.on
       ? '♻ AUTO REPLENISH ARMED — a colony at ' + autoReplenish.floor + ' tops BOTH back to ' + autoReplenish.target
       : '♻ AUTO REPLENISH OFF', 'warn');
+    saveSwitches();
   }
+
+  /* SWITCH MEMORY — the range keeps its posture across a reload, so an unattended
+     run is not silently disarmed by a refresh (DESIGN_INTENT 4.1/4.2: a range that
+     falls back to idle without saying so is a silent failure). Per browser.
+     Manual clicks are remembered. ?auto=1 arms AUTO ATTACK + AUTO REPLENISH and
+     ?auto=0 disarms both FOR THIS VISIT ONLY — a shared link never changes what a
+     plain /attrition does on someone's next visit. Every restore says where it
+     came from in the log, so the posture is never unexplained. */
+  const SWITCH_KEY = 'attrition.switches/1';
+  let _switchSaveMuted = false;           // set while a URL parameter drives the toggles
+  // Invariant: toggleAutoAttack/toggleAutoReplenish must stay synchronous. The mute
+  // window is safe only because no click can run inside it; an await would leak it.
+  function saveSwitches(){
+    if(_switchSaveMuted) return;
+    try { localStorage.setItem(SWITCH_KEY, JSON.stringify({ attack: autoAttack.on, replenish: autoReplenish.on })); } catch(e){}
+  }
+  function restoreSwitches(){
+    const q = new URLSearchParams(location.search).get('auto');
+    const fromUrl = (q === '1' || q === '0');
+    let want = null, source;
+    if(fromUrl){
+      want = { attack: q === '1', replenish: q === '1' };
+      source = '?auto=' + q + ' (this visit only, not saved)';
+    } else {
+      try { want = JSON.parse(localStorage.getItem(SWITCH_KEY) || 'null'); } catch(e){}
+      source = 'what this browser saved last time';
+    }
+    if(!want || typeof want !== 'object') return;   // nothing saved, or unreadable: stay at the defaults
+    log('⟲ SWITCH MEMORY — restoring from ' + source, 'warn');
+    _switchSaveMuted = fromUrl;
+    try {
+      if(!!want.attack !== autoAttack.on) toggleAutoAttack();
+      if(!!want.replenish !== autoReplenish.on) toggleAutoReplenish();
+    } finally { _switchSaveMuted = false; }
+  }
+  // Restore only once the buttons are parsed, wherever this script ends up living,
+  // so a label can never read OFF while its switch is ON.
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restoreSwitches);
+  else restoreSwitches();
 
   // AUTO EVOLVE — the colonies GROW on their own: each unlocks its next locked gene on a
   // cadence (staggered so they don't move in lockstep), via the same path the ▶ button uses
