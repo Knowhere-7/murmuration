@@ -752,6 +752,7 @@
     log(autoAttack.on
       ? '⏲ AUTO ATTACK ARMED — LOBO attacks unattended, mean ' + autoAttack.cadence + ' ticks between waves'
       : '⏲ AUTO ATTACK OFF — LOBO waits for the operator again', 'warn');
+    saveSwitches();
   }
 
   /* AUTO REPLENISH — the colonies' half of an unending fight. Under continuous
@@ -789,7 +790,29 @@
     log(autoReplenish.on
       ? '♻ AUTO REPLENISH ARMED — a colony at ' + autoReplenish.floor + ' tops BOTH back to ' + autoReplenish.target
       : '♻ AUTO REPLENISH OFF', 'warn');
+    saveSwitches();
   }
+
+  /* SWITCH MEMORY — the range keeps its posture across a reload, so an unattended
+     run is not silently disarmed by a refresh (DESIGN_INTENT 4.1/4.2: a range that
+     falls back to idle without saying so is a silent failure). Per browser.
+     ?auto=1 arms AUTO ATTACK + AUTO REPLENISH on open; ?auto=0 disarms both.
+     Either way the choice is remembered for the next visit. */
+  const SWITCH_KEY = 'attrition.switches/1';
+  function saveSwitches(){
+    try { localStorage.setItem(SWITCH_KEY, JSON.stringify({ attack: autoAttack.on, replenish: autoReplenish.on })); } catch(e){}
+  }
+  (function restoreSwitches(){
+    let want = null;
+    const q = new URLSearchParams(location.search).get('auto');
+    if(q === '1') want = { attack: true, replenish: true };
+    else if(q === '0') want = { attack: false, replenish: false };
+    else { try { want = JSON.parse(localStorage.getItem(SWITCH_KEY) || 'null'); } catch(e){} }
+    if(!want) return;
+    if(!!want.attack !== autoAttack.on) toggleAutoAttack();
+    if(!!want.replenish !== autoReplenish.on) toggleAutoReplenish();
+    saveSwitches();                       // a no-op toggle still records the choice
+  })();
 
   // AUTO EVOLVE — the colonies GROW on their own: each unlocks its next locked gene on a
   // cadence (staggered so they don't move in lockstep), via the same path the ▶ button uses
