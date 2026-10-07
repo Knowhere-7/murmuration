@@ -27,8 +27,14 @@
   };
 
   let failures = 0;                 // consecutive transport failures
-  const MAX_FAILURES = 4;           // then stop trying until re-enabled
+  const MAX_FAILURES = 4;           // then the breaker opens
+  const RETRY_MS = 60000;           // ...and lets ONE probe through per minute (half-open)
+  let lastProbe = 0;
   let sent = 0, dropped = 0;
+  // 2026-10-07: the breaker used to stay open until a page reload. On an
+  // unattended range (headless, nobody reloading) a single GEA restart would
+  // silence it for good. Half-open: after MAX_FAILURES, one lesson per minute is
+  // still tried; the first success closes the breaker again.
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -55,7 +61,12 @@
   }
 
   function forward(lesson) {
-    if (!ENABLED() || failures >= MAX_FAILURES) { dropped++; return; }
+    if (!ENABLED()) { dropped++; return; }
+    if (failures >= MAX_FAILURES) {
+      const now = Date.now();
+      if (now - lastProbe < RETRY_MS) { dropped++; return; }
+      lastProbe = now;                                     // half-open: this one goes through
+    }
     if (typeof fetch !== 'function') { dropped++; return; }
     let body;
     try { body = JSON.stringify(shape(lesson)); } catch (_) { dropped++; return; }
@@ -68,7 +79,7 @@
 
   window.GEAWriter = {
     record: forward,
-    get stats() { return { sent, dropped, failures, live: ENABLED() && failures < MAX_FAILURES }; },
+    get stats() { return { sent, dropped, failures, live: ENABLED() && failures < MAX_FAILURES, halfOpen: failures >= MAX_FAILURES }; },
     reset() { failures = 0; }                              // call after the service comes back
   };
 })();
