@@ -434,8 +434,18 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     this.IMMUNE_RESERVE    = 0.30;  // share of free members the escalation may never spend
     this.IMMUNE_REFRACTORY = 600;   // ticks after an overwhelming response with recognition off
     this.IMMUNE_SURGE      = 2;     // "overwhelming": reactions fired on recognition last this many times longer
-    this._immune = { A:{ refractoryUntil:0, last:null, fired:0, held:0 }, B:{ refractoryUntil:0, last:null, fired:0, held:0 } };
+    this._immune = { A:{ refractoryUntil:0, last:null, fired:0, held:0, cut:0 }, B:{ refractoryUntil:0, last:null, fired:0, held:0, cut:0 } };
     this._surge  = { A:false, B:false };   // this tick's confirmation is an overwhelming one
+    /* SR-026 Wayne Review of SR-025 (2026-10-16): found and handled before deployment.
+       A3 · an adversary who has read this code would time its real strike for a refractory window
+            of known length. The window's length is drawn fresh each time (0.5x-1.5x), so it can't
+            be timed. The random source is injectable so tests can seed it.
+       A4 · the reserve was checked only when the surge fired, while the surge kept body-committing
+            reactions (balling, the hunting party, mimics) running twice as long. Bait the surge,
+            then drain the reserve through those commitments. Now the reserve is re-checked EVERY
+            tick while a surge holds; if it is breached, the surge's extra time is cut at once. */
+    this.rand = () => Math.random();
+    this._surgeExtra = {};                 // key -> extra ticks a surge added (cut if the reserve breaks)
     // ── TACTICIAN DOCTRINE STATE (Ghost, 2026-08-29) — real coupling, not decoration ──
     // Intel is PRODUCED by the sentinel and CONSUMED by the strike; the sync window is
     // OPENED by the flash and READ by the snap. This is what makes each trait load-bearing:
@@ -741,6 +751,29 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
      only the unaligned adversary's marker is presented. Off while refractory: a repeated lure
      drains nothing. Drift and waning need nothing here: a changed or faded antigen record simply
      falls below the line. */
+  /** Free members (not king, not on guard) against all living non-king members. */
+  _reserve(colony){
+    const live = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing);
+    return { free: live.filter(a=>!a._attritionGuard).length, total: live.length };
+  }
+
+  /* A4: while a surge holds, the reserve is checked every tick. If it is breached, every surge
+     extension for that colony is cut back at once: the surge never outlives the reserve. */
+  _guardReserve(colony){
+    const keys = Object.keys(this._surgeExtra).filter(k => k.startsWith(colony+':'));
+    if (!keys.length) return;
+    const { free, total } = this._reserve(colony);
+    if (total > 0 && free / total >= this.IMMUNE_RESERVE) {
+      for (const k of keys) if (!(this.active[k] > 0)) delete this._surgeExtra[k];   // finished on its own
+      return;
+    }
+    for (const k of keys) {
+      this.active[k] = Math.max(0, (this.active[k]||0) - this._surgeExtra[k]);
+      delete this._surgeExtra[k];
+    }
+    this._immune[colony].cut++;
+  }
+
   _recognise(colony){
     if (this.world.time < this._immune[colony].refractoryUntil) return null;
     const A = window.MurmurationModules.Attrition;
@@ -813,12 +846,15 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const rec = this._recognise(colony);
       if (rec) {
         const st = this._immune[colony];
-        const free = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard).length;
-        const total = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing).length;
+        const { free, total } = this._reserve(colony);
         const reserveOk = total > 0 && free / total >= this.IMMUNE_RESERVE;
         st.last = { t: this.world.time, tactic: rec.tactic, memory: rec.memory, overwhelming: reserveOk, free, total };
         st.fired++;
-        if (reserveOk) { this._surge[colony] = true; st.refractoryUntil = this.world.time + this.IMMUNE_REFRACTORY; }
+        if (reserveOk) {
+          this._surge[colony] = true;
+          // A3: the window's length is unpredictable, so it cannot be timed from the code.
+          st.refractoryUntil = this.world.time + Math.round(this.IMMUNE_REFRACTORY * (0.5 + this.rand()));
+        }
         else st.held++;                     // recognised, fired ordinary: escalating would spend the reserve
         return true;
       }
@@ -871,6 +907,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       if(_Bh){ const _avg=(_Bh.honor.A+_Bh.honor.B+_Bh.honor.U)/3; if(_Bh.honor[colony]<_avg) _n.deficit += (_avg-_Bh.honor[colony])*0.08; } // losing the pool
       _n.grind += 0.004;                                          // memory/lineage — a slow, ever-present want
       const confirmed = this._confirm(colony, threat);
+      this._guardReserve(colony);          // SR-026 A4: no surge outlives the reserve
 
       // decay active reactions, keep expressing while live
       for(const r of this.reactions){
@@ -922,6 +959,7 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
         // Cooldowns are untouched, so the surge is bounded (FG-1) and cannot be farmed by repetition.
         const _surge = this._surge[colony];
         this.active[key] = (r.dur||1) * (_surge ? this.IMMUNE_SURGE : 1);
+        if (_surge) this._surgeExtra[key] = (r.dur||1) * (this.IMMUNE_SURGE - 1);   // A4: cut if the reserve breaks
         this.lastFired[key] = t;
         this.fireLog.unshift({ t, id:r.id, colony, msg:colony+' → '+r.trait+(_surge ? ' (immune surge)' : '') });
         if(this.fireLog.length>40) this.fireLog.pop();

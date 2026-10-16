@@ -99,6 +99,7 @@ test('the reserve: if escalating would spend it, the response fires but ordinary
 
 test('refractory: a repeated lure right after a surge goes back through quorum', () => {
   const { R, world, threat } = setup();
+  R.rand = () => 0.5;                                 // seeded: exactly 1.0x the base window
   assert.equal(R._confirm('A', threat), true);
   world.time += 50;                                   // the lure, moments later
   assert.equal(R._confirm('A', threat), false, 'one defender is not enough while refractory');
@@ -115,6 +116,48 @@ test('the surge doubles the duration of every reaction fired, and nothing else',
   const dur = (r.dur || 1) * (R._surge.A ? R.IMMUNE_SURGE : 1);
   assert.equal(dur, 60);
   assert.ok(src('attrition.js').includes("(r.dur||1) * (_surge ? this.IMMUNE_SURGE : 1)"), 'step() applies exactly this');
+});
+
+test('SR-026 A3: the refractory window cannot be timed from the code', () => {
+  const lengths = [0, 0.25, 0.5, 0.999].map(x => {
+    const { R, world, threat } = setup();
+    R.rand = () => x;
+    R._confirm('A', threat);
+    return R._immune.A.refractoryUntil - world.time;
+  });
+  assert.deepEqual(lengths, [300, 450, 600, 899], 'drawn fresh each time, 0.5x to 1.5x');
+  const { R, world, threat } = setup();
+  R.rand = () => 0;
+  R._confirm('A', threat);
+  world.time += 299;
+  assert.equal(R._confirm('A', threat), false, 'still refractory inside the drawn window');
+  world.time += 1;
+  assert.equal(R._confirm('A', threat), true, 'and recognises again once it closes');
+});
+
+test('SR-026 A4: a surge never outlives the reserve', () => {
+  const { R, world, threat } = setup({ free: 20 });
+  R._confirm('A', threat);
+  assert.equal(R._surge.A, true);
+  // a reaction fired under the surge: 30 ticks doubled to 60, 30 of them surge extension
+  R.active['A:thermalBalling'] = 60; R._surgeExtra['A:thermalBalling'] = 30;
+  R._guardReserve('A');
+  assert.equal(R.active['A:thermalBalling'], 60, 'reserve intact: the surge holds');
+  // the bait works: 15 of the 20 free members get drawn onto guard detail
+  world.agents.filter(a => a.colony === 'A' && !a._attritionGuard).slice(0, 16).forEach(a => { a._attritionGuard = true; });
+  R._guardReserve('A');
+  assert.equal(R.active['A:thermalBalling'], 30, 'reserve breached: the surge extension is cut at once');
+  assert.equal(R._immune.A.cut, 1, 'and the cut is counted');
+  assert.equal(Object.keys(R._surgeExtra).length, 0);
+});
+
+test('SR-026 A4 CONTROL: without the per-tick guard the surge keeps draining', () => {
+  const { R, world, threat } = setup({ free: 20 });
+  R._confirm('A', threat);
+  R.active['A:thermalBalling'] = 60; R._surgeExtra['A:thermalBalling'] = 30;
+  world.agents.filter(a => a.colony === 'A' && !a._attritionGuard).slice(0, 16).forEach(a => { a._attritionGuard = true; });
+  // the old behaviour: no guard is consulted
+  assert.equal(R.active['A:thermalBalling'], 60, 'the doubled commitment stands with the reserve gone');
 });
 
 test('the gate never writes immune memory', () => {
