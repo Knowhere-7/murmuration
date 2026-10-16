@@ -422,6 +422,20 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     // tick. A colony unlocks the LOCKED trait that best answers what is actually hurting it — not a
     // fixed ladder — so two colonies under different pressure evolve DIFFERENTLY (identity by experience).
     this._need = { A:{siege:0,swarm:0,deficit:0,grind:0}, B:{siege:0,swarm:0,deficit:0,grind:0} };
+    /* SR-025 (Ghost, 2026-10-16): "the single agent quorum alarm should be related to adaptive
+       immunity, meaning certain threats may need an immediate, overwhelming response" ... "but we
+       must also ensure enough resources are left in case this reaction is discovered".
+       One defender fires the colony ONLY when immune memory recognises a tactic LOBO is expressing
+       (a secondary response). Every other route to the bar stops at two. The overwhelming response
+       holds every reaction it fires for twice as long, and only while a protected reserve of free
+       members remains; afterwards the colony is refractory, so a repeated lure drains nothing.
+       The four numbers are tunable, not settled (SR-025). */
+    this.IMMUNE_RECOGNISE  = 0.30;  // memory strength that recognises a tactic
+    this.IMMUNE_RESERVE    = 0.30;  // share of free members the escalation may never spend
+    this.IMMUNE_REFRACTORY = 600;   // ticks after an overwhelming response with recognition off
+    this.IMMUNE_SURGE      = 2;     // "overwhelming": reactions fired on recognition last this many times longer
+    this._immune = { A:{ refractoryUntil:0, last:null, fired:0, held:0 }, B:{ refractoryUntil:0, last:null, fired:0, held:0 } };
+    this._surge  = { A:false, B:false };   // this tick's confirmation is an overwhelming one
     // ── TACTICIAN DOCTRINE STATE (Ghost, 2026-08-29) — real coupling, not decoration ──
     // Intel is PRODUCED by the sentinel and CONSUMED by the strike; the sync window is
     // OPENED by the flash and READ by the snap. This is what makes each trait load-bearing:
@@ -721,9 +735,31 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
     return this.world.agents.filter(a=>a.colony==='U' && !a.seppukuDone &&
       Math.hypot(a.x-home.x, a.y-home.y) < this.threatR);
   }
+  /* SR-025 recognition: does this colony's immune MEMORY know a tactic LOBO is expressing now?
+     Reads memory (formed only after a confirmed primary response, in immunity.js) and never writes
+     it, so a fast response cannot breed the memory that triggers the next one. Self-tolerance:
+     only the unaligned adversary's marker is presented. Off while refractory: a repeated lure
+     drains nothing. Drift and waning need nothing here: a changed or faded antigen record simply
+     falls below the line. */
+  _recognise(colony){
+    if (this.world.time < this._immune[colony].refractoryUntil) return null;
+    const A = window.MurmurationModules.Attrition;
+    const ev = A && A.loboEvolve, im = A && A.immunity;
+    if (!ev || !ev.expressedList || !im || !im.has || !im.has(colony)) return null;
+    if (im.isNotSelf && !im.isNotSelf('U')) return null;
+    const ag = (im.antigens && im.antigens[colony]) || {};
+    let best = null;
+    for (const k of ev.expressedList()) {
+      const m = ag[k] ? ag[k].memory : 0;
+      if (m >= this.IMMUNE_RECOGNISE && (!best || m > best.memory)) best = { tactic: k, memory: +m.toFixed(3) };
+    }
+    return best;
+  }
+
   _confirm(colony, threat){
     // QUORUM: count independent colony members who can also sense the threat.
     // Consensus, not a single alarm — the false-positive gate.
+    this._surge[colony] = false;
     if(threat.length===0) return false;
     /* FEINT (Anglerfish) — "split into probes too small to confirm". LOBO's
        counter to QUORUM, and until now it was ADOPTED BUT INERT: LOBO could
@@ -769,8 +805,24 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
       const watchers = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing).length;
       if (watchers >= 6) sentinel = 1;
     }
-    const bar = Math.max(1, q - bonus - Math.round(fam) - sentinel);
+    /* SR-025: mood, muster, familiarity and sentinels may lower the bar, but never below TWO —
+       a novel threat needs a true quorum. Only adaptive-immune recognition reaches one. */
+    const bar = Math.max(2, q - bonus - Math.round(fam) - sentinel);
     if (sensing >= bar) return true;
+    if (sensing >= 1) {
+      const rec = this._recognise(colony);
+      if (rec) {
+        const st = this._immune[colony];
+        const free = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing && !a._attritionGuard).length;
+        const total = this.world.agents.filter(a=>a.colony===colony && !a.seppukuDone && !a.isKing).length;
+        const reserveOk = total > 0 && free / total >= this.IMMUNE_RESERVE;
+        st.last = { t: this.world.time, tactic: rec.tactic, memory: rec.memory, overwhelming: reserveOk, free, total };
+        st.fired++;
+        if (reserveOk) { this._surge[colony] = true; st.refractoryUntil = this.world.time + this.IMMUNE_REFRACTORY; }
+        else st.held++;                     // recognised, fired ordinary: escalating would spend the reserve
+        return true;
+      }
+    }
     /* PER-NODE DISTRIBUTED DISTRUST IS AUTHORITATIVE over the colony mood
        (insight_agent_paranoia_zero_trust; IMMUNE_AUDIT gap #3). Stress is a
        MODIFIER, never a SUBSTITUTE: a colony whose own members have INDEPENDENTLY
@@ -866,9 +918,12 @@ window.MurmurationModules.AttritionReactions = class AttritionReactions {
           const seated = threat.filter(u=>Math.hypot(u.x-h.x,u.y-h.y) < this.kings.captureR*1.6).length;
           if(!this.kings.captured[colony] && seated < 3) continue;
         }
-        this.active[key] = r.dur||1;
+        // SR-025 overwhelming: a recognised threat, with the reserve intact, holds each reaction longer.
+        // Cooldowns are untouched, so the surge is bounded (FG-1) and cannot be farmed by repetition.
+        const _surge = this._surge[colony];
+        this.active[key] = (r.dur||1) * (_surge ? this.IMMUNE_SURGE : 1);
         this.lastFired[key] = t;
-        this.fireLog.unshift({ t, id:r.id, colony, msg:colony+' → '+r.trait });
+        this.fireLog.unshift({ t, id:r.id, colony, msg:colony+' → '+r.trait+(_surge ? ' (immune surge)' : '') });
         if(this.fireLog.length>40) this.fireLog.pop();
         window.MurmurationModules.AttritionKnowledge.recordDefense({
           colony, reaction:r.id, kind:r.kind, threat:threat.length });
