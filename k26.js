@@ -209,28 +209,39 @@ window.MurmurationModules.K26 = class K26 {
     if (this.animationId) cancelAnimationFrame(this.animationId);
   }
 
+  // Keep the simulation world locked to the canvas — if the canvas resized
+  // (preview pane, window, DPR shift), rescale agent positions to fill it so
+  // the swarm never shrinks into a corner or a stale sub-rectangle.
+  //
+  // This is the ONLY place world.width/height may change after a world is
+  // built. Both colonies used to start on one side (Ghost, 2026-11-03: "no
+  // matter what") because two other sites changed the size without going
+  // through here: restoreCivilization() built the world at the SAVE's width
+  // and scaled the agents to the canvas, so this then scaled them a second
+  // time; the window resize handler set world.width without moving anyone.
+  // A size change and an agent rescale are one act — call this, never assign.
+  fitWorldToCanvas() {
+    if (!this.world || !(this.canvas.width > 0 && this.canvas.height > 0)) return;
+    if (this.world.width === this.canvas.width && this.world.height === this.canvas.height) return;
+    const ow = this.world.width || this.canvas.width;
+    const oh = this.world.height || this.canvas.height;
+    const sx = this.canvas.width / ow;
+    const sy = this.canvas.height / oh;
+    for (const a of this.world.agents) {
+      if (typeof a.x === 'number') a.x *= sx;
+      if (typeof a.y === 'number') a.y *= sy;
+    }
+    this.world.width = this.canvas.width;
+    this.world.height = this.canvas.height;
+    if (this.economy && this.economy.recomputeZonePositions) this.economy.recomputeZonePositions();
+    if (this.world.onResize) this.world.onResize();
+  }
+
   draw() {
     const ctx = this.canvas.getContext('2d');
     if (!this.world) return;
 
-    // Keep the simulation world locked to the canvas — if the canvas resized
-    // (preview pane, window, DPR shift), rescale agent positions to fill it so
-    // the swarm never shrinks into a corner or a stale sub-rectangle.
-    if (this.canvas.width > 0 && this.canvas.height > 0 &&
-        (this.world.width !== this.canvas.width || this.world.height !== this.canvas.height)) {
-      const ow = this.world.width || this.canvas.width;
-      const oh = this.world.height || this.canvas.height;
-      const sx = this.canvas.width / ow;
-      const sy = this.canvas.height / oh;
-      for (const a of this.world.agents) {
-        if (typeof a.x === 'number') a.x *= sx;
-        if (typeof a.y === 'number') a.y *= sy;
-      }
-      this.world.width = this.canvas.width;
-      this.world.height = this.canvas.height;
-      if (this.economy && this.economy.recomputeZonePositions) this.economy.recomputeZonePositions();
-      if (this.world.onResize) this.world.onResize();
-    }
+    this.fitWorldToCanvas();
 
     const W = this.world.width, H = this.world.height;
 

@@ -1205,7 +1205,7 @@ input[type="range"].colB::-webkit-slider-thumb{background:#ff5cc8}
 <script src="mutations.js?v=6"></script>
 <script src="chronicle.js?v=1"></script>
 <script src="relics.js?v=2"></script>
-<script src="k26.js?v=18"></script>
+<script src="k26.js?v=19"></script>
 <script src="economy.js?v=10"></script>
 <script src="wealth.js"></script>
 <script src="predator.js?v=2"></script>
@@ -1435,15 +1435,9 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     sizeCanvas();
-    if (k26 && k26.world) {
-      const c = document.getElementById('canvas');
-      k26.world.width  = c.width;
-      k26.world.height = c.height;
-      // Recompute zone pixel coords to match new world size
-      if (k26.economy && k26.economy.recomputeZonePositions) {
-        k26.economy.recomputeZonePositions();
-      }
-    }
+    // Resize the world AND move the agents with it, in one act. Assigning
+    // world.width here alone left every agent at its old pixel position.
+    if (k26 && k26.world) k26.fitWorldToCanvas();
     rebuildTopo();
     repositionZoneGauges();
   }, 80);
@@ -2500,8 +2494,11 @@ function restoreCivilization(snapshot) {
   const w = snapshot.meta.width || c.width;
   const h = snapshot.meta.height || c.height;
 
-  // Build world shell without random agents
-  k26.world = new World(w, h, 0); // 0 agents — we'll rebuild them
+  // Build world shell without random agents — at the CANVAS size, because the
+  // agents below are scaled to the canvas. Built at the save's size, the render
+  // loop saw a mismatch and scaled them a second time, piling both colonies
+  // to one side (see K26.fitWorldToCanvas).
+  k26.world = new World(c.width, c.height, 0); // 0 agents — we'll rebuild them
 
   // Scale factor if canvas size changed
   const sx = c.width / w;
